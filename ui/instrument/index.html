@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instrument — Performance Optimisation redesign</title>
+<style>
+  :root{
+    --canvas:#F4F6F9; --surface:#fff; --ink:#0C1420; --muted:#4A5A6E; --faint:#7C8CA0;
+    --hair:#DDE3EA; --primary:#1B5FD9; --soft:#E8F0FE;
+    --good:#0B8A5C; --good-soft:#E6F6EF; --watch:#B26A00; --watch-soft:#FFF4E0;
+    --poor:#C02626; --poor-soft:#FDECEC;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);
+    font:400 15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:48px 28px 96px}
+
+  header{border-bottom:1px solid var(--hair);padding-bottom:28px;margin-bottom:36px}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  h1{font-size:34px;line-height:1.15;letter-spacing:-.02em;margin:10px 0 10px;font-weight:600}
+  .lede{color:var(--muted);max-width:62ch;margin:0}
+
+  .facts{display:flex;flex-wrap:wrap;gap:28px;margin:26px 0 0;padding:0;list-style:none}
+  .facts b{display:block;font-family:var(--mono);font-size:20px;font-weight:600}
+  .facts span{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+
+  h2{font-size:18px;letter-spacing:-.01em;margin:44px 0 6px;font-weight:600}
+  h2 + p{margin:0 0 20px;color:var(--muted);max-width:70ch}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:22px}
+  figure{margin:0;background:var(--surface);border:1px solid var(--hair);border-radius:8px;overflow:hidden}
+  figure img{display:block;width:100%;height:auto;border-bottom:1px solid var(--hair);background:var(--canvas)}
+  figcaption{padding:14px 16px}
+  figcaption b{display:block;font-size:13.5px;font-weight:600}
+  figcaption span{display:block;color:var(--muted);font-size:12.5px;margin-top:3px}
+  figcaption a{display:inline-block;margin-top:9px;font-family:var(--mono);font-size:11.5px;color:var(--primary);text-decoration:none;border-bottom:1px solid transparent}
+  figcaption a:hover{border-bottom-color:currentColor}
+
+  .note{background:var(--surface);border:1px solid var(--hair);border-left:3px solid var(--primary);border-radius:8px;padding:18px 20px;margin:22px 0}
+  .note b{font-size:13px}
+  .note p{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+  .note.warn{border-left-color:var(--watch);background:var(--watch-soft)}
+  .note.warn b{color:var(--watch)}
+
+  ul.tight{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px}
+  ul.tight li{margin:5px 0}
+  code{font-family:var(--mono);font-size:.9em;background:var(--soft);padding:1px 5px;border-radius:3px;color:var(--primary)}
+  @media (max-width:640px){ .wrap{padding:28px 16px 64px} h1{font-size:26px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Redesign proposal</p>
+  <h1>Instrument</h1>
+  <p class="lede">One direction for the Performance Optimisation admin, replacing the three rejected
+  variants. A control room for a single site's performance: cool, quiet, dense with meaning rather
+  than pixels, and built so every setting can explain itself.</p>
+  <ul class="facts">
+    <li><b>8</b><span>screens</span></li>
+    <li><b>2</b><span>signature ideas</span></li>
+    <li><b>3</b><span>type roles</span></li>
+    <li><b>0</b><span>drop shadows</span></li>
+  </ul>
+</header>
+
+<div class="note">
+  <b>The two ideas the design is built on</b>
+  <p><strong>1. The threshold rail.</strong> A performance metric is not pass/fail — it is a position
+  on a scale with real published boundaries. Every metric is drawn as a short rail with good /
+  needs-work / poor zones and the current value plotted as a solid marker. A green pill gives a
+  verdict; a rail shows where you stand and how much room there is.</p>
+  <p><strong>2. The inspector.</strong> A persistent right-hand panel that explains whatever control
+  or metric is focused, always answering the same three questions in the same order:
+  <em>What it does · What it costs you · Where you stand now</em>. On a 246-field settings surface the
+  real question is never "what is this called" — it is "is this safe for my site, and what changes if
+  I turn it on".</p>
+</div>
+
+<h2>Colour and type</h2>
+<p>Cool, low-chroma instrument palette. Hairlines and spacing create depth; shadows are reserved for
+genuinely floating layers. Blue is used for actions and focus only — never decoration.</p>
+<ul class="tight">
+  <li>Canvas <code>#F4F6F9</code> · surface <code>#FFFFFF</code> · hairline <code>#DDE3EA</code> · ink <code>#0C1420</code> · muted <code>#4A5A6E</code></li>
+  <li>Primary <code>#1B5FD9</code> · good <code>#0B8A5C</code> · needs work <code>#B26A00</code> · poor <code>#C02626</code> · <strong>idle is a first-class state, not an error</strong></li>
+  <li>Space Grotesk for headings only · IBM Plex Sans for all interface text · JetBrains Mono for every number, handle and unit</li>
+  <li>8px radius · 4px spacing base · nav 236px · inspector 344px · content capped 880px, left-aligned</li>
+</ul>
+
+<h2>The eight screens</h2>
+<p>Every screen shares the same shell: a light 236px nav, a fluid left-aligned work area, and the
+344px inspector. Only the middle changes.</p>
+
+<div class="grid">
+  <figure>
+    <img src="./stitch/01-overview.png" alt="Overview — Summary screen">
+    <figcaption><b>Overview › Summary</b><span>Status rows with threshold rails. No composite score — the plugin's own code says a 92/100 "would be decoration, not evidence".</span>
+    <a href="./stitch/01-overview.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/02-all-diagnostics.png" alt="Overview — All diagnostics screen">
+    <figcaption><b>Overview › All diagnostics</b><span>Health strip, presets, four-tile stat strip, page cache, and the collapsible scan groups.</span>
+    <a href="./stitch/02-all-diagnostics.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/03-assets-scripts.png" alt="Speed — Assets and Scripts screen">
+    <figcaption><b>Speed › Assets &amp; Scripts</b><span>The densest screen. Selected row drives the inspector; the safelist guard is explained where the risk is.</span>
+    <a href="./stitch/03-assets-scripts.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/04-database-cleanup.png" alt="Database Cleanup screen">
+    <figcaption><b>Database Cleanup</b><span>Safe / Caution / Review risk chips per item type, with the destructive explanation in the inspector.</span>
+    <a href="./stitch/04-database-cleanup.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/05-images.png" alt="Images screen">
+    <figcaption><b>Images</b><span>Lazy loading, next-gen conversion, responsive limits, and the conversion progress summary.</span>
+    <a href="./stitch/05-images.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/06-object-cache.png" alt="Object Cache screen">
+    <figcaption><b>Object Cache</b><span>Redis connection state with a hit-rate rail, and a danger zone for the destructive action.</span>
+    <a href="./stitch/06-object-cache.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/07-preload.png" alt="Preload screen">
+    <figcaption><b>Preload</b><span>Cache warm-up, third-party connections, critical assets, speculative loading.</span>
+    <a href="./stitch/07-preload.html">open the HTML →</a></figcaption>
+  </figure>
+  <figure>
+    <img src="./stitch/08-tools.png" alt="Tools and Settings screen">
+    <figcaption><b>Tools &amp; Settings</b><span>API keys, monitoring, import, and the activity log.</span>
+    <a href="./stitch/08-tools.html">open the HTML →</a></figcaption>
+  </figure>
+</div>
+
+<div class="note warn">
+  <b>What is not done yet</b>
+  <p>These are generated design references, not working code. The screenshots above are 512px
+  thumbnails rendered by Stitch; the linked HTML files are Stitch's own export and are useful for
+  reading exact spacing and colour, but they are single static pages with no behaviour — no live
+  inspector, no conditional fields, no keyboard navigation. A production implementation still needs
+  to be built, and the accessibility, overflow and responsive behaviour of this direction has not
+  been verified in a real browser.</p>
+</div>
+
+</div>
+</body>
+</html>

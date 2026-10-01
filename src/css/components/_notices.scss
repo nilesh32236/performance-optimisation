@@ -9,6 +9,29 @@
 	justify-content: flex-start;
 	flex-wrap: wrap;
 	gap: 8px 10px;
+
+	// A flex item defaults to `min-width: auto`, which refuses to shrink below
+	// its content's min-content width. A long `<pre>` inside a notice therefore
+	// set the item's floor, the item's `max-width: 100%` resolved against that
+	// widened floor rather than the viewport, and the line was clipped with no
+	// way to scroll it — `.wppo-container` uses `overflow-x: clip`.
+	//
+	// Measured on the Object Cache screen at 360px: the `<pre>` laid out at
+	// 465px inside a 360px viewport, with `scrollWidth === clientWidth`, so
+	// `overflow-x: auto` had nothing to act on. This is the general fix; adding
+	// it only to the `<pre>` would not help, because the constraint that failed
+	// is on its parent.
+	> * {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	// NOTE: `&__dismiss` below sets `min-width: 44px` and **ties on
+	// specificity** with the `> *` wildcard above, so it wins only because it
+	// comes later in this file. Move it above the wildcard and the dismiss
+	// button's 44x44 touch target collapses, with nothing failing. An
+	// independent review measured it at exactly 44x44 across every container and
+	// width, and flagged the ordering as the real fragility here.
 	font-size: 13.5px;
 	line-height: 1.5;
 	border-width: 1px;

@@ -1,18 +1,54 @@
 @use '../abstracts/mixins' as *;
 
-.wppo-feature-card {
+// The card surface, stated once.
+//
+// `.wppo-card` is the Overview's card class and `.wppo-feature-card` is every
+// other screen's. They were *not* the same surface: there was no `.wppo-card`
+// rule anywhere in `src/css` or in the built stylesheet, so the Overview's
+// three cards — including the Site status card, that screen's primary surface —
+// computed to a transparent background, `0px` radius and no shadow. The
+// "unified design system" held everywhere except the screen the redesign is
+// named after.
+//
+// Declaring the surface once under both names keeps the Overview's BEM naming
+// and gives it the card treatment, without a second set of values to drift.
+// An independent review found this by measuring computed styles and finding
+// that the record claiming consistency had checked the wrong screen.
+%wppo-card-surface {
 	background: var(--wppo-bg-card);
 	border: 1px solid var(--wppo-border);
 	border-radius: var(--wppo-radius);
 	box-shadow: var(--wppo-shadow-card);
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.wppo-card {
+	@extend %wppo-card-surface;
+}
+
+.wppo-card__title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--wppo-text-main);
+	padding: 20px 24px 0;
+}
+
+.wppo-card__body {
+	padding: 0 24px 24px;
+}
+
+.wppo-feature-card {
+	// The same surface; the rest of the block is the card's own behaviour.
+	@extend %wppo-card-surface;
+
 	transition: box-shadow 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
 	overflow: hidden;
 	height: 100%;
 	display: flex;
 	flex-direction: column;
-	min-width: 0;
-	max-width: 100%;
-	box-sizing: border-box;
 
 	&:hover {
 		box-shadow: var(--wppo-shadow-card-hover);
@@ -165,7 +201,10 @@
 	&:hover,
 	&:focus-visible {
 		border-color: var(--wppo-primary);
-		background: var(--wppo-primary-light, #eff6ff);
+		// `--wppo-primary-light` does not exist; the hardcoded `#eff6ff` always
+		// won. `--wppo-primary-soft` is the real faint-primary token, and is what
+		// `--wppo-focus-ring` is built from.
+		background: var(--wppo-primary-soft);
 	}
 }
 
@@ -210,11 +249,16 @@
 }
 
 .wppo-danger-zone {
-	border-left: 4px solid var(--wppo-danger, #ef4444);
-	background: var(--wppo-error-bg, #fef2f2);
+	border-left: 4px solid var(--wppo-border, #e2e8f0);
+	background: transparent;
 	margin-top: 20px;
 	border-radius: var(--wppo-radius-sm, 10px);
 	overflow: hidden;
+}
+
+.wppo-danger-zone--has-error {
+	border-left-color: var(--wppo-danger, #ef4444);
+	background: var(--wppo-error-bg, #fef2f2);
 }
 // Keep .wppo-danger-zone as canonical danger-zone token — see
 // src/components/PluginSetting.js (danger-zone import card). Do not

@@ -1,0 +1,322 @@
+/**
+ * The area frame: a section header and the in-area sub-navigation.
+ *
+ * The sub-nav is a horizontal row of tabs. Colour, radius and the focus ring
+ * come from the tokens in `src/css/abstracts/_variables.scss`, so the component
+ * tracks the admin's palette.
+ *
+ * Spacing and type sizes are literal px/rem, deliberately. The design system
+ * has no spacing or font-size scale — inventing `--wppo-space-*` tokens would
+ * have made every value silently fall back to its own fallback while the file
+ * claimed to be token-driven. These match the values the existing components
+ * already use.
+ *
+ * Notes on the approach:
+ *
+ * - Logical properties (`padding-inline`, `border-inline-start`) rather than
+ *   left/right, so the sub-nav mirrors correctly in RTL.
+ * - Focus is shown with the shared `--wppo-focus-ring` token, matching every
+ *   other control in the admin.
+ * - The container scrolls horizontally on narrow screens instead of wrapping,
+ *   so a two-item row never reflows the panel height under the user.
+ */
+
+.wppo-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+}
+
+.wppo-section__header {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+// Scoped by the mount id, not just the class.
+//
+// WordPress core ships an `h1` rule keyed to an **id**, and an id beats any
+// number of classes. So the declared weight and size were both being discarded
+// on every screen: `.wppo-section__title` declares `600` / `1.5rem` and the
+// heading computed **400 / 23px** at a 16px root. An independent review measured
+// the override on all eight screens.
+//
+// `#performance-optimisation` is this plugin's own mount node, so this wins on
+// specificity without `!important`.
+#performance-optimisation .wppo-section__title {
+	margin: 0;
+	font-size: 1.5rem;
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--wppo-text-main, #0f172a);
+}
+
+.wppo-section__purpose {
+	margin: 0;
+	max-width: 68ch;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--wppo-text-muted, #475569);
+}
+
+/* In-area sub-navigation. */
+.wppo-subnav {
+	display: flex;
+	gap: 4px;
+	overflow-x: auto;
+	scrollbar-width: thin;
+	// Keep the row from being squeezed into two lines by a long label.
+	flex-wrap: nowrap;
+	padding-block-end: 4px;
+	// A visible, consistent focus surface for keyboard users.
+	border-block-end: 1px solid var(--wppo-border, #e2e8f0);
+}
+
+.wppo-subnav__tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 0 auto;
+	margin-block-end: -1px;
+	padding: 8px 12px;
+	border: 1px solid transparent;
+	border-block-end: 2px solid transparent;
+	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
+	background: transparent;
+	color: var(--wppo-text-muted, #475569);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.4;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.wppo-subnav__tab:hover:not( .wppo-is-active ) {
+	background: var(--wppo-switch-hover, #f1f5f9);
+	color: var(--wppo-text-main, #0f172a);
+}
+
+.wppo-subnav__tab.wppo-is-active {
+	color: var(--wppo-primary);
+	background: var(--wppo-bg-card, #fff);
+	border-color: var(--wppo-border, #e2e8f0);
+	// The active marker sits on the row's own border line, so it reads as
+	// "you are here" rather than another box.
+	border-block-end-color: var(--wppo-primary);
+	font-weight: 600;
+}
+
+// One focus treatment, shared with the rest of the admin: `--wppo-focus-ring`
+// is a **box-shadow** triple (`0 0 0 3px var(--wppo-primary-soft)`), the same
+// way _forms.scss consumes it. Using it as an `outline` colour yields an
+// invalid shorthand, `outline-style: none`, and no visible focus at all.
+// Applied on the tab itself, so there is exactly one focus stop per sub-tab.
+// No `outline: none` here.
+//
+// The rule this replaces set `outline: none` and used `--wppo-focus-ring` as
+// the indicator. That token is `0 0 0 3px var(--wppo-primary-soft)` — a soft,
+// very low-alpha halo intended to sit *around* a real outline, not to be one.
+// Measured on the live page it is about **1.07:1** against the surrounding
+// surface, where WCAG 2.2 SC 1.4.11 requires 3:1, so the focus stop was
+// effectively invisible.
+//
+// The design system's `outline: 2px solid var(--wppo-primary)` in `_base.scss`
+// is what carries the indicator; not overriding it is the fix.
+
+.wppo-subnav__icon {
+	display: inline-flex;
+	align-items: center;
+	font-size: 14px;
+}
+
+.wppo-subnav__label {
+	white-space: nowrap;
+}
+
+/* The panel body. Focusable so a keyboard user can scroll it, but it must not
+   draw a focus ring around the whole page on mouse click. */
+.wppo-section__panel {
+	min-width: 0;
+	padding-block-start: 16px;
+}
+
+// Deliberately NO `:focus { outline: none }` here.
+//
+// That rule has equal specificity to `[tabindex]:focus-visible` in `_base.scss`
+// and appears *later* in the stylesheet, so it won and left the panel with no
+// focus indicator at all: `outline: none` and no `box-shadow`, measured live
+// with `:focus-visible` matching.
+//
+// The panel is a real `tabIndex={ 0 }` stop and the **first** one on every
+// area, so this is the worst possible place for an invisible ring — and the
+// earlier `box-shadow: var(--wppo-focus-ring)` it removed was itself only
+// about 1.07:1. Removing one weak indicator without replacing it turned a
+// weak indicator into none.
+//
+// Letting the base rule apply is the fix.
+
+// Same reasoning as `.wppo-subnav__tab` above. The panel is a real tab stop
+// (`tabIndex={ 0 }`, so a keyboard user can scroll it) and it is the *first*
+// stop on every area, so an invisible ring here is worse than anywhere else.
+.wppo-section__panel:focus-visible {
+	// Redundant, and kept only to pin the radius.
+	//
+	// The base rule in `_base.scss` already covers `[tabindex]:focus-visible`
+	// and already supplies `outline: 2px solid var(--wppo-primary)`. An
+	// independent review deleted this rule from the live stylesheet via the
+	// CSSOM and re-measured with a real Tab press: the outline was unchanged.
+	// Only the radius differed.
+	//
+	// A previous version of this comment claimed the base rule was unreliable
+	// here and reported "measured live, outline: none". That measurement was
+	// wrong: it used a programmatic `.focus()`, which does not match
+	// `:focus-visible`, so the base rule never applied. The rule was never
+	// carrying the outline, and the premise that led to adding this one was
+	// false. Keeping the comment accurate matters more than keeping the rule:
+	// a comment that says a working base rule is unreliable invites redundant
+	// overrides in the next place someone cannot find their focus ring.
+	border-radius: var(--wppo-radius-sm, 8px);
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.wppo-subnav__tab {
+		transition: none;
+	}
+}
+
+@media ( max-width: 782px ) {
+	.wppo-section__title {
+		font-size: 1.25rem;
+	}
+
+	// Touch targets: the sub-nav is a primary navigation control on mobile.
+	.wppo-subnav__tab {
+		min-height: 44px;
+		padding-inline: 12px;
+	}
+}
+
+// A titled, foldable group of panels.
+//
+// The All-diagnostics screen rendered 13 panels in one flat column — a measured
+// 9,053px, ten screens, 22 headings. This gives it the hierarchy it never had.
+// The toggle is a real button with a full-width target; the panel keeps a small
+// left border so the fold is legible without a heavy rule.
+.wppo-panel-group {
+	margin-bottom: 24px;
+
+	&--spaced {
+		margin-top: 20px;
+	}
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		// 44px, not the ~30px a bare text button would be: this is the
+		// primary control for a third of the screen's content.
+		min-height: 44px;
+		padding: 10px 14px;
+		margin-bottom: 12px;
+		text-align: left;
+		cursor: pointer;
+		background: var(--wppo-bg-card, #fff);
+		border: 1px solid var(--wppo-border, #e2e8f0);
+		border-radius: var(--wppo-radius-sm, 4px);
+
+		&:hover {
+			border-color: var(--wppo-border-hover, #cbd5e1);
+			background: var(--wppo-switch-hover, #f1f5f9);
+		}
+
+		// The one focus treatment for the whole plugin.
+		&:focus-visible {
+			outline: solid 2px var(--wppo-primary, #2271b1);
+			outline-offset: 2px;
+		}
+	}
+
+	&__heading {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		// A flex item must be allowed to shrink, or the long summary sets the
+		// floor and the button overflows its card at 360px.
+		min-width: 0;
+	}
+
+	&__title {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--wppo-text-main, #0f172a);
+	}
+
+	&__summary {
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--wppo-text-muted, #475569);
+		overflow-wrap: anywhere;
+	}
+
+	// The HTML `hidden` attribute is `display: none` from the UA stylesheet, and
+	// **any author `display` beats it**. `.wppo-stacked-cards` sets one, so
+	// folding the group did nothing at all: the page measured 9,306px with the
+	// "Advanced tuning" group reported collapsed. This restores the attribute's
+	// meaning, scoped to this component.
+	&__panel[hidden] {
+		display: none;
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 0.75rem;
+		color: var(--wppo-text-muted, #475569);
+	}
+}
+
+// On the All-diagnostics screen an action is **contextual**, not primary.
+//
+// Measured across the eight screens, that screen carried **12**
+// `wppo-button--primary` at once — "Purge All Cache", "Apply Balanced", "Save
+// Page Cache Settings", "Save CDN Purge", "Save Settings", "Run Scan", "Run
+// PageSpeed Scan", "Save LLMs.txt Settings", "Save AI Settings", "Save Edge
+// Cache", "Optimize All" and one more. Twelve blue buttons is twelve things
+// shouting at once, which is what "there is no visual hierarchy" and "I cannot
+// tell what to click" look like from the outside.
+//
+// The distinction is the screen's job, not the panel's: a **settings** screen
+// has one thing to commit, so its Save keeps the primary weight. A
+// **reporting** screen has none — an action belongs to the panel it sits in, so
+// it takes the secondary weight and the measurements lead the page.
+//
+// Scoped to that one view, so the settings screens keep their single primary
+// action and this cannot drift per panel.
+.wppo-dashboard .wppo-panel-group .wppo-button--primary {
+	background: var(--wppo-bg-card);
+	border: 1px solid var(--wppo-border);
+	box-shadow: none;
+	// `.wppo-button--secondary` already exists and is the canonical
+	// non-primary button. An independent review measured this rule rendering
+	// **blue** text where the real secondary renders `#0f172a` — a third
+	// appearance for the same idea, with the DOM class still claiming
+	// `primary`. Matching the token instead means there is one secondary
+	// button in the plugin, not two.
+	color: var(--wppo-text-main);
+
+	// Without this the button lifted 1px on hover and changed nothing else —
+	// no background, no colour — because `_section.scss` loads after
+	// `_forms.scss` and wins the specificity tie on `background` while never
+	// declaring `transform`. Measured: rest and hover were identical apart
+	// from `translateY(-1px)`, so aiming at "Run Scan" gave no feedback.
+	&:hover {
+		background: var(--wppo-switch-hover);
+		border-color: var(--wppo-border-hover);
+		transform: none;
+	}
+}

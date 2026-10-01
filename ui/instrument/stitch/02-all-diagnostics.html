@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Performance Optimisation — Instrument v2.4.0</title>
+<!-- Google Fonts: Space Grotesk, IBM Plex Sans, JetBrains Mono, Public Sans -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Public+Sans:wght@600&amp;family=Space+Grotesk:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#F4F6F9',
+            'canvas-sunken': '#EDF1F6',
+            surface: '#FFFFFF',
+            'surface-quiet': '#F8FAFC',
+            ink: '#0C1420',
+            'ink-muted': '#4A5A6E',
+            'ink-faint': '#7C8CA0',
+            hairline: '#DDE3EA',
+            'hairline-strong': '#C3CDD9',
+            primary: '#1B5FD9',
+            'primary-hover': '#1549AC',
+            'primary-soft': '#E8F0FE',
+            'on-primary': '#FFFFFF',
+            'signal-good': '#0B8A5C',
+            'signal-good-soft': '#E6F6EF',
+            'signal-watch': '#B26A00',
+            'signal-watch-soft': '#FFF4E0',
+            'signal-poor': '#C02626',
+            'signal-poor-soft': '#FDECEC',
+            'signal-idle': '#6B7A8D',
+            'signal-idle-soft': '#EEF1F5',
+            'rail-good': '#0B8A5C',
+            'rail-watch': '#E0A32E',
+            'rail-poor': '#C02626',
+            'rail-track': '#E4E9EF',
+            'rail-marker': '#0C1420'
+          },
+          borderRadius: {
+            xs: '3px',
+            sm: '5px',
+            DEFAULT: '8px',
+            md: '10px',
+            lg: '8px',
+            xl: '14px',
+            full: '9999px'
+          },
+          fontFamily: {
+            headline: ['Space Grotesk', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+            body: ['IBM Plex Sans', 'sans-serif'],
+            label: ['Public Sans', 'IBM Plex Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          fontSize: {
+            'eyebrow': ['11px', { lineHeight: '16px', letterSpacing: '0.06em' }],
+            'data-lg': ['28px', { lineHeight: '32px', letterSpacing: '-0.02em' }],
+            'data-md': ['13px', { lineHeight: '20px' }],
+            'data-sm': ['11.5px', { lineHeight: '16px' }],
+            'headline-lg': ['24px', { lineHeight: '30px', letterSpacing: '-0.015em' }],
+            'headline-md': ['18px', { lineHeight: '24px' }],
+            'body-md': ['13.5px', { lineHeight: '21px' }],
+            'body-sm': ['12.5px', { lineHeight: '19px' }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #DDE3EA;
+      border-radius: 3px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #C3CDD9;
+    }
+    /* Tabular monospaced figures */
+    .font-mono {
+      font-feature-settings: "tnum" 1;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-ink font-body antialiased text-body-md min-h-screen overflow-x-hidden selection:bg-primary-soft selection:text-primary">
+<div class="flex h-screen w-screen overflow-hidden">
+<!-- ================================================================= -->
+<!-- 1. LEFT NAV: 236px width, light near-white, border-r              -->
+<!-- ================================================================= -->
+<aside class="fixed top-0 left-0 h-screen w-[236px] flex flex-col justify-between bg-surface-quiet dark:bg-canvas-sunken border-r border-hairline z-30 select-none">
+<!-- Nav Header & Branding -->
+<div>
+<div class="h-14 px-4 flex items-center gap-2.5 border-b border-hairline">
+<div class="w-7 h-7 rounded bg-primary text-white flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1; font-size: 18px;">bolt</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-semibold text-[13px] leading-tight text-ink tracking-tight">Performance</span>
+<span class="font-headline text-[11px] leading-tight text-ink-muted tracking-tight">Optimisation</span>
+</div>
+</div>
+<!-- Global Navigation Items -->
+<nav class="p-2 space-y-1 mt-2">
+<!-- Overview (Active) -->
+<a class="bg-surface text-primary font-semibold border-l-2 border-primary pl-3 py-2 flex items-center gap-3 text-body-md rounded-r hover:bg-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>Overview</span>
+</a>
+<!-- Speed -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface transition-colors duration-150 rounded" href="#">
+<span class="material-symbols-outlined">speed</span>
+<span>Speed</span>
+</a>
+<!-- Media -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface transition-colors duration-150 rounded" href="#">
+<span class="material-symbols-outlined">perm_media</span>
+<span>Media</span>
+</a>
+<!-- Data & System -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface transition-colors duration-150 rounded" href="#">
+<span class="material-symbols-outlined">database</span>
+<span>Data &amp; System</span>
+</a>
+<!-- Manage -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface transition-colors duration-150 rounded" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Manage</span>
+</a>
+</nav>
+</div>
+<!-- Nav Footer / Telemetry -->
+<div class="p-3 border-t border-hairline bg-surface-quiet space-y-2">
+<div class="px-2 py-1.5 flex items-center justify-between text-xs text-ink-muted">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-signal-good"></span>
+<span class="font-mono text-data-sm">WP 6.7.1</span>
+</div>
+<span class="font-mono text-data-sm text-signal-good font-medium">Engine OK</span>
+</div>
+<div class="px-2 flex items-center justify-between text-[11px] text-ink-faint">
+<span>Instrument Build</span>
+<span class="font-mono text-[11px]">v2.4.0</span>
+</div>
+</div>
+</aside>
+<!-- ================================================================= -->
+<!-- MAIN WORK AREA & HEADER WRAPPER (Left-aligned, capped at 880px)   -->
+<!-- ================================================================= -->
+<div class="flex-1 ml-[236px] mr-[344px] h-screen overflow-y-auto custom-scroll flex flex-col bg-canvas">
+<!-- Top Bar / App Bar -->
+<header class="h-14 px-8 w-full border-b border-hairline bg-surface flex justify-between items-center sticky top-0 z-20">
+<div class="flex items-center gap-3">
+<span class="font-headline font-semibold text-headline-md text-ink tracking-tight">Performance Optimisation</span>
+<span class="px-2 py-0.5 rounded text-[11px] font-mono bg-canvas-sunken text-ink-muted border border-hairline">v2.4.0</span>
+</div>
+<div class="flex items-center gap-2.5">
+<button class="h-8 px-3 rounded bg-surface border border-hairline text-ink-muted hover:text-ink hover:bg-canvas-sunken text-xs font-semibold flex items-center gap-1.5 active:scale-[0.98] transition-all" type="button">
+<span class="material-symbols-outlined text-[16px]">refresh</span>
+<span>Re-test Site</span>
+</button>
+<button class="h-8 px-3.5 rounded bg-primary hover:bg-primary-hover text-on-primary text-xs font-semibold flex items-center gap-1.5 active:scale-[0.98] transition-all shadow-none" type="button">
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+<span>Purge Cache</span>
+</button>
+</div>
+</header>
+<!-- Content Canvas: Left aligned ml-0, capped 880px -->
+<main class="w-full max-w-[880px] ml-0 px-8 py-7 space-y-6">
+<!-- Page Header & Tab Segment -->
+<div class="space-y-3 pb-2 border-b border-hairline">
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold tracking-wider">OVERVIEW</div>
+<h1 class="font-headline text-headline-lg font-semibold text-ink tracking-tight">Overview</h1>
+<p class="text-body-md text-ink-muted mt-0.5">What is working, what is not configured, and what to do next.</p>
+</div>
+<!-- Sub-tabs: "Summary" and "All diagnostics" -->
+<div class="flex items-center gap-6 pt-2">
+<button class="text-xs font-medium text-ink-muted hover:text-ink pb-2 -mb-[1px] transition-colors" type="button">
+              Summary
+            </button>
+<button class="text-xs font-semibold text-primary pb-2 -mb-[1px] border-b-2 border-primary transition-colors flex items-center gap-1.5" type="button">
+<span>All diagnostics</span>
+<span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-primary-soft text-primary">8</span>
+</button>
+</div>
+</div>
+<!-- 1. HEALTH STRIP -->
+<section class="bg-surface rounded-lg border border-hairline p-4 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-signal-good opacity-40"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-signal-good"></span>
+</span>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-headline text-[15px] font-semibold text-ink">System Health</span>
+<span class="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-signal-good-soft text-signal-good">Operational</span>
+</div>
+<p class="text-body-sm text-ink-muted mt-0.5">6 checks passing, 1 not configured, and 1 quick optimisation action.</p>
+</div>
+</div>
+<button class="h-8 px-3 rounded bg-primary hover:bg-primary-hover text-on-primary text-xs font-semibold transition-colors active:scale-[0.98]" type="button">
+            Purge All Cache
+          </button>
+</section>
+<!-- 2. TWO TOP CARDS: Find a setting + Optimisation presets -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Card: Find a setting -->
+<div class="bg-surface rounded-lg border border-hairline p-4 flex flex-col justify-between">
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-2">QUICK NAVIGATION</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-ink-faint text-[18px]">search</span>
+<input class="w-full h-8 pl-8 pr-3 bg-surface border border-hairline rounded text-xs font-body text-ink placeholder:text-ink-faint focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none" placeholder="Search settings, hooks, directives..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-1.5 mt-3 pt-3 border-t border-hairline text-[11px] text-ink-muted">
+<span class="text-ink-faint">Common:</span>
+<button class="px-1.5 py-0.5 rounded bg-surface-quiet border border-hairline hover:border-hairline-strong font-mono text-[11px] text-ink-muted hover:text-ink">object cache</button>
+<button class="px-1.5 py-0.5 rounded bg-surface-quiet border border-hairline hover:border-hairline-strong font-mono text-[11px] text-ink-muted hover:text-ink">ttl</button>
+<button class="px-1.5 py-0.5 rounded bg-surface-quiet border border-hairline hover:border-hairline-strong font-mono text-[11px] text-ink-muted hover:text-ink">webp</button>
+</div>
+</div>
+<!-- Card: Optimisation presets -->
+<div class="bg-surface rounded-lg border border-hairline p-4 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold">OPTIMISATION PRESETS</div>
+<div class="flex items-center gap-2 text-[11px]">
+<a class="text-ink-muted hover:text-primary transition-colors" href="#">Export JSON</a>
+<span class="text-hairline">·</span>
+<a class="text-ink-muted hover:text-primary transition-colors" href="#">Import JSON</a>
+</div>
+</div>
+<p class="text-[12px] text-ink-muted leading-tight mb-2.5">Pre-calibrated profiles verified against high-concurrency production.</p>
+<!-- 3 preset buttons -->
+<div class="grid grid-cols-3 gap-1.5">
+<button class="h-8 px-2 rounded border border-hairline bg-surface text-ink-muted hover:text-ink text-[11px] font-semibold flex flex-col items-center justify-center leading-tight" type="button">
+<span>Safe</span>
+<span class="text-[9px] text-ink-faint font-normal">Zero CSS risk</span>
+</button>
+<button class="h-8 px-2 rounded border-2 border-primary bg-primary-soft text-primary text-[11px] font-semibold flex flex-col items-center justify-center leading-tight" type="button">
+<span class="flex items-center gap-1">Balanced <span class="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span></span>
+<span class="text-[9px] text-primary font-normal">Active standard</span>
+</button>
+<button class="h-8 px-2 rounded border border-hairline bg-surface text-ink-muted hover:text-ink text-[11px] font-semibold flex flex-col items-center justify-center leading-tight" type="button">
+<span class="text-signal-watch">Aggressive</span>
+<span class="text-[9px] text-ink-faint font-normal">Requires test</span>
+</button>
+</div>
+</div>
+<p class="text-[10.5px] text-ink-faint mt-2.5">A snapshot of your current settings is saved before any preset is applied.</p>
+</div>
+</section>
+<!-- 3. FOUR-TILE STAT STRIP -->
+<section class="grid grid-cols-4 bg-surface rounded-lg border border-hairline divide-x divide-hairline">
+<div class="p-4">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block mb-1">CACHE SIZE</span>
+<div class="font-mono text-data-lg font-semibold text-ink">9 MB</div>
+<div class="text-[11.5px] text-signal-good font-medium mt-1 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span> Ready
+            </div>
+</div>
+<div class="p-4">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block mb-1">OPTIMIZED FILES</span>
+<div class="font-mono text-data-lg font-semibold text-ink">4</div>
+<div class="text-[11.5px] text-ink-muted font-mono mt-1">4 CSS · 0 JS</div>
+</div>
+<div class="p-4">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block mb-1">DB OVERHEAD</span>
+<div class="font-mono text-data-lg font-semibold text-ink">405</div>
+<div class="text-[11.5px] text-ink-muted mt-1">transient items</div>
+</div>
+<div class="p-4">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block mb-1">IMAGES OPTIMIZED</span>
+<div class="font-mono text-data-lg font-semibold text-ink">45%</div>
+<div class="text-[11.5px] text-signal-good mt-1 font-mono">412 converted</div>
+</div>
+</section>
+<!-- 4. CARD: Page Cache (with Inspector Active highlight) -->
+<section class="bg-surface rounded-lg border border-hairline overflow-hidden">
+<div class="px-5 py-3.5 bg-surface-quiet border-b border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="font-label text-eyebrow uppercase text-ink font-semibold tracking-wider">PAGE CACHE CONFIGURATION</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-signal-good-soft text-signal-good font-medium">Active</span>
+</div>
+<span class="text-xs text-ink-faint font-mono">Directives verified</span>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Enable Page Cache (Active selected focus) -->
+<div class="p-4 flex items-center justify-between bg-primary-soft/30 border-l-4 border-l-primary transition-colors">
+<div>
+<div class="flex items-center gap-2">
+<span class="font-semibold text-ink text-sm">Enable Page Cache</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-primary text-white">Inspecting</span>
+</div>
+<p class="text-xs text-ink-muted mt-0.5">Generates static HTML files from dynamic WordPress pages for instant response.</p>
+</div>
+<div class="flex items-center gap-3">
+<!-- Toggle ON switch -->
+<div class="w-9 h-5 bg-primary rounded-full relative cursor-pointer p-0.5 transition-colors">
+<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+</div>
+<span class="material-symbols-outlined text-primary text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Row 2: Cache Lifespan -->
+<div class="p-4 flex items-center justify-between">
+<div>
+<span class="font-label text-[11px] uppercase tracking-wider text-ink-faint font-semibold block mb-0.5">CACHE LIFESPAN</span>
+<span class="text-xs text-ink-muted">Standard expiration cycle before scheduled background regeneration.</span>
+</div>
+<div class="w-64">
+<select class="w-full h-8 px-2.5 bg-surface border border-hairline rounded text-xs font-body text-ink focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option selected="">Never expire (Recommended)</option>
+<option>10 Hours</option>
+<option>24 Hours</option>
+<option>7 Days</option>
+</select>
+</div>
+</div>
+<!-- Row 3: TTL Overrides (3 column selects) -->
+<div class="p-4 space-y-2">
+<span class="font-label text-[11px] uppercase tracking-wider text-ink-faint font-semibold block">GRANULAR EXPIRY OVERRIDES</span>
+<div class="grid grid-cols-3 gap-3">
+<div>
+<label class="block text-[11px] font-medium text-ink-muted mb-1">POSTS TTL OVERRIDE</label>
+<select class="w-full h-8 px-2 bg-surface border border-hairline rounded text-xs font-body text-ink focus:border-primary outline-none">
+<option selected="">Inherit global</option>
+<option>12 Hours</option>
+<option>24 Hours</option>
+</select>
+</div>
+<div>
+<label class="block text-[11px] font-medium text-ink-muted mb-1">PAGES TTL OVERRIDE</label>
+<select class="w-full h-8 px-2 bg-surface border border-hairline rounded text-xs font-body text-ink focus:border-primary outline-none">
+<option selected="">Inherit global</option>
+<option>7 Days</option>
+<option>30 Days</option>
+</select>
+</div>
+<div>
+<label class="block text-[11px] font-medium text-ink-muted mb-1">PRODUCTS TTL OVERRIDE</label>
+<select class="w-full h-8 px-2 bg-surface border border-hairline rounded text-xs font-body text-ink focus:border-primary outline-none">
+<option selected="">Inherit global</option>
+<option>4 Hours</option>
+<option>8 Hours</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Row 4: WooCommerce safe mode -->
+<div class="p-4 flex items-center justify-between">
+<div>
+<span class="font-semibold text-ink text-sm">WooCommerce safe mode</span>
+<p class="text-xs text-ink-muted mt-0.5">Cart, checkout and account pages are never cached. Dynamic fragments bypassed.</p>
+</div>
+<div class="w-9 h-5 bg-primary rounded-full relative cursor-pointer p-0.5">
+<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+</div>
+</div>
+<!-- Row 5: Bordered sub-panel: Run Woo Cache Self Test -->
+<div class="p-4 bg-surface-quiet">
+<div class="border border-hairline rounded bg-surface p-3 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-signal-good text-[18px]">verified</span>
+<div>
+<div class="text-xs font-semibold text-ink">Run Woo Cache Self Test</div>
+<div class="text-[11.5px] text-ink-muted">Simulates anonymous cart addition and confirms checkout nonce generation bypass.</div>
+</div>
+</div>
+<button class="h-7 px-3 rounded bg-surface border border-hairline text-ink text-xs font-semibold hover:bg-canvas-sunken transition-colors" type="button">
+                  Run Self Test
+                </button>
+</div>
+</div>
+</div>
+</section>
+<!-- 5. TWO CARDS: CDN Cache Purge & Cache for Logged-in Users -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Card: CDN Cache Purge -->
+<div class="bg-surface rounded-lg border border-hairline p-4 flex flex-col justify-between">
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-1">EDGE SYNCHRONISATION</div>
+<h3 class="font-headline text-headline-md font-semibold text-ink mb-1">CDN Cache Purge</h3>
+<p class="text-xs text-ink-muted mb-3">Automated purge on post publish or theme update across perimeter POPs.</p>
+<div class="mb-3">
+<label class="block text-[11px] font-medium text-ink-muted mb-1">ACTIVE INTEGRATION</label>
+<select class="w-full h-8 px-2.5 bg-surface border border-hairline rounded text-xs font-body text-ink focus:border-primary outline-none">
+<option selected="">None</option>
+<option>Cloudflare API</option>
+<option>Fastly Real-time</option>
+<option>BunnyCDN</option>
+</select>
+</div>
+</div>
+<div class="pt-2 border-t border-hairline flex justify-end">
+<button class="h-7 px-3 rounded bg-surface border border-hairline text-ink text-xs font-semibold hover:bg-canvas-sunken" type="button">
+                Save CDN Purge
+              </button>
+</div>
+</div>
+<!-- Card: Cache for Logged-in Users -->
+<div class="bg-surface rounded-lg border border-hairline p-4 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-1">
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold">SECURITY CONTEXT</div>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-signal-watch-soft text-signal-watch font-medium">Bypass Active</span>
+</div>
+<h3 class="font-headline text-headline-md font-semibold text-ink mb-1">Cache for Logged-in Users</h3>
+<p class="text-xs text-ink-muted mb-3">Serve static pages to logged-in administrators and customers (may bypass nonce security).</p>
+<div class="flex items-center justify-between p-2.5 rounded bg-surface-quiet border border-hairline mb-2">
+<span class="text-xs font-medium text-ink">Bypass cache for logged-in sessions</span>
+<!-- Switch OFF -->
+<div class="w-9 h-5 bg-hairline-strong rounded-full relative cursor-pointer p-0.5">
+<div class="w-4 h-4 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></div>
+</div>
+</div>
+</div>
+<div class="pt-2 border-t border-hairline flex justify-end">
+<button class="h-7 px-3 rounded bg-surface border border-hairline text-ink text-xs font-semibold hover:bg-canvas-sunken" type="button">
+                Save Settings
+              </button>
+</div>
+</div>
+</section>
+<!-- 6. COLLAPSIBLE GROUP (OPEN): "How your site is doing" -->
+<section class="border border-hairline rounded-lg bg-surface overflow-hidden">
+<div class="px-5 py-3.5 bg-surface-quiet border-b border-hairline flex items-center justify-between cursor-pointer">
+<div>
+<div class="flex items-center gap-2">
+<span class="font-headline text-[15px] font-semibold text-ink">How your site is doing</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-signal-good-soft text-signal-good">Verified Live</span>
+</div>
+<div class="text-xs text-ink-muted">Lab scans, real-user data, and what to do next.</div>
+</div>
+<span class="material-symbols-outlined text-ink-muted">expand_more</span>
+</div>
+<div class="p-5 space-y-5">
+<!-- Guided next step banner -->
+<div class="p-3.5 rounded bg-surface-quiet border-l-4 border-l-primary border-t border-r border-b border-hairline flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary-soft text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</div>
+<div>
+<div class="text-xs font-semibold text-ink">Guided recommendation: Eliminate render-blocking CSS</div>
+<div class="text-[12px] text-ink-muted">Generating critical CSS will shave an estimated 420ms off LCP for mobile templates.</div>
+</div>
+</div>
+<button class="h-7 px-3 rounded bg-primary text-white text-xs font-semibold hover:bg-primary-hover whitespace-nowrap">
+                Run Critical CSS
+              </button>
+</div>
+<!-- Two Sub-Cards: Performance Audit & PageSpeed Insights -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Performance Audit Card -->
+<div class="border border-hairline rounded p-4 bg-surface">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block mb-1">LAB AUDIT ENGINE</span>
+<div class="text-sm font-semibold text-ink mb-2">Performance Audit</div>
+<div class="flex gap-2 mb-2">
+<input class="h-8 px-2.5 bg-surface-quiet border border-hairline rounded text-xs font-mono text-ink flex-1 truncate select-all" readonly="" type="text" value="https://nileshportfolio.duckdns.org"/>
+<button class="h-8 px-3 rounded bg-primary text-white text-xs font-semibold hover:bg-primary-hover shrink-0" type="button">
+                    Run Scan
+                  </button>
+</div>
+<div class="flex items-center justify-between text-[11px] text-ink-faint font-mono">
+<span>Last run: 42 mins ago</span>
+<span class="text-signal-good font-semibold">Ready (Code 200)</span>
+</div>
+</div>
+<!-- PageSpeed Insights Card -->
+<div class="border border-hairline rounded p-4 bg-surface flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold">SYNTHETIC GAUGES</span>
+<!-- Mobile / Desktop segmented control -->
+<div class="inline-flex rounded border border-hairline p-0.5 bg-canvas-sunken">
+<button class="px-2 py-0.5 text-[10px] font-semibold rounded bg-surface text-ink shadow-none">Mobile</button>
+<button class="px-2 py-0.5 text-[10px] font-medium text-ink-muted hover:text-ink">Desktop</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-11 h-11 rounded-full border-2 border-signal-good flex items-center justify-center font-mono font-bold text-signal-good text-base">
+                        94
+                      </div>
+<div>
+<div class="text-xs font-semibold text-ink">PageSpeed Lab Score</div>
+<div class="text-[11px] text-ink-muted">Simulated Nexus 5X on 4G Fast</div>
+</div>
+</div>
+<button class="h-7 px-2.5 rounded bg-surface border border-hairline text-ink text-xs font-semibold hover:bg-canvas-sunken" type="button">
+                      Run PageSpeed
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Web Vitals Trends Card (Two Stacked Sparklines: Mobile and Desktop) -->
+<div class="border border-hairline rounded p-4 bg-surface space-y-4">
+<div class="flex items-center justify-between">
+<div>
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block">7-DAY TELEMETRY</span>
+<div class="text-sm font-semibold text-ink">Web Vitals Trends</div>
+</div>
+<div class="text-xs font-mono text-ink-muted bg-surface-quiet px-2 py-1 rounded border border-hairline">
+                  Target: https://nileshportfolio.duckdns.org/
+                </div>
+</div>
+<!-- Mobile Chart Block -->
+<div class="p-3 bg-surface-quiet rounded border border-hairline space-y-1.5">
+<div class="flex items-center justify-between">
+<span class="text-xs font-semibold text-ink flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-ink-muted">smartphone</span> Mobile Track
+                  </span>
+<span class="font-mono text-xs font-semibold text-signal-good">Latest score 94</span>
+</div>
+<!-- Sparkline SVG with Good/Watch zones -->
+<div class="relative h-14 w-full bg-surface border border-hairline rounded overflow-hidden">
+<!-- Subtle Good / Watch background bands (>=90 is good) -->
+<div class="absolute inset-x-0 top-0 h-[45%] bg-signal-good-soft/40 border-b border-signal-good/20"></div>
+<div class="absolute inset-x-0 bottom-0 h-[55%] bg-signal-watch-soft/30"></div>
+<!-- Vector line graph -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 40">
+<polyline fill="none" points="5,24 20,20 35,16 50,18 65,12 80,14 95,8" stroke="#0B8A5C" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></polyline>
+<!-- Ink markers at points -->
+<circle cx="5" cy="24" fill="#0C1420" r="1.5"></circle>
+<circle cx="20" cy="20" fill="#0C1420" r="1.5"></circle>
+<circle cx="35" cy="16" fill="#0C1420" r="1.5"></circle>
+<circle cx="50" cy="18" fill="#0C1420" r="1.5"></circle>
+<circle cx="65" cy="12" fill="#0C1420" r="1.5"></circle>
+<circle cx="80" cy="14" fill="#0C1420" r="1.5"></circle>
+<circle cx="95" cy="8" fill="#0C1420" r="1.5"></circle>
+</svg>
+</div>
+<div class="flex justify-between text-[10px] font-mono text-ink-faint px-1">
+<span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+</div>
+</div>
+<!-- Desktop Chart Block -->
+<div class="p-3 bg-surface-quiet rounded border border-hairline space-y-1.5">
+<div class="flex items-center justify-between">
+<span class="text-xs font-semibold text-ink flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-ink-muted">desktop_windows</span> Desktop Track
+                  </span>
+<span class="font-mono text-xs font-semibold text-signal-good">Latest score 98</span>
+</div>
+<div class="relative h-14 w-full bg-surface border border-hairline rounded overflow-hidden">
+<div class="absolute inset-x-0 top-0 h-[45%] bg-signal-good-soft/40 border-b border-signal-good/20"></div>
+<div class="absolute inset-x-0 bottom-0 h-[55%] bg-signal-watch-soft/30"></div>
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 40">
+<polyline fill="none" points="5,14 20,12 35,11 50,9 65,9 80,6 95,5" stroke="#0B8A5C" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></polyline>
+<circle cx="5" cy="14" fill="#0C1420" r="1.5"></circle>
+<circle cx="20" cy="12" fill="#0C1420" r="1.5"></circle>
+<circle cx="35" cy="11" fill="#0C1420" r="1.5"></circle>
+<circle cx="50" cy="9" fill="#0C1420" r="1.5"></circle>
+<circle cx="65" cy="9" fill="#0C1420" r="1.5"></circle>
+<circle cx="80" cy="6" fill="#0C1420" r="1.5"></circle>
+<circle cx="95" cy="5" fill="#0C1420" r="1.5"></circle>
+</svg>
+</div>
+<div class="flex justify-between text-[10px] font-mono text-ink-faint px-1">
+<span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+</div>
+</div>
+</div>
+<!-- Card: Real-user Web Vitals (CrUX Tabular Metrics with Threshold Rails) -->
+<div class="border border-hairline rounded p-4 bg-surface">
+<div class="flex items-center justify-between mb-3">
+<div>
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block">FIELD DATA (75TH PERCENTILE)</span>
+<div class="text-sm font-semibold text-ink">Real-user Web Vitals</div>
+</div>
+<span class="text-[11px] font-mono text-ink-faint">Aggregated from Chrome UX Report</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse text-xs">
+<thead>
+<tr class="border-b border-hairline text-ink-faint font-label uppercase text-[10px] tracking-wider">
+<th class="py-2 pr-3 font-semibold">Day</th>
+<th class="py-2 px-3 font-semibold">LCP (p75)</th>
+<th class="py-2 px-3 font-semibold">INP (p75)</th>
+<th class="py-2 px-3 font-semibold">CLS (p75)</th>
+<th class="py-2 px-3 font-semibold">FCP</th>
+<th class="py-2 pl-3 font-semibold">TTFB</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-hairline font-mono text-ink">
+<!-- Row 1: Today -->
+<tr class="hover:bg-surface-quiet">
+<td class="py-2.5 pr-3 text-ink font-medium">Sun (Today)</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good font-semibold">1.42s</span>
+<!-- Signature Threshold Rail: 4px track, 3 zones, ink marker -->
+<div class="relative w-16 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[60%]"></div>
+<div class="h-full bg-rail-watch w-[25%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[35%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<!-- INP unmeasured empty dashed track -->
+<div class="flex items-center gap-1.5 text-ink-faint">
+<div class="w-12 h-1 border-b border-dashed border-hairline-strong"></div>
+<span class="text-[10px] font-body text-ink-faint">Not measured</span>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">0.02</span>
+<div class="relative w-12 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[65%]"></div>
+<div class="h-full bg-rail-watch w-[20%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[15%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3 text-ink-muted">0.88s</td>
+<td class="py-2.5 pl-3 text-signal-good">142ms</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-quiet">
+<td class="py-2.5 pr-3 text-ink font-medium">Sat</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">1.50s</span>
+<div class="relative w-16 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[60%]"></div>
+<div class="h-full bg-rail-watch w-[25%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[38%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-1.5 text-ink-faint">
+<div class="w-12 h-1 border-b border-dashed border-hairline-strong"></div>
+<span class="text-[10px] font-body text-ink-faint">Not measured</span>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">0.03</span>
+<div class="relative w-12 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[65%]"></div>
+<div class="h-full bg-rail-watch w-[20%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[20%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3 text-ink-muted">0.91s</td>
+<td class="py-2.5 pl-3 text-signal-good">155ms</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-quiet">
+<td class="py-2.5 pr-3 text-ink font-medium">Fri</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">1.61s</span>
+<div class="relative w-16 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[60%]"></div>
+<div class="h-full bg-rail-watch w-[25%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[42%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">85ms</span>
+<div class="relative w-14 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[50%]"></div>
+<div class="h-full bg-rail-watch w-[30%]"></div>
+<div class="h-full bg-rail-poor w-[20%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[25%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">0.02</span>
+<div class="relative w-12 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[65%]"></div>
+<div class="h-full bg-rail-watch w-[20%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[15%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3 text-ink-muted">0.94s</td>
+<td class="py-2.5 pl-3 text-signal-good">149ms</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-quiet">
+<td class="py-2.5 pr-3 text-ink font-medium">Thu</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-watch font-semibold">2.68s</span>
+<div class="relative w-16 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[60%]"></div>
+<div class="h-full bg-rail-watch w-[25%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[68%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-1.5 text-ink-faint">
+<div class="w-12 h-1 border-b border-dashed border-hairline-strong"></div>
+<span class="text-[10px] font-body text-ink-faint">Not measured</span>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">0.04</span>
+<div class="relative w-12 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[65%]"></div>
+<div class="h-full bg-rail-watch w-[20%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[25%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3 text-ink-muted">1.12s</td>
+<td class="py-2.5 pl-3 text-signal-watch">215ms</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-quiet">
+<td class="py-2.5 pr-3 text-ink font-medium">Wed</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">1.84s</span>
+<div class="relative w-16 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[60%]"></div>
+<div class="h-full bg-rail-watch w-[25%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[46%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-1.5 text-ink-faint">
+<div class="w-12 h-1 border-b border-dashed border-hairline-strong"></div>
+<span class="text-[10px] font-body text-ink-faint">Not measured</span>
+</div>
+</td>
+<td class="py-2.5 px-3">
+<div class="flex items-center gap-2">
+<span class="text-signal-good">0.03</span>
+<div class="relative w-12 h-1 bg-rail-track rounded-full overflow-hidden shrink-0 flex">
+<div class="h-full bg-rail-good w-[65%]"></div>
+<div class="h-full bg-rail-watch w-[20%]"></div>
+<div class="h-full bg-rail-poor w-[15%]"></div>
+<div class="absolute top-0 bottom-0 w-[2px] bg-rail-marker left-[20%]"></div>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-3 text-ink-muted">1.04s</td>
+<td class="py-2.5 pl-3 text-signal-good">172ms</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<!-- 7. COLLAPSED GROUP: "Advanced tuning" -->
+<section class="border border-hairline rounded-lg bg-surface overflow-hidden">
+<div class="px-5 py-3.5 bg-surface-quiet flex items-center justify-between cursor-pointer hover:bg-canvas-sunken/60 transition-colors">
+<div>
+<div class="font-headline text-[15px] font-semibold text-ink">Advanced tuning</div>
+<div class="text-xs text-ink-muted">Option bloat, edge caching, adaptive AI, and llms.txt.</div>
+</div>
+<span class="material-symbols-outlined text-ink-muted">chevron_right</span>
+</div>
+</section>
+<!-- 8. OPEN GROUP: "Server, images and activity" -->
+<section class="border border-hairline rounded-lg bg-surface overflow-hidden">
+<div class="px-5 py-3.5 bg-surface-quiet border-b border-hairline flex items-center justify-between cursor-pointer">
+<div>
+<div class="font-headline text-[15px] font-semibold text-ink">Server, images and activity</div>
+<div class="text-xs text-ink-muted">System information, image conversion, and what changed.</div>
+</div>
+<span class="material-symbols-outlined text-ink-muted">expand_more</span>
+</div>
+<div class="p-5 space-y-5">
+<!-- Card: System Info -->
+<div class="border border-hairline rounded p-4 bg-surface">
+<div class="flex items-center justify-between mb-3">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold">RUNTIME TELEMETRY</span>
+<button class="h-7 px-3 rounded bg-surface border border-hairline text-ink text-xs font-semibold hover:bg-canvas-sunken" type="button">
+                  Load System Info
+                </button>
+</div>
+<!-- Two-column definition list with monospace values -->
+<div class="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+<div class="flex justify-between py-1 border-b border-hairline">
+<span class="text-ink-muted">PHP Version</span>
+<span class="font-mono text-ink font-semibold">8.3.6</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline">
+<span class="text-ink-muted">Memory Limit</span>
+<span class="font-mono text-ink font-semibold">512M</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline">
+<span class="text-ink-muted">Opcache State</span>
+<span class="font-mono text-signal-good font-semibold">Enabled (128MB)</span>
+</div>
+<div class="flex justify-between py-1 border-b border-hairline">
+<span class="text-ink-muted">Web Server</span>
+<span class="font-mono text-ink font-semibold">LiteSpeed / Nginx</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-ink-muted">Object Cache</span>
+<span class="font-mono text-signal-good font-semibold">Redis 7.2.4 Connected</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-ink-muted">Gzip / Brotli</span>
+<span class="font-mono text-ink font-semibold">Active (Level 5)</span>
+</div>
+</div>
+</div>
+<!-- Card: Image Optimisation -->
+<div class="border border-hairline rounded p-4 bg-surface space-y-3">
+<div class="flex items-center justify-between">
+<div>
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold block">NEXT-GEN MEDIA ENGINE</span>
+<div class="text-sm font-semibold text-ink">Image Optimisation</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[11px] font-mono bg-signal-good-soft text-signal-good font-semibold">
+                  Queue Idle
+                </span>
+</div>
+<!-- Progress bar 1: WebP -->
+<div class="space-y-1">
+<div class="flex justify-between text-xs">
+<span class="text-ink-muted font-medium">WebP Conversion Progress</span>
+<span class="font-mono text-ink font-semibold">78% (321 / 412)</span>
+</div>
+<div class="h-2 w-full bg-canvas-sunken rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 78%;"></div>
+</div>
+</div>
+<!-- Progress bar 2: AVIF -->
+<div class="space-y-1">
+<div class="flex justify-between text-xs">
+<span class="text-ink-muted font-medium">AVIF Conversion Progress</span>
+<span class="font-mono text-ink font-semibold">34% (140 / 412)</span>
+</div>
+<div class="h-2 w-full bg-canvas-sunken rounded-full overflow-hidden">
+<div class="h-full bg-signal-good rounded-full" style="width: 34%;"></div>
+</div>
+</div>
+<!-- Savings line -->
+<div class="p-2.5 rounded bg-surface-quiet border border-hairline flex items-center justify-between text-xs">
+<span class="text-ink-muted">Bandwidth &amp; storage savings:</span>
+<span class="font-mono text-ink font-semibold">
+                  Original 2.41 GB → Optimised 612 MB <span class="text-signal-good">(75% smaller · 412 images)</span>
+</span>
+</div>
+</div>
+<!-- Card: Recent Optimization Activity -->
+<div class="border border-hairline rounded p-4 bg-surface">
+<div class="flex items-center justify-between mb-2.5">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold">AUDIT FEED</span>
+<span class="text-[11px] font-mono text-ink-faint">Auto-refresh: 30s</span>
+</div>
+<div class="divide-y divide-hairline text-xs font-mono">
+<div class="py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span>
+<span class="text-ink font-body">Cache cleared for path</span>
+<span class="text-primary font-mono text-[11px]">/docs/performance-architecture</span>
+</div>
+<span class="text-ink-faint text-[11px]">10:14:02</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="text-ink font-body">Critical CSS regenerated for</span>
+<span class="text-ink-muted font-mono text-[11px]">single-portfolio.php</span>
+</div>
+<span class="text-ink-faint text-[11px]">09:48:19</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span>
+<span class="text-ink font-body">Image pipeline finished:</span>
+<span class="text-ink-muted font-mono text-[11px]">412 images converted to WebP</span>
+</div>
+<span class="text-ink-faint text-[11px]">08:30:45</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-watch"></span>
+<span class="text-ink font-body">Garbage collection pruned</span>
+<span class="text-ink-muted font-mono text-[11px]">48 expired transient payloads</span>
+</div>
+<span class="text-ink-faint text-[11px]">04:00:00</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Spacing -->
+<div class="h-8"></div>
+</main>
+</div>
+<!-- ================================================================= -->
+<!-- 3. RIGHT INSPECTOR: 344px width, white, sticky, full height       -->
+<!-- ================================================================= -->
+<aside class="fixed top-0 right-0 h-screen w-[344px] bg-surface border-l border-hairline flex flex-col justify-between z-30 select-none overflow-hidden">
+<!-- Top Section + Scrollable Inspector Body -->
+<div class="flex-1 overflow-y-auto custom-scroll">
+<!-- Inspector Subject Header (Sticky) -->
+<div class="p-4 border-b border-hairline bg-surface-quiet sticky top-0 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label text-eyebrow uppercase text-ink-faint font-semibold tracking-wider">INSPECTOR · SELECTED CONTROL</span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-signal-good-soft text-signal-good">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span> Working
+            </span>
+</div>
+<h2 class="font-headline text-headline-md font-semibold text-ink tracking-tight">Enable Page Cache</h2>
+<div class="text-xs text-ink-muted font-mono mt-0.5">Core Cache Engine (WP_CACHE)</div>
+</div>
+<div class="p-5 space-y-6 text-xs leading-relaxed">
+<!-- BLOCK 1: WHAT IT DOES -->
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-1.5">WHAT IT DOES</div>
+<p class="text-ink font-medium mb-1.5">
+              Stores a finished copy of each page so WordPress does not rebuild it for every visitor.
+            </p>
+<p class="text-ink-muted">
+              Requests bypass PHP execution and database queries entirely, delivering pre-rendered HTML directly from local NVMe storage with response times under 50ms.
+            </p>
+</div>
+<!-- BLOCK 2: WHAT IT COSTS YOU -->
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-1.5">WHAT IT COSTS YOU</div>
+<p class="text-ink font-medium mb-1.5">
+              No known downside. Pages are regenerated automatically when content changes.
+            </p>
+<div class="p-2.5 rounded bg-surface-quiet border border-hairline text-ink-muted text-[11.5px]">
+              Disk space is capped at <span class="font-mono text-ink font-semibold">500 MB</span> with FIFO garbage collection enabled. Cart and checkout sessions automatically bypass cache via cookie rules.
+            </div>
+</div>
+<!-- BLOCK 3: WHERE YOU STAND NOW -->
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-2">WHERE YOU STAND NOW</div>
+<div class="bg-surface-quiet rounded border border-hairline divide-y divide-hairline">
+<div class="px-3 py-2 flex items-center justify-between">
+<span class="text-ink-muted">Cache Size</span>
+<span class="font-mono text-ink font-semibold">9.0 MB cached</span>
+</div>
+<div class="px-3 py-2 flex items-center justify-between">
+<span class="text-ink-muted">Engine Status</span>
+<span class="font-mono text-signal-good font-semibold">Working</span>
+</div>
+<div class="px-3 py-2 flex items-center justify-between">
+<span class="text-ink-muted">Hit Ratio</span>
+<span class="font-mono text-ink font-semibold">94.2%</span>
+</div>
+<div class="px-3 py-2 flex items-center justify-between">
+<span class="text-ink-muted">Last Flushed</span>
+<span class="font-mono text-ink-faint">2026-09-28 08:52</span>
+</div>
+</div>
+</div>
+<!-- BLOCK 4: RELATED SETTINGS -->
+<div>
+<div class="font-label text-eyebrow uppercase text-ink-faint font-semibold mb-2">RELATED SETTINGS</div>
+<div class="space-y-1.5">
+<a class="p-2 rounded border border-hairline bg-surface hover:bg-surface-quiet flex items-center justify-between text-ink-muted hover:text-ink transition-colors group" href="#">
+<div>
+<div class="font-semibold text-ink group-hover:text-primary">Cache Lifespan</div>
+<div class="text-[11px] text-ink-faint font-mono">10 hours configured</div>
+</div>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+<a class="p-2 rounded border border-hairline bg-surface hover:bg-surface-quiet flex items-center justify-between text-ink-muted hover:text-ink transition-colors group" href="#">
+<div>
+<div class="font-semibold text-ink group-hover:text-primary">Cache for logged-in users</div>
+<div class="text-[11px] text-ink-faint font-mono">Disabled — recommended</div>
+</div>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+<a class="p-2 rounded border border-hairline bg-surface hover:bg-surface-quiet flex items-center justify-between text-ink-muted hover:text-ink transition-colors group" href="#">
+<div>
+<div class="font-semibold text-ink group-hover:text-primary">CDN cache purge</div>
+<div class="text-[11px] text-ink-faint font-mono">Automated on publish</div>
+</div>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Inspector Footer -->
+<div class="p-3 border-t border-hairline bg-surface-quiet flex items-center justify-between text-[11px] text-ink-faint">
+<span class="font-mono">Active focus: Engine / PageCache</span>
+<span class="font-mono">v2.4.0</span>
+</div>
+</aside>
+</div>
+</body></html>

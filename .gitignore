@@ -33,3 +33,4 @@ test-lab/
 # Private release-rhythm files (local planning only, never commit).
 /AGENT-RELEASE.md
 /RELEASE-SCHEDULE.local.md
+.ux-shots/

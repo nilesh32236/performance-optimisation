@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Database Cleanup — Instrument Performance Optimisation</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Public+Sans:wght@500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Script -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#F4F6F9',
+            'canvas-sunken': '#EDF1F6',
+            surface: '#FFFFFF',
+            'surface-quiet': '#F8FAFC',
+            ink: '#0C1420',
+            'ink-muted': '#4A5A6E',
+            'ink-faint': '#7C8CA0',
+            hairline: '#DDE3EA',
+            'hairline-strong': '#C3CDD9',
+            primary: '#1B5FD9',
+            'primary-hover': '#1549AC',
+            'primary-soft': '#E8F0FE',
+            'on-primary': '#FFFFFF',
+            'signal-good': '#0B8A5C',
+            'signal-good-soft': '#E6F6EF',
+            'signal-watch': '#B26A00',
+            'signal-watch-soft': '#FFF4E0',
+            'signal-poor': '#C02626',
+            'signal-poor-soft': '#FDECEC',
+            'signal-idle': '#6B7A8D',
+            'signal-idle-soft': '#EEF1F5',
+            'rail-good': '#0B8A5C',
+            'rail-watch': '#E0A32E',
+            'rail-poor': '#C02626',
+            'rail-track': '#E4E9EF',
+            'rail-marker': '#0C1420',
+          },
+          borderRadius: {
+            DEFAULT: "8px",
+            xs: "3px",
+            sm: "5px",
+            md: "10px",
+            lg: "14px",
+            full: "9999px"
+          },
+          fontFamily: {
+            headline: ["Space Grotesk", "sans-serif"],
+            display: ["Space Grotesk", "sans-serif"],
+            body: ["IBM Plex Sans", "sans-serif"],
+            label: ["IBM Plex Sans", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #F8FAFC;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #DDE3EA;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-ink font-body antialiased min-h-screen flex selection:bg-primary-soft selection:text-primary">
+<!-- 1. LEFT SIDE NAV (236px width, fixed left, h-screen) -->
+<aside class="fixed top-0 left-0 h-screen w-[236px] flex flex-col justify-between bg-surface-quiet border-r border-hairline z-30 select-none">
+<div class="flex flex-col">
+<!-- Brand & Product Header -->
+<div class="h-16 px-4 flex items-center gap-3 border-b border-hairline">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-semibold text-[13px] leading-tight text-ink tracking-tight">Performance</span>
+<span class="font-headline text-[12px] font-medium text-ink-muted leading-tight">Optimisation</span>
+</div>
+</div>
+<!-- Main Navigation Items -->
+<nav class="p-3 space-y-1">
+<!-- Overview -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded hover:bg-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-ink-faint">dashboard</span>
+<span>Overview</span>
+</a>
+<!-- Speed -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded hover:bg-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-ink-faint">speed</span>
+<span>Speed</span>
+</a>
+<!-- Media -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded hover:bg-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-ink-faint">perm_media</span>
+<span>Media</span>
+</a>
+<!-- Data & System (ACTIVE STATE) -->
+<a class="bg-surface text-primary font-semibold border-l-2 border-primary pl-3 py-2 flex items-center gap-3 text-[13.5px] rounded-r" href="#">
+<span class="material-symbols-outlined text-primary">database</span>
+<span>Data &amp; System</span>
+</a>
+<!-- Manage -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded hover:bg-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-ink-faint">settings</span>
+<span>Manage</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Footer Meta -->
+<div class="p-4 border-t border-hairline bg-surface-quiet/60 flex flex-col gap-2">
+<div class="flex items-center justify-between text-xs">
+<span class="font-mono text-[11px] text-ink-muted font-medium">v2.4.0</span>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono text-signal-good bg-signal-good-soft border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span>
+          Engine OK
+        </span>
+</div>
+<div class="text-[11px] font-mono text-ink-faint truncate pt-1 border-t border-hairline/60">
+        WP 6.7.1 · PHP 8.3
+      </div>
+</div>
+</aside>
+<!-- 2. TOP BAR & WORK AREA (ml-[236px] mr-[344px], fluid, left-aligned) -->
+<div class="flex-1 ml-[236px] mr-[344px] min-h-screen bg-canvas pb-20">
+<!-- Top Utility Bar (Shared Component Style) -->
+<header class="flex justify-between items-center h-14 px-8 w-full border-b border-hairline bg-surface sticky top-0 z-20">
+<div class="flex items-center gap-2">
+<span class="font-label text-[11px] font-semibold tracking-wider text-ink-faint uppercase">WP-ADMIN</span>
+<span class="text-hairline-strong text-xs">/</span>
+<span class="font-headline text-[14px] font-semibold text-ink">Instrument Engine</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="h-8 px-3 border border-hairline rounded bg-surface hover:bg-canvas-sunken text-xs font-medium text-ink transition-colors duration-150 flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px]">refresh</span>
+          Re-test Site
+        </button>
+<button class="h-8 px-3 bg-surface border border-hairline rounded hover:bg-canvas-sunken text-xs font-medium text-ink transition-colors duration-150 flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px]">tune</span>
+          Purge Cache
+        </button>
+</div>
+</header>
+<!-- Work Area Container (Capped at 880px, left-aligned) -->
+<main class="px-8 pt-7 max-w-[880px]">
+<!-- Page Header -->
+<div class="flex justify-between items-start pb-6 border-b border-hairline mb-6">
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint">DATA &amp; SYSTEM</span>
+<h1 class="font-headline font-semibold text-2xl text-ink tracking-tight mt-0.5">Database Cleanup</h1>
+<p class="font-body text-[13.5px] text-ink-muted mt-1 leading-normal">
+            Database cleanup and server-side caching, with the risk of each made clear.
+          </p>
+</div>
+<button class="h-8 px-4 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded transition-colors duration-150 flex items-center gap-1.5 shrink-0 active:scale-[0.98]" type="button">
+<span class="material-symbols-outlined text-[16px]">save</span>
+          Save Settings
+        </button>
+</div>
+<!-- CARD 1: Automated Database Cleanup -->
+<section class="bg-surface border border-hairline rounded p-6 mb-7">
+<div class="mb-5 pb-4 border-b border-hairline">
+<h2 class="font-headline text-[16px] font-semibold text-ink">Automated Database Cleanup</h2>
+<p class="text-xs text-ink-muted mt-0.5">Configure autonomous background crons to prune outdated records and maintain query performance.</p>
+</div>
+<div class="space-y-4">
+<!-- Row 1: Schedule Frequency -->
+<div class="grid grid-cols-12 gap-4 items-center">
+<label class="col-span-5 text-[13px] font-medium text-ink">
+              Schedule Frequency
+              <span class="block text-xs font-normal text-ink-muted">Set recurring automation run cadence</span>
+</label>
+<div class="col-span-7">
+<select class="w-full h-8 text-xs font-body rounded border border-hairline px-2.5 bg-surface text-ink focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none">
+<option selected="">None (Manual Only)</option>
+<option>Daily at 03:00 UTC</option>
+<option>Weekly (Sundays)</option>
+<option>Monthly (1st of month)</option>
+</select>
+</div>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- Row 2: Revision Max Age -->
+<div class="grid grid-cols-12 gap-4 items-center">
+<label class="col-span-5 text-[13px] font-medium text-ink">
+              Revision Max Age (Days)
+              <span class="block text-xs font-normal text-ink-muted">Revisions older than this boundary will be flagged</span>
+</label>
+<div class="col-span-7 flex items-center gap-2">
+<input class="w-24 h-8 text-xs font-mono rounded border border-hairline px-2.5 bg-surface text-ink focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none" type="number" value="30"/>
+<span class="text-xs text-ink-faint">days threshold</span>
+</div>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- Row 3: Keep Latest Revisions -->
+<div class="grid grid-cols-12 gap-4 items-center">
+<label class="col-span-5 text-[13px] font-medium text-ink">
+              Keep Latest Revisions
+              <span class="block text-xs font-normal text-ink-muted">Preserve at least N revisions per published post</span>
+</label>
+<div class="col-span-7 flex items-center gap-2">
+<input class="w-24 h-8 text-xs font-mono rounded border border-hairline px-2.5 bg-surface text-ink focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none" type="number" value="5"/>
+<span class="text-xs text-ink-faint">versions protected</span>
+</div>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- Row 4: Optimize tables after cleanup (Toggle) -->
+<div class="grid grid-cols-12 gap-4 items-center">
+<div class="col-span-10">
+<span class="text-[13px] font-medium text-ink block">Optimize tables after cleanup</span>
+<span class="text-xs text-ink-muted">Executes <code class="font-mono text-[11px] bg-canvas px-1 py-0.5 rounded text-ink">OPTIMIZE TABLE</code> to reclaim disk fragmentation after mass row deletion.</span>
+</div>
+<div class="col-span-2 flex justify-end">
+<!-- Switch On -->
+<button class="w-9 h-5 bg-primary rounded-full relative transition-colors focus:outline-none focus:ring-2 focus:ring-primary-soft" type="button">
+<span class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 transition-transform"></span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 2: Total Database Overhead -->
+<section class="bg-surface border border-hairline rounded p-6">
+<!-- Header summary metrics -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-hairline gap-4">
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint block">OVERHEAD STATUS</span>
+<div class="flex items-baseline gap-3 mt-1">
+<span class="font-mono text-3xl font-bold tracking-tight text-ink">103.02 MB</span>
+<span class="text-xs font-body text-ink-muted">overhead identified across <strong class="font-mono font-medium text-ink">931 items</strong></span>
+</div>
+<div class="flex items-center gap-4 mt-2 text-xs text-ink-faint font-mono">
+<span>Indexed tables: 48</span>
+<span>·</span>
+<span>Engine: InnoDB</span>
+<span>·</span>
+<span>DB Size: 412.8 MB</span>
+</div>
+</div>
+<div>
+<button class="h-9 px-4 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded transition-colors duration-150 flex items-center gap-2 shrink-0 shadow-none" type="button">
+<span class="material-symbols-outlined text-[16px]">mop</span>
+              Optimize Everything Now
+            </button>
+</div>
+</div>
+<!-- Section Eyebrow -->
+<div class="pt-5 pb-3">
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint">GRANULAR CLEANUP OPTIONS</span>
+</div>
+<!-- Ten Granular Cleanup Rows -->
+<div class="border border-hairline rounded overflow-hidden">
+<!-- Row 1: Post Revisions (Safe) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Post Revisions</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">Safe</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Historical edit snapshots saved on every post draft update.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">405 items</div>
+<div class="font-mono text-[11px] text-ink-faint">12.4 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 2: Auto Drafts (Caution) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Auto Drafts</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">Caution</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">WordPress auto-saves generated when creating a new post window.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">18 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.3 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 3: Trashed Posts (Caution) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Trashed Posts</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">Caution</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Deleted posts waiting in trash recycle bin before permanent deletion.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">6 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.1 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 4: Spam Comments (Caution) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Spam Comments</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">Caution</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Automated flag queue marked as spam by moderation plugins.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">142 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.9 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 5: Trashed Comments (Caution) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Trashed Comments</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">Caution</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Manually discarded feedback entries held in trash queue.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">3 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.02 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 6: Expired Transients (Safe) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Expired Transients</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">Safe</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Temporary cached key-value entries in wp_options that passed expiration.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">88 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.4 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 7: Orphaned Post Meta (Review) -> VISIBLY SELECTED ROW -->
+<div class="flex items-center justify-between px-4 py-3 bg-[#EFF6FF] border-l-[3px] border-l-primary border-b border-hairline transition-colors relative">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-bold text-ink">Orphaned Post Meta</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">Review</span>
+<span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-primary text-white font-semibold tracking-wider">Active</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Records in wp_postmeta with post_id no longer matching any row in wp_posts.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-bold">214 items</div>
+<div class="font-mono text-[11px] text-primary font-semibold">1.1 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 bg-primary text-white border border-primary rounded text-xs font-medium hover:bg-primary-hover shadow-none" type="button">Clean</button>
+<button class="h-7 px-2 text-ink hover:text-primary text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 8: Unattached Media (Caution) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Unattached Media</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">Caution</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Media uploads without parent post relation (could still be referenced in builders).</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">31 items</div>
+<div class="font-mono text-[11px] text-ink-faint">88.2 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 9: oEmbed Cache (Safe) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet border-b border-hairline transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">oEmbed Cache</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">Safe</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Stored HTML snippets for external YouTube, Twitter/X, and Vimeo embeds.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">22 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0.1 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline rounded hover:bg-canvas text-xs text-ink-muted hover:text-ink font-medium" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint hover:text-ink text-xs font-medium" type="button">Export</button>
+</div>
+</div>
+</div>
+<!-- Row 10: Action Scheduler Queue (Safe) -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-quiet transition-colors">
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex items-center gap-2">
+<span class="text-[13.5px] font-semibold text-ink">Action Scheduler Queue</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">Safe</span>
+</div>
+<p class="text-xs text-ink-muted truncate mt-0.5">Completed and failed task logs created by WooCommerce background workers.</p>
+</div>
+<div class="flex items-center gap-6 shrink-0">
+<div class="text-right">
+<div class="font-mono text-[13px] text-ink font-semibold">0 items</div>
+<div class="font-mono text-[11px] text-ink-faint">0 MB</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="h-7 px-2.5 border border-hairline/60 rounded text-xs text-ink-faint font-medium opacity-50 cursor-not-allowed" disabled="" type="button">Clean</button>
+<button class="h-7 px-2 text-ink-faint text-xs font-medium opacity-50 cursor-not-allowed" disabled="" type="button">Export</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Note info foot of card -->
+<div class="mt-4 flex items-center justify-between text-xs text-ink-muted px-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-signal-watch text-[16px]">info</span>
+<span>All cleanup operations are transactional. Foreign key constraints are respected.</span>
+</div>
+<span class="font-mono text-[11px]">InnoDB Auto-Vacuum: Enabled</span>
+</div>
+</section>
+</main>
+</div>
+<!-- 3. RIGHT INSPECTOR (344px width, fixed right-0 top-0 h-screen, bg-white, border-l border-hairline) -->
+<aside class="fixed right-0 top-0 h-screen w-[344px] bg-white border-l border-hairline overflow-y-auto custom-scrollbar p-6 z-30 flex flex-col justify-between">
+<div class="space-y-6">
+<!-- Sticky / Top subject header -->
+<div class="pb-5 border-b border-hairline">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint">INSPECTOR · SELECTED CONTROL</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">
+<span class="w-1.5 h-1.5 rounded-full bg-[#991B1B]"></span>
+            Review Required
+          </span>
+</div>
+<h2 class="font-headline font-semibold text-[20px] text-ink tracking-tight mt-2">Orphaned Post Meta</h2>
+<p class="font-mono text-xs text-ink-muted mt-0.5">wp_postmeta table cleanup</p>
+</div>
+<!-- SECTION 1: WHAT IT DOES -->
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint block mb-2">WHAT IT DOES</span>
+<div class="text-[13px] text-ink leading-relaxed space-y-2">
+<p>
+            Deletes metadata entries in <code class="font-mono text-[11.5px] bg-canvas px-1 py-0.5 rounded text-ink border border-hairline">wp_postmeta</code> that point to post IDs that no longer exist in the database.
+          </p>
+<p class="text-ink-muted text-xs leading-normal">
+            Leftover meta commonly accumulates when deleting custom post types, WooCommerce orders, or page builder revisions without cascading deletes.
+          </p>
+</div>
+</div>
+<!-- SECTION 2: WHAT IT COSTS YOU (Warning Box) -->
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-[#991B1B] block mb-2">WHAT IT COSTS YOU</span>
+<div class="p-3.5 bg-signal-poor-soft border-l-[3px] border-[#C02626] rounded-r space-y-2">
+<p class="text-xs text-[#991B1B] font-medium leading-relaxed">
+            These rows are not referenced by any post. Deleting them is usually safe, but a plugin that stores data outside the normal WordPress tables can lose its settings.
+          </p>
+<p class="text-[11px] text-[#991B1B]/80 leading-normal pt-1 border-t border-[#C02626]/20">
+            Recommendation: Run an export backup before purging if you run custom ERP syncs or legacy membership plugins.
+          </p>
+</div>
+</div>
+<!-- SECTION 3: WHERE YOU STAND NOW -->
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint block mb-2">WHERE YOU STAND NOW</span>
+<div class="border border-hairline rounded divide-y divide-hairline text-xs">
+<div class="flex justify-between items-center px-3 py-2 bg-surface">
+<span class="text-ink-muted font-medium">Total Rows</span>
+<span class="font-mono font-semibold text-ink">214 orphaned rows</span>
+</div>
+<div class="flex justify-between items-center px-3 py-2 bg-surface">
+<span class="text-ink-muted font-medium">Estimated Space Reclaimed</span>
+<span class="font-mono font-semibold text-primary">1.1 MB</span>
+</div>
+<div class="flex justify-between items-center px-3 py-2 bg-surface">
+<span class="text-ink-muted font-medium">Last Scanned</span>
+<span class="font-mono text-ink-muted">2026-09-28 09:14</span>
+</div>
+<div class="flex justify-between items-center px-3 py-2 bg-surface">
+<span class="text-ink-muted font-medium">Safety Classification</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">Review</span>
+</div>
+</div>
+</div>
+<!-- SECTION 4: RELATED SETTINGS -->
+<div>
+<span class="font-label text-[11px] font-semibold tracking-wider uppercase text-ink-faint block mb-2">RELATED SETTINGS</span>
+<div class="space-y-1.5">
+<a class="group flex items-center justify-between p-2.5 rounded border border-hairline hover:border-hairline-strong bg-surface hover:bg-surface-quiet transition-colors" href="#">
+<span class="text-xs font-medium text-ink group-hover:text-primary">Automatic Post Meta Exclusions</span>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+<a class="group flex items-center justify-between p-2.5 rounded border border-hairline hover:border-hairline-strong bg-surface hover:bg-surface-quiet transition-colors" href="#">
+<span class="text-xs font-medium text-ink group-hover:text-primary">Export wp_postmeta SQL dump</span>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+<a class="group flex items-center justify-between p-2.5 rounded border border-hairline hover:border-hairline-strong bg-surface hover:bg-surface-quiet transition-colors" href="#">
+<span class="text-xs font-medium text-ink group-hover:text-primary">Database table defragmentation</span>
+<span class="material-symbols-outlined text-[16px] text-ink-faint group-hover:text-primary">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Inspector Bottom Action Footer -->
+<div class="pt-6 border-t border-hairline mt-6 flex flex-col gap-2">
+<button class="w-full h-8 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px]">delete_sweep</span>
+        Purge Selected 214 Rows
+      </button>
+<button class="w-full h-8 bg-surface hover:bg-canvas-sunken text-ink text-xs font-medium border border-hairline rounded flex items-center justify-center gap-1.5 transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px]">download</span>
+        Export SQL Backup First
+      </button>
+</div>
+</aside>
+</body></html>

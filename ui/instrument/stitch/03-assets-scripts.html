@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Performance Optimisation — Speed</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#F4F6F9',
+            'canvas-sunken': '#EDF1F6',
+            surface: '#FFFFFF',
+            'surface-quiet': '#F8FAFC',
+            ink: '#0C1420',
+            'ink-muted': '#4A5A6E',
+            'ink-faint': '#8C9BAE',
+            hairline: '#DDE3EA',
+            'hairline-strong': '#CBD5E1',
+            primary: '#1B5FD9',
+            'primary-soft': '#EBF2FE',
+            'primary-dark': '#1347A4',
+            emerald: '#0EA569',
+            'emerald-soft': '#E6F8F0',
+            amber: '#D97706',
+            'amber-soft': '#FEF3C7',
+            'amber-tint': '#FFFBEB',
+            'amber-rule': '#F59E0B',
+            crimson: '#DC2626',
+            'crimson-soft': '#FEE2E2',
+          },
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          boxShadow: {
+            none: 'none',
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    /* Custom scrollbars for instrument feel */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-ink font-sans antialiased h-screen overflow-hidden flex select-none">
+<!-- LEFT ZONE: NAV 236px (fixed h-screen) -->
+<aside class="w-[236px] flex-shrink-0 h-screen bg-surface border-r border-hairline flex flex-col justify-between z-20">
+<!-- Brand / Header -->
+<div>
+<div class="h-16 px-5 flex items-center gap-3 border-b border-hairline">
+<div class="w-7 h-7 rounded bg-primary-soft text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined fill text-[18px]">bolt</span>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-[13px] leading-tight tracking-tight text-ink">Performance</span>
+<span class="font-normal text-[11px] leading-tight text-ink-muted">Optimisation</span>
+</div>
+</div>
+<!-- Navigation links -->
+<nav class="p-3 space-y-0.5">
+<a class="flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-canvas transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span>Overview</span>
+</a>
+<!-- Speed (Active) -->
+<a class="flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-semibold text-primary bg-primary-soft border-l-[3px] border-primary transition-colors" href="#">
+<span class="material-symbols-outlined fill text-[18px]">speed</span>
+<span>Speed</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-canvas transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">perm_media</span>
+<span>Media</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-canvas transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">database</span>
+<span>Data &amp; System</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-canvas transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+<span>Manage</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Footer Meta -->
+<div class="p-4 border-t border-hairline bg-surface flex flex-col gap-2">
+<div class="flex items-center justify-between text-[11px] font-mono text-ink-muted">
+<span class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-emerald"></span>
+<span>Engine OK</span>
+</span>
+<span class="text-ink-faint">v2.4.0</span>
+</div>
+<div class="text-[11px] text-ink-faint font-mono">WP 6.7.1 · PHP 8.3</div>
+</div>
+</aside>
+<!-- CENTER ZONE: WORK AREA (fluid, content capped 880px, LEFT-ALIGNED) -->
+<main class="flex-1 h-screen overflow-y-auto bg-canvas">
+<div class="max-w-[880px] w-full px-8 py-8 mr-auto">
+<!-- PAGE HEAD -->
+<div class="mb-6">
+<div class="flex items-start justify-between">
+<div>
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1">SPEED</div>
+<h1 class="text-2xl font-bold tracking-tight text-ink">Speed</h1>
+<p class="text-[13px] text-ink-muted mt-0.5">Make pages load faster: assets, scripts, preloading and server rules.</p>
+</div>
+<button class="bg-primary hover:bg-primary-dark text-white text-[13px] font-semibold px-4 py-2 rounded tracking-tight transition-colors flex items-center gap-1.5 shadow-none active:scale-[0.99]">
+<span class="material-symbols-outlined text-[16px]">save</span>
+<span>Save Settings</span>
+</button>
+</div>
+<!-- Sub tabs: Assets & Scripts (active) and Preload -->
+<div class="flex items-center gap-6 mt-5 border-b border-hairline">
+<button class="text-[13px] font-semibold text-primary border-b-2 border-primary pb-2.5 px-0.5 tracking-tight flex items-center gap-1.5">
+<span>Assets &amp; Scripts</span>
+</button>
+<button class="text-[13px] font-medium text-ink-muted hover:text-ink pb-2.5 px-0.5 tracking-tight transition-colors">
+<span>Preload</span>
+</button>
+</div>
+</div>
+<!-- CARD 1: File Optimisation -->
+<section class="bg-surface rounded-lg border border-hairline p-5 mb-5">
+<div class="flex items-center justify-between pb-3.5 border-b border-hairline mb-4">
+<div>
+<h2 class="text-[14px] font-bold text-ink tracking-tight">File Optimisation</h2>
+<p class="text-[12px] text-ink-muted mt-0.5">Fine-tune how your site delivers CSS, JS, and HTML for maximum performance.</p>
+</div>
+</div>
+<!-- Inner pill sub-tab strip: Assets (active), Scripts, E-Commerce, Network, Core -->
+<div class="inline-flex p-1 bg-canvas-sunken rounded-md gap-1">
+<button class="px-3 py-1 rounded bg-surface text-ink text-[12px] font-semibold border border-hairline/60">Assets</button>
+<button class="px-3 py-1 rounded text-ink-muted hover:text-ink text-[12px] font-medium transition-colors">Scripts</button>
+<button class="px-3 py-1 rounded text-ink-muted hover:text-ink text-[12px] font-medium transition-colors">E-Commerce</button>
+<button class="px-3 py-1 rounded text-ink-muted hover:text-ink text-[12px] font-medium transition-colors">Network</button>
+<button class="px-3 py-1 rounded text-ink-muted hover:text-ink text-[12px] font-medium transition-colors">Core</button>
+</div>
+</section>
+<!-- CARD 2: Optimisation Presets -->
+<section class="bg-surface rounded-lg border border-hairline p-5 mb-5">
+<div class="mb-4">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1">ENGINE MODE</div>
+<h2 class="text-[14px] font-bold text-ink tracking-tight">Optimisation Presets</h2>
+<p class="text-[12px] text-ink-muted mt-1 leading-relaxed">
+            Pre-calibrated profiles tested against high-concurrency production stores and blogs. Switching modes instantly updates lower level optimization flags.
+          </p>
+</div>
+<!-- Three full-width buttons -->
+<div class="grid grid-cols-3 gap-2.5 mb-4">
+<button class="w-full py-2 px-3 border border-hairline rounded bg-surface hover:bg-canvas text-ink text-[12px] font-semibold text-center transition-colors">
+            Apply Safe Preset
+          </button>
+<button class="w-full py-2 px-3 border border-amber/40 rounded bg-amber-soft/40 hover:bg-amber-soft text-ink text-[12px] font-semibold text-center transition-colors flex items-center justify-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-amber"></span>
+<span>Enable Aggressive Mode</span>
+</button>
+<button class="w-full py-2 px-3 border border-transparent rounded bg-canvas-sunken hover:bg-hairline text-ink-muted hover:text-ink text-[12px] font-medium text-center transition-colors">
+            Revert to Previous
+          </button>
+</div>
+<!-- Amber warning banner with 3px left rule -->
+<div class="border-l-[3px] border-amber-rule bg-amber-tint p-3.5 rounded-r">
+<div class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-amber text-[18px] flex-shrink-0 mt-0.5">warning</span>
+<p class="text-[12px] leading-relaxed text-ink">
+<strong class="font-semibold">Aggressive mode is on:</strong> builder, jQuery or WooCommerce scripts may be delayed. Re-enable the safe presets — or press Revert to Previous to restore your last settings in one click.
+            </p>
+</div>
+</div>
+</section>
+<!-- CARD 3: CSS Optimisation -->
+<section class="bg-surface rounded-lg border border-hairline mb-5 overflow-hidden">
+<div class="px-5 py-4 border-b border-hairline flex items-center justify-between">
+<div>
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-0.5">STYLESHEET ENGINE</div>
+<h2 class="text-[14px] font-bold text-ink tracking-tight">CSS Optimisation</h2>
+</div>
+<span class="text-[11px] font-mono text-emerald bg-emerald-soft px-2 py-0.5 rounded font-medium">Inline active</span>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row: Minify CSS -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<div class="flex items-center gap-2">
+<span class="text-[13px] font-semibold text-ink">Minify CSS</span>
+</div>
+<p class="text-[12px] text-ink-muted mt-0.5">Remove whitespace and comments from stylesheets to reduce file size.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Row: Combine CSS -->
+<div class="p-4 px-5 bg-surface hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="flex items-center justify-between">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Combine CSS</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Merge all CSS files into a single file to reduce the number of requests.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Amber inline notice -->
+<div class="mt-2.5 flex items-center gap-2 text-[11px] text-amber font-medium bg-amber-soft/50 py-1.5 px-2.5 rounded border border-amber/20">
+<span class="material-symbols-outlined text-[15px]">info</span>
+<span>May cause FOUC — test in incognito and exclude problematic files above.</span>
+</div>
+</div>
+<!-- Eyebrow: EXCLUDE FROM COMBINING -->
+<div class="p-4 px-5 bg-canvas-sunken/40">
+<label class="block text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1.5">EXCLUDE FROM COMBINING</label>
+<textarea class="w-full font-mono text-[12px] p-2.5 rounded border border-hairline bg-surface text-ink focus:border-primary outline-none resize-none leading-relaxed" placeholder="e.g. handle-name or /wp-content/.../style.css" rows="2"></textarea>
+<p class="text-[11px] text-ink-muted mt-1 font-sans">One handle or partial URL per line.</p>
+</div>
+<!-- Row: Remove Unused CSS (VISIBLY SELECTED: Tinted background & left rule) -->
+<div class="p-4 px-5 bg-primary-soft/50 border-l-[3px] border-primary flex items-center justify-between cursor-pointer group">
+<div class="max-w-[540px]">
+<div class="flex items-center gap-2">
+<span class="text-[13px] font-semibold text-ink">Remove Unused CSS</span>
+<span class="text-[10px] font-mono uppercase bg-primary text-white px-1.5 py-0.5 rounded font-semibold tracking-wide">Selected</span>
+</div>
+<p class="text-[12px] text-ink-muted mt-0.5">Scan pages and remove CSS rules that are not used. Reduces file size by 30-80% and helps pass PageSpeed audits.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-primary text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Row: Critical CSS -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Critical CSS</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- CRITICAL CSS MAX SIZE (BYTES) -->
+<div class="p-4 px-5 bg-canvas-sunken/20">
+<label class="block text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1.5">CRITICAL CSS MAX SIZE (BYTES)</label>
+<div class="max-w-xs">
+<input class="w-full font-mono text-[12px] p-2 rounded border border-hairline bg-surface text-ink focus:border-primary outline-none" type="number" value="20480"/>
+</div>
+<p class="text-[11px] text-ink-muted mt-1 font-sans">Inline output above this size is served from a per-template file with cache busting instead.</p>
+</div>
+<!-- CRITICAL CSS SAFELIST -->
+<div class="p-4 px-5 bg-canvas-sunken/20">
+<label class="block text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1.5">CRITICAL CSS SAFELIST</label>
+<textarea class="w-full font-mono text-[12px] p-2.5 rounded border border-hairline bg-surface text-ink focus:border-primary outline-none resize-none leading-relaxed" placeholder=".nav-menu-open, [data-dialog], .header-sticky" rows="2"></textarea>
+<p class="text-[11px] text-ink-muted mt-1 font-sans">Exact or partial CSS selectors that must always remain in generated critical styles.</p>
+</div>
+<!-- EXCLUDED POST TYPES (CRITICAL / USED CSS) -->
+<div class="p-4 px-5 bg-canvas-sunken/20">
+<label class="block text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1.5">EXCLUDED POST TYPES (CRITICAL / USED CSS)</label>
+<textarea class="w-full font-mono text-[12px] p-2.5 rounded border border-hairline bg-surface text-ink focus:border-primary outline-none resize-none leading-relaxed" rows="2">fl-builder-template
+elementor_library</textarea>
+<p class="text-[11px] text-ink-muted mt-1 font-sans">One post type key per line.</p>
+</div>
+<!-- CRITICAL CSS MAX RETRIES -->
+<div class="p-4 px-5 bg-canvas-sunken/20">
+<label class="block text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-1.5">CRITICAL CSS MAX RETRIES</label>
+<div class="max-w-xs">
+<input class="w-full font-mono text-[12px] p-2 rounded border border-hairline bg-surface text-ink focus:border-primary outline-none" max="5" min="0" type="number" value="5"/>
+</div>
+<p class="text-[11px] text-ink-muted mt-1 font-sans">Consecutive failures before a template is marked failed (0-5, default 5).</p>
+</div>
+<!-- Sub-panel: CRITICAL CSS STATUS -->
+<div class="p-5 bg-surface">
+<div class="flex items-center justify-between mb-3">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase">CRITICAL CSS STATUS</div>
+<button class="text-[12px] font-medium text-ink-muted hover:text-ink px-2.5 py-1 rounded border border-hairline hover:bg-canvas transition-colors">
+                Regenerate All
+              </button>
+</div>
+<!-- Small Table with required rows: Default, Home, Single Post, Page, Archive -->
+<div class="border border-hairline rounded overflow-hidden">
+<table class="w-full text-left border-collapse text-[12px]">
+<thead>
+<tr class="bg-canvas-sunken/60 text-ink-faint font-mono text-[11px] uppercase tracking-wider border-b border-hairline">
+<th class="py-2 px-3 font-medium">Template</th>
+<th class="py-2 px-3 font-medium">Status</th>
+<th class="py-2 px-3 font-medium">Size</th>
+<th class="py-2 px-3 font-medium text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-hairline font-mono text-[12px]">
+<tr class="hover:bg-surface-quiet">
+<td class="py-2 px-3 font-medium text-ink">Default</td>
+<td class="py-2 px-3">
+<span class="inline-flex items-center gap-1 text-[11px] text-emerald bg-emerald-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Ready
+                      </span>
+</td>
+<td class="py-2 px-3 text-ink-muted">14.2 KB</td>
+<td class="py-2 px-3 text-right space-x-2 font-sans">
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Regenerate</a>
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Preview</a>
+</td>
+</tr>
+<tr class="hover:bg-surface-quiet">
+<td class="py-2 px-3 font-medium text-ink">Home</td>
+<td class="py-2 px-3">
+<span class="inline-flex items-center gap-1 text-[11px] text-emerald bg-emerald-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Ready
+                      </span>
+</td>
+<td class="py-2 px-3 text-ink-muted">18.6 KB</td>
+<td class="py-2 px-3 text-right space-x-2 font-sans">
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Regenerate</a>
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Preview</a>
+</td>
+</tr>
+<tr class="hover:bg-surface-quiet">
+<td class="py-2 px-3 font-medium text-ink">Single Post</td>
+<td class="py-2 px-3">
+<span class="inline-flex items-center gap-1 text-[11px] text-emerald bg-emerald-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Ready
+                      </span>
+</td>
+<td class="py-2 px-3 text-ink-muted">12.1 KB</td>
+<td class="py-2 px-3 text-right space-x-2 font-sans">
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Regenerate</a>
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Preview</a>
+</td>
+</tr>
+<tr class="hover:bg-surface-quiet">
+<td class="py-2 px-3 font-medium text-ink">Page</td>
+<td class="py-2 px-3">
+<span class="inline-flex items-center gap-1 text-[11px] text-emerald bg-emerald-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Ready
+                      </span>
+</td>
+<td class="py-2 px-3 text-ink-muted">15.4 KB</td>
+<td class="py-2 px-3 text-right space-x-2 font-sans">
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Regenerate</a>
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Preview</a>
+</td>
+</tr>
+<tr class="hover:bg-surface-quiet">
+<td class="py-2 px-3 font-medium text-ink">Archive</td>
+<td class="py-2 px-3">
+<span class="inline-flex items-center gap-1 text-[11px] text-amber bg-amber-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-amber"></span>In progress
+                      </span>
+</td>
+<td class="py-2 px-3 text-ink-muted">9.8 KB</td>
+<td class="py-2 px-3 text-right space-x-2 font-sans">
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Regenerate</a>
+<a class="text-ink-muted hover:text-primary transition-colors text-[11px]" href="#">Preview</a>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Font rows -->
+<!-- Host Google Fonts Locally -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Host Google Fonts Locally</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Download Google webfonts and store them on your own server for privacy and zero external roundtrips.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Font Metric Fallback -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Font Metric Fallback</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Adjust fallback font metrics (size-adjust, ascent, descent) to eliminate layout shift while webfonts load.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Font Subsetting -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Font Subsetting</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Strip unused glyphs and non-Latin character sets from font files to compress transfer weight.</p>
+</div>
+<div class="flex items-center gap-3">
+<!-- Toggle OFF -->
+<div class="w-9 h-5 bg-hairline rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 4: HTML Optimisation -->
+<section class="bg-surface rounded-lg border border-hairline mb-8 overflow-hidden">
+<div class="px-5 py-4 border-b border-hairline">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-0.5">MARKUP STREAM</div>
+<h2 class="text-[14px] font-bold text-ink tracking-tight">HTML Optimisation</h2>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Minify HTML -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Minify HTML</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Strip extra whitespaces, newlines, and unneeded attributes from output buffers.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Remove HTML Comments -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Remove HTML Comments</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Strip developer notes and HTML comments before page markup is returned.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Minify Inline CSS -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Minify Inline CSS</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Compress CSS contained in inline style tags and HTML attributes.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+<!-- Minify Inline JavaScript -->
+<div class="p-4 px-5 flex items-center justify-between hover:bg-surface-quiet transition-colors cursor-pointer group">
+<div class="max-w-[540px]">
+<span class="text-[13px] font-semibold text-ink">Minify Inline JavaScript</span>
+<p class="text-[12px] text-ink-muted mt-0.5">Clean up inline script blocks to reduce overall page weight.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-9 h-5 bg-primary rounded-full relative p-0.5 flex items-center">
+<div class="w-4 h-4 rounded-full bg-white ml-auto"></div>
+</div>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-ink text-[18px]">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- RIGHT ZONE: INSPECTOR 344px (white, 1px hairline separator, sticky subject header, own scroll) -->
+<aside class="w-[344px] flex-shrink-0 h-screen bg-surface border-l border-hairline flex flex-col overflow-hidden z-20">
+<!-- Sticky Subject Header -->
+<div class="p-5 border-b border-hairline bg-surface sticky top-0 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="text-[11px] font-mono tracking-wider text-ink-faint uppercase">INSPECTOR · SELECTED CONTROL</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald bg-emerald-soft px-1.5 py-0.5 rounded font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Working
+        </span>
+</div>
+<h3 class="text-base font-bold text-ink tracking-tight">Remove Unused CSS</h3>
+<p class="text-[12px] text-ink-muted mt-0.5 font-mono">Core Stylesheet Purge Engine</p>
+</div>
+<!-- Inspector Content (Own Scroll) -->
+<div class="flex-1 overflow-y-auto divide-y divide-hairline">
+<!-- Block 1: WHAT IT DOES -->
+<div class="p-5">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-2">WHAT IT DOES</div>
+<p class="text-[13px] leading-relaxed text-ink">
+          Scans each page, works out which CSS rules are actually used, and strips the rest.
+        </p>
+<p class="text-[12px] leading-relaxed text-ink-muted mt-2">
+          Unused rules are filtered out of all enqueued files and inline style tags before markup delivery, significantly reducing total stylesheet payload.
+        </p>
+</div>
+<!-- Block 2: WHAT IT COSTS YOU (Amber treatment) -->
+<div class="p-5 bg-amber-tint/40">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-amber uppercase mb-2 flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px]">warning</span>
+<span>WHAT IT COSTS YOU</span>
+</div>
+<div class="border-l-[3px] border-amber-rule pl-3 py-0.5">
+<p class="text-[12px] leading-relaxed text-ink font-medium">
+<strong class="font-bold text-ink">Aggressive.</strong> A rule that only appears after a click can be stripped, which breaks menus and popups.
+          </p>
+<p class="text-[12px] leading-relaxed text-ink-muted mt-1.5">
+            The safelist below is the guard — add any selector that must survive.
+          </p>
+</div>
+</div>
+<!-- Block 3: WHERE YOU STAND NOW (Monospace values, threshold rail signature) -->
+<div class="p-5">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-3">WHERE YOU STAND NOW</div>
+<div class="space-y-3 font-mono text-[12px]">
+<div class="flex justify-between items-center py-1 border-b border-hairline/60 pb-2">
+<span class="text-ink-muted font-sans text-[12px]">State:</span>
+<span class="font-medium text-ink">On · 42 of 46 templates processed</span>
+</div>
+<div class="flex justify-between items-center py-1 border-b border-hairline/60 pb-2">
+<span class="text-ink-muted font-sans text-[12px]">Engine Status:</span>
+<span class="text-emerald font-semibold flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>Working
+            </span>
+</div>
+<div class="flex justify-between items-center py-1 border-b border-hairline/60 pb-2">
+<span class="text-ink-muted font-sans text-[12px]">Last Regenerated:</span>
+<span class="text-ink">2026-09-28 08:52</span>
+</div>
+<!-- THRESHOLD RAIL: Purge Reduction Metric -->
+<div class="pt-2">
+<div class="flex justify-between items-center text-[11px] mb-1.5">
+<span class="font-sans text-ink-muted">Payload Reduction:</span>
+<span class="font-mono font-semibold text-ink">64.2%</span>
+</div>
+<!-- Threshold rail: 4px track, 3 tinted zones (green good / amber needs-work / red poor), 2px solid dark marker -->
+<div class="relative w-full h-1 bg-gray-200 rounded-full flex overflow-hidden">
+<div class="w-[30%] bg-crimson/50 h-full"></div>
+<div class="w-[30%] bg-amber/50 h-full"></div>
+<div class="w-[40%] bg-emerald/60 h-full"></div>
+</div>
+<!-- Marker at 64.2% -->
+<div class="relative w-full h-0">
+<div class="absolute -top-1 w-[2px] h-[7px] bg-ink" style="left: 64.2%;"></div>
+</div>
+</div>
+<!-- THRESHOLD RAIL: Unmeasured metric example with EMPTY DASHED track -->
+<div class="pt-3">
+<div class="flex justify-between items-center text-[11px] mb-1.5">
+<span class="font-sans text-ink-muted">DOM Recalculation Time:</span>
+<span class="font-mono font-semibold text-ink">12 ms</span>
+</div>
+<div class="w-full h-1 border-b border-dashed border-hairline-strong"></div>
+</div>
+</div>
+</div>
+<!-- Block 4: RELATED SETTINGS -->
+<div class="p-5">
+<div class="text-[11px] font-mono font-semibold tracking-wider text-ink-faint uppercase mb-2">RELATED SETTINGS</div>
+<div class="space-y-1">
+<a class="flex items-center justify-between py-2 text-[12px] text-ink hover:text-primary transition-colors border-b border-hairline/50 group" href="#">
+<span>Safelist Selectors</span>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-primary text-[16px]">chevron_right</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[12px] text-ink hover:text-primary transition-colors border-b border-hairline/50 group" href="#">
+<span>Extra Safelist</span>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-primary text-[16px]">chevron_right</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[12px] text-ink hover:text-primary transition-colors border-b border-hairline/50 group" href="#">
+<span>Used CSS Delivery Mode</span>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-primary text-[16px]">chevron_right</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[12px] text-ink hover:text-primary transition-colors group" href="#">
+<span>Visual regression guard</span>
+<span class="material-symbols-outlined text-ink-faint group-hover:text-primary text-[16px]">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Inspector Footer -->
+<div class="p-3.5 border-t border-hairline bg-surface-quiet text-[11px] font-mono text-ink-faint flex items-center justify-between">
+<span>Focus: CSS / RemoveUnused</span>
+<span>Engine v2.4</span>
+</div>
+</aside>
+</body>
+</html>

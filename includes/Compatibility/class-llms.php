@@ -380,16 +380,152 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		}
 
 		/**
-		 * Collect top URLs for LLMs digest.
+		 * Normalize a WP_Post or numeric post ID for test and runtime callers.
 		 *
-		 * @since 2.0.0
-		 * @param int    $limit  Max URLs.
+		 * @since NEXT
+		 * @param mixed $value Candidate post value.
+		 * @return WP_Post|null
+		 */
+		private static function normalize_docs_post( $value ): ?\WP_Post {
+			if ( $value instanceof \WP_Post ) {
+				return $value;
+			}
+			if ( ! is_numeric( $value ) || ! function_exists( 'get_post' ) ) {
+				return null;
+			}
+			$post = get_post( (int) $value );
+			return $post instanceof \WP_Post ? $post : null;
+		}
+
+		/**
+		 * Collect the public documentation entry points and first-level pages.
+		 *
+		 * Documentation is a product tree rather than a chronological post
+		 * stream. Prepending its roots keeps llms.txt useful even when a site
+		 * has a large sitemap or no recorded high-value URL.
+		 *
+		 * @since NEXT
+		 * @param int $cap Maximum documentation URLs to return.
+		 * @return string[]
+		 */
+		private static function collect_docs_urls( int $cap = 40 ): array {
+			$urls    = array();
+			$archive = function_exists( 'get_post_type_archive_link' ) ? get_post_type_archive_link( 'docs' ) : '';
+			if ( is_string( $archive ) && '' !== $archive ) {
+				$urls[] = esc_url_raw( $archive );
+			}
+
+			$roots = get_posts(
+				array(
+					'post_type'      => 'docs',
+					'post_status'    => 'publish',
+					'post_parent'    => 0,
+					'posts_per_page' => -1,
+					'orderby'        => 'menu_order title',
+					'order'          => 'ASC',
+					'no_found_rows'  => true,
+				)
+			);
+			if ( ! function_exists( 'get_post' ) ) {
+				return array_values( array_unique( array_filter( $urls ) ) );
+			}
+			foreach ( $roots as $root ) {
+				$root = self::normalize_docs_post( $root );
+				if ( null === $root ) {
+					continue;
+				}
+				$permalink = get_permalink( $root );
+				if ( is_string( $permalink ) && '' !== $permalink ) {
+					$urls[] = esc_url_raw( $permalink );
+				}
+				$children = get_posts(
+					array(
+						'post_type'      => 'docs',
+						'post_status'    => 'publish',
+						'post_parent'    => (int) $root->ID,
+						'posts_per_page' => 20,
+						'orderby'        => 'menu_order title',
+						'order'          => 'ASC',
+						'no_found_rows'  => true,
+					)
+				);
+				foreach ( $children as $child ) {
+					$child = self::normalize_docs_post( $child );
+					if ( null === $child ) {
+						continue;
+					}
+					$permalink = get_permalink( $child );
+					if ( is_string( $permalink ) && '' !== $permalink ) {
+						$urls[] = esc_url_raw( $permalink );
+					}
+					if ( 'reference' !== $child->post_name ) {
+						continue;
+					}
+					$grandchildren = get_posts(
+						array(
+							'post_type'      => 'docs',
+							'post_status'    => 'publish',
+							'post_parent'    => (int) $child->ID,
+							'posts_per_page' => 12,
+							'orderby'        => 'menu_order title',
+							'order'          => 'ASC',
+							'no_found_rows'  => true,
+						)
+					);
+					foreach ( $grandchildren as $grandchild ) {
+						$grandchild = self::normalize_docs_post( $grandchild );
+						if ( null === $grandchild ) {
+							continue;
+						}
+						$permalink = get_permalink( $grandchild );
+						if ( is_string( $permalink ) && '' !== $permalink ) {
+							$urls[] = esc_url_raw( $permalink );
+						}
+					}
+				}
+			}
+
+			$urls = array_values( array_unique( array_filter( $urls ) ) );
+			return array_slice( $urls, 0, max( 0, $cap ) );
+		}
+
+		/**
+		 * Return every currently published documentation permalink.
+		 *
+		 * @since NEXT
+		 * @return array<string,bool>
+		 */
+		private static function published_docs_url_set(): array {
+			$ids = get_posts(
+				array(
+					'post_type'      => 'docs',
+					'post_status'    => 'publish',
+					'posts_per_page' => -1,
+					'fields'         => 'ids',
+					'no_found_rows'  => true,
+				)
+			);
+			$set = array();
+			foreach ( $ids as $id ) {
+				$permalink = get_permalink( (int) $id );
+				if ( is_string( $permalink ) && '' !== $permalink ) {
+					$set[ untrailingslashit( esc_url_raw( $permalink ) ) ] = true;
+				}
+			}
+			return $set;
+		}
+
+		/**
+		 * Collect URLs for the generated llms.txt index.
+		 *
+		 * @param int    $limit Maximum URLs.
 		 * @param string $source Source filter.
 		 * @return string[]
 		 */
 		private static function collect_urls( int $limit = 50, string $source = 'both' ): array {
-			$urls = array();
-
+			$docs_urls      = self::collect_docs_urls( min( $limit, 40 ) );
+			$published_docs = self::published_docs_url_set();
+			$urls           = $docs_urls;
 			if ( in_array( $source, array( 'both', 'trends' ), true ) ) {
 				// The trends keys are hashed (md5(url)_strategy) and cannot be
 				// reversed to URLs, so high_value_urls + home are the proxy list
@@ -412,6 +548,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			if ( in_array( $source, array( 'both', 'sitemap' ), true ) ) {
 				$sitemap_urls = self::collect_sitemap_urls( $limit );
 				foreach ( $sitemap_urls as $s_url ) {
+					$path = (string) wp_parse_url( $s_url, PHP_URL_PATH );
+					if ( 0 === strpos( $path, '/docs/' ) && ! isset( $published_docs[ untrailingslashit( esc_url_raw( $s_url ) ) ] ) ) {
+						continue;
+					}
 					if ( ! in_array( $s_url, $urls, true ) ) {
 						$urls[] = $s_url;
 					}

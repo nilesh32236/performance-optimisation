@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Performance Optimisation — Preload</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Public+Sans:wght@600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#F4F6F9',
+            'canvas-sunken': '#EDF1F6',
+            surface: '#FFFFFF',
+            'surface-quiet': '#F8FAFC',
+            ink: '#0C1420',
+            'ink-muted': '#4A5A6E',
+            'ink-faint': '#7C8CA0',
+            hairline: '#DDE3EA',
+            'hairline-strong': '#C3CDD9',
+            primary: '#1B5FD9',
+            'primary-hover': '#1549AC',
+            'primary-soft': '#E8F0FE',
+            'on-primary': '#FFFFFF',
+            'signal-good': '#0B8A5C',
+            'signal-good-soft': '#E6F6EF',
+            'signal-watch': '#B26A00',
+            'signal-watch-soft': '#FFF4E0',
+            'signal-poor': '#C02626',
+            'signal-poor-soft': '#FDECEC',
+            'signal-idle': '#6B7A8D',
+            'signal-idle-soft': '#EEF1F5',
+            'rail-good': '#0B8A5C',
+            'rail-watch': '#E0A32E',
+            'rail-poor': '#C02626',
+            'rail-track': '#E4E9EF',
+            'rail-marker': '#0C1420',
+          },
+          borderRadius: {
+            DEFAULT: "8px",
+            xs: "3px",
+            sm: "5px",
+            md: "8px",
+            lg: "10px",
+            xl: "14px",
+            full: "9999px"
+          },
+          fontFamily: {
+            headline: ["Space Grotesk", "sans-serif"],
+            display: ["Space Grotesk", "sans-serif"],
+            body: ["IBM Plex Sans", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            label: ["Public Sans", "sans-serif"]
+          },
+          fontSize: {
+            'display-lg': ['34px', { lineHeight: '40px', letterSpacing: '-0.02em' }],
+            'headline-lg': ['24px', { lineHeight: '30px', letterSpacing: '-0.015em' }],
+            'headline-md': ['18px', { lineHeight: '24px' }],
+            'body-lg': ['15px', { lineHeight: '23px' }],
+            'body-md': ['13.5px', { lineHeight: '21px' }],
+            'body-sm': ['12.5px', { lineHeight: '19px' }],
+            'label-md': ['13px', { lineHeight: '18px', fontWeight: '600' }],
+            'label-sm': ['11px', { lineHeight: '16px', letterSpacing: '0.06em', fontWeight: '600' }],
+            'data-lg': ['28px', { lineHeight: '32px', letterSpacing: '-0.02em' }],
+            'data-md': ['13px', { lineHeight: '20px' }],
+            'data-sm': ['11.5px', { lineHeight: '16px' }],
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    /* Tabular figures across mono */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-ink font-body antialiased flex flex-col h-screen overflow-hidden selection:bg-primary-soft selection:text-primary">
+<!-- TOP NAV BAR (Shared Component: TopNavBar) -->
+<header class="h-14 w-full flex items-center justify-between px-6 border-b border-hairline bg-surface shrink-0 z-30">
+<div class="flex items-center gap-3">
+<span class="font-headline text-headline-md font-semibold text-ink tracking-tight flex items-center gap-2">
+<span class="w-6 h-6 rounded bg-primary-soft text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+</span>
+        Performance Optimisation
+      </span>
+<span class="text-hairline-strong">/</span>
+<span class="text-xs font-mono text-ink-muted bg-surface-quiet px-2 py-0.5 rounded border border-hairline">production · wp-cluster-04</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center border border-hairline rounded overflow-hidden divide-x divide-hairline">
+<button class="px-3 py-1.5 bg-surface text-ink text-body-sm font-medium hover:bg-canvas-sunken flex items-center gap-1.5 active:scale-[0.98] transition-transform duration-100">
+<span class="material-symbols-outlined text-[16px] text-ink-muted">refresh</span>
+          Re-test Site
+        </button>
+<button class="px-3 py-1.5 bg-surface text-ink text-body-sm font-medium hover:bg-canvas-sunken flex items-center gap-1.5 active:scale-[0.98] transition-transform duration-100">
+<span class="material-symbols-outlined text-[16px] text-ink-muted">tune</span>
+          Rules
+        </button>
+</div>
+<button class="bg-primary hover:bg-primary-hover text-on-primary px-3 py-1.5 rounded text-body-sm font-medium transition-colors shadow-none active:scale-[0.98] flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">cleaning_services</span>
+        Purge Cache
+      </button>
+<div class="w-7 h-7 rounded-full bg-surface-quiet border border-hairline flex items-center justify-center text-xs font-mono font-medium text-ink-muted ml-1" title="Site admin avatar">
+        AD
+      </div>
+</div>
+</header>
+<!-- MAIN 3-COLUMN WORKSPACE BODY -->
+<div class="flex flex-1 w-full overflow-hidden">
+<!-- LEFT NAV (Shared Component: SideNavBar) -->
+<aside class="w-[236px] h-full flex flex-col justify-between p-4 border-r border-hairline bg-surface-quiet shrink-0">
+<div>
+<!-- SideNav Brand anchor -->
+<div class="flex items-center justify-between pb-4 mb-3 border-b border-hairline">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded bg-primary text-white flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">speed</span>
+</span>
+<span class="font-headline text-sm font-semibold tracking-tight text-ink">Instrument</span>
+</div>
+<span class="text-[11px] font-mono font-medium text-ink-faint">v2.4.0</span>
+</div>
+<!-- Primary Navigation Tabs -->
+<nav class="space-y-1">
+<!-- Overview -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface rounded transition-colors duration-150 cursor-pointer select-none" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span>Overview</span>
+</a>
+<!-- Speed (ACTIVE) -->
+<a class="bg-surface text-primary font-semibold border-l-2 border-primary pl-3 py-2 flex items-center gap-3 text-body-md rounded-r transition-colors duration-150 cursor-pointer select-none" href="#">
+<span class="material-symbols-outlined text-[18px]">speed</span>
+<span>Speed</span>
+</a>
+<!-- Media -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface rounded transition-colors duration-150 cursor-pointer select-none" href="#">
+<span class="material-symbols-outlined text-[18px]">perm_media</span>
+<span>Media</span>
+</a>
+<!-- Data & System -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface rounded transition-colors duration-150 cursor-pointer select-none" href="#">
+<span class="material-symbols-outlined text-[18px]">database</span>
+<span>Data &amp; System</span>
+</a>
+<!-- Manage -->
+<a class="text-ink-muted hover:text-ink pl-3 py-2 flex items-center gap-3 text-body-md font-medium hover:bg-surface rounded transition-colors duration-150 cursor-pointer select-none" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+<span>Manage</span>
+</a>
+</nav>
+</div>
+<!-- Navigation Footer -->
+<div class="pt-4 border-t border-hairline space-y-3">
+<nav class="space-y-1">
+<a class="text-ink-muted hover:text-ink px-3 py-1.5 flex items-center gap-2.5 text-body-sm font-medium hover:bg-surface rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[16px]">help</span>
+<span>Documentation</span>
+</a>
+<a class="text-ink-muted hover:text-ink px-3 py-1.5 flex items-center gap-2.5 text-body-sm font-medium hover:bg-surface rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span>Status</span>
+</a>
+</nav>
+<div class="px-3 pt-2 flex items-center justify-between text-[11px] font-mono text-ink-faint border-t border-hairline">
+<span class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span>
+            WP 6.7.1 · Engine OK
+          </span>
+<span>v2.4.0</span>
+</div>
+</div>
+</aside>
+<!-- CENTER WORK AREA: Fluid, strictly capped at 880px & left-aligned -->
+<main class="flex-1 h-full overflow-y-auto bg-canvas">
+<div class="max-w-[880px] pl-8 pr-8 py-6">
+<!-- PAGE HEADER -->
+<div class="mb-6">
+<div class="flex items-start justify-between">
+<div>
+<span class="font-mono text-label-sm uppercase tracking-wider text-ink-faint block mb-1">SPEED</span>
+<h1 class="font-headline font-semibold text-headline-lg text-ink tracking-tight">Preload</h1>
+<p class="font-body text-body-md text-ink-muted mt-1">Improve perceived performance by pre-connecting to domains and preloading critical assets.</p>
+</div>
+<button class="bg-primary hover:bg-primary-hover text-on-primary px-4 py-2 rounded text-body-sm font-medium transition-colors shadow-none active:scale-[0.98] flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">save</span>
+              Save Settings
+            </button>
+</div>
+<!-- Sub-navigation Tabs -->
+<div class="flex items-center gap-6 mt-6 border-b border-hairline">
+<a class="text-body-md font-medium text-ink-muted hover:text-ink pb-2.5 transition-colors" href="#">Assets &amp; Scripts</a>
+<a class="text-body-md font-semibold text-primary border-b-2 border-primary pb-2.5 flex items-center gap-1.5" href="#">
+              Preload
+              <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</a>
+</div>
+</div>
+<!-- CARDS CONTAINER (Stack of table-like hairline cards, 8px radius, no shadow) -->
+<div class="space-y-5 pb-12">
+<!-- CARD 1: Cache Warm-up -->
+<div class="bg-surface rounded border border-hairline p-5">
+<div class="flex items-center justify-between pb-3 mb-1 border-b border-hairline">
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint">CACHE WARM-UP</span>
+<span class="text-xs font-mono text-ink-faint">warmup.worker</span>
+</div>
+<!-- Row 1: Enable Preload Cache -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Enable Preload Cache</div>
+<div class="font-body text-body-sm text-ink-muted">Fetch pages immediately after they change so the first visitor gets a cached copy.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+<!-- Row 2: Exclude URLs Textarea -->
+<div class="py-3 border-b border-hairline">
+<div class="flex items-center justify-between mb-2">
+<div class="font-body font-semibold text-body-md text-ink">Exclude URLs from Cache Warm-up</div>
+<span class="text-xs font-mono text-ink-faint">RegEx pattern allowed</span>
+</div>
+<textarea class="w-full font-mono text-data-md text-ink bg-surface-quiet border border-hairline rounded p-2.5 focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none resize-none leading-relaxed" readonly="" rows="3">my-account/(.*)
+cart/(.*)
+checkout/(.*)</textarea>
+<p class="font-body text-body-sm text-ink-faint mt-1.5">One URL pattern per line.</p>
+</div>
+<!-- Row 3: Preload from Sitemap -->
+<div class="pt-3 flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Preload from Sitemap</div>
+<div class="font-body text-body-sm text-ink-muted">Reads URLs from your XML sitemap to automatically seed the local page cache on schedule.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+</div>
+<!-- CARD 2: Third-Party Connections -->
+<div class="bg-surface rounded border border-hairline p-5">
+<div class="flex items-center justify-between pb-3 mb-1 border-b border-hairline">
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint">THIRD-PARTY CONNECTIONS</span>
+<span class="text-xs font-mono text-ink-faint">network.hints</span>
+</div>
+<!-- Preconnect -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Preconnect</div>
+<div class="font-body text-body-sm text-ink-muted">Opens the DNS, TCP and TLS connection early for domains you name.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+<!-- DNS Prefetch -->
+<div class="pt-3 flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">DNS Prefetch</div>
+<div class="font-body text-body-sm text-ink-muted">Resolves external domains ahead of time to minimize lookup delays on subsequent requests.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+</div>
+<!-- CARD 3: Critical Assets Preloading -->
+<div class="bg-surface rounded border border-hairline p-5">
+<div class="flex items-center justify-between pb-3 mb-1 border-b border-hairline">
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint">CRITICAL ASSETS PRELOADING</span>
+<span class="text-xs font-mono text-ink-faint">assets.rel_preload</span>
+</div>
+<!-- Preload Fonts -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Preload Fonts</div>
+<div class="font-body text-body-sm text-ink-muted">Adds &lt;link rel="preload" as="font"&gt; tags to head to prevent FOIT/FOUT flashes.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+<!-- Automatically Discover Fonts -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Automatically Discover Fonts</div>
+<div class="font-body text-body-sm text-ink-muted">Parses active theme CSS files to build and maintain the font preloading list automatically.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+<!-- Automatically Preload LCP Hero -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Automatically Preload LCP Hero</div>
+<div class="font-body text-body-sm text-ink-muted">Identifies hero background images or featured pictures and preloads with high fetchpriority.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+<!-- Preload Critical CSS -->
+<div class="pt-3 flex items-center justify-between">
+<div class="max-w-[540px]">
+<div class="font-body font-semibold text-body-md text-ink">Preload Critical CSS</div>
+<div class="font-body text-body-sm text-ink-muted">Extracts above-the-fold inline stylesheets and preloads deferred full stylesheet asynchronously.</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+</div>
+</div>
+<!-- CARD 4: Speculative Loading (Selected / Active in Inspector) -->
+<div class="bg-surface rounded border border-hairline p-5">
+<div class="flex items-center justify-between pb-3 mb-1 border-b border-hairline">
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint">SPECULATIVE LOADING</span>
+<span class="text-xs font-mono text-ink-faint">speculation.rules</span>
+</div>
+<!-- ACTIVE / SELECTED ROW -->
+<div class="p-3.5 -mx-2 my-1 rounded border-l-2 border-primary bg-primary-soft/30 border border-hairline flex items-center justify-between transition-all">
+<div class="max-w-[520px]">
+<div class="flex items-center gap-2">
+<span class="font-body font-semibold text-body-md text-ink">Enable Speculative Loading</span>
+<span class="font-mono text-[10px] uppercase font-semibold text-primary bg-white px-2 py-0.5 rounded border border-primary/20 tracking-wider">INSPECTING</span>
+</div>
+<div class="font-body text-body-sm text-ink-muted mt-0.5">Injects native browser Speculation Rules API for instant anticipatory document navigation.</div>
+</div>
+<div class="flex items-center gap-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-rail-track peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-hairline-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-2 font-mono text-body-sm text-ink-muted">Off</span>
+</label>
+<span class="material-symbols-outlined text-primary text-[20px]">arrow_forward</span>
+</div>
+</div>
+<!-- Speculation Mode Select -->
+<div class="py-3 border-b border-hairline flex items-center justify-between">
+<div>
+<div class="font-body font-semibold text-body-md text-ink">Speculation Mode</div>
+<div class="font-body text-body-sm text-ink-muted">Strategy for preparing matched prospective documents.</div>
+</div>
+<div class="w-72">
+<select class="w-full text-body-sm font-body text-ink bg-surface border border-hairline rounded px-2.5 py-1.5 focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none cursor-pointer">
+<option selected="">Prefetch (faster navigation, lower resource usage)</option>
+<option>Prerender (instant navigation, higher server load)</option>
+</select>
+</div>
+</div>
+<!-- Eagerness Select -->
+<div class="pt-3 flex items-center justify-between">
+<div>
+<div class="font-body font-semibold text-body-md text-ink">Eagerness</div>
+<div class="font-body text-body-sm text-ink-muted">Timing heuristic trigger for initiating network speculates.</div>
+</div>
+<div class="w-72">
+<select class="w-full text-body-sm font-body text-ink bg-surface border border-hairline rounded px-2.5 py-1.5 focus:border-primary focus:ring-2 focus:ring-primary-soft outline-none cursor-pointer">
+<option selected="">Conservative (only on hover/touch)</option>
+<option>Moderate (hover 200ms or scroll proximity)</option>
+<option>Eager (immediately when link is visible)</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- RIGHT INSPECTOR PANEL (Fixed 344px, sticky, hairline separator) -->
+<aside class="w-[344px] h-full flex flex-col border-l border-hairline bg-surface shrink-0 overflow-y-auto">
+<!-- Sticky Subject Header -->
+<div class="sticky top-0 bg-surface/95 backdrop-blur-sm border-b border-hairline p-5 z-10">
+<div class="flex items-center justify-between mb-1.5">
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint">INSPECTOR · SELECTED CONTROL</span>
+<span class="inline-flex items-center gap-1 font-mono text-[11px] font-medium text-signal-idle bg-signal-idle-soft px-2 py-0.5 rounded">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-idle"></span>
+            Not Configured
+          </span>
+</div>
+<h2 class="font-headline font-semibold text-headline-md text-ink leading-tight">Enable Speculative Loading</h2>
+<span class="font-mono text-data-sm text-ink-muted mt-1 block">speculative.loading.rules</span>
+</div>
+<div class="p-5 space-y-6">
+<!-- BLOCK 1: WHAT IT DOES -->
+<div>
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint block mb-2">WHAT IT DOES</span>
+<p class="font-body text-body-md text-ink leading-relaxed">
+            Tells the browser to quietly load a page the visitor is likely to open next, so it appears instantly.
+          </p>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- BLOCK 2: WHAT IT COSTS YOU -->
+<div>
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint block mb-2">WHAT IT COSTS YOU</span>
+<div class="bg-signal-watch-soft border-l-[3px] border-signal-watch p-3 rounded-r text-body-sm text-ink leading-relaxed">
+            Prefetch downloads the page in the background, which uses bandwidth the visitor may never benefit from. Prerender goes further and renders it, costing more CPU and memory. Conservative eagerness only acts on hover or touch, which keeps the waste low.
+          </div>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- BLOCK 3: WHERE YOU STAND NOW -->
+<div>
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint block mb-3">WHERE YOU STAND NOW</span>
+<!-- Key-value Monospace rows -->
+<div class="space-y-2 border border-hairline rounded p-3 bg-surface-quiet mb-4 font-mono text-body-sm">
+<div class="flex items-center justify-between">
+<span class="text-ink-muted">Setting Value:</span>
+<span class="font-medium text-ink">Off</span>
+</div>
+<div class="flex items-center justify-between border-t border-hairline pt-2">
+<span class="text-ink-muted">Status:</span>
+<span class="font-medium text-signal-idle">Not set up</span>
+</div>
+<div class="flex items-center justify-between border-t border-hairline pt-2">
+<span class="text-ink-muted">Last Activity:</span>
+<span class="text-ink">Never enabled</span>
+</div>
+</div>
+<!-- Threshold Rail for Metric / Resource Impact -->
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-body-sm text-ink-muted font-medium">Speculation Overhead</span>
+<span class="text-xs font-mono text-ink-faint">Idle</span>
+</div>
+<!-- Threshold rail: 4px track, dashed for unmeasured with real scale boundaries -->
+<div class="w-full h-1.5 bg-rail-track rounded-full relative overflow-hidden flex">
+<div class="h-full bg-rail-good w-1/2 opacity-30"></div>
+<div class="h-full bg-rail-watch w-1/4 opacity-30"></div>
+<div class="h-full bg-rail-poor w-1/4 opacity-30"></div>
+</div>
+<div class="flex items-center justify-between text-[11px] font-mono text-ink-faint mt-1.5">
+<span>Not measured yet</span>
+<span>0 B consumed</span>
+</div>
+</div>
+</div>
+<div class="h-[1px] bg-hairline"></div>
+<!-- BLOCK 4: RELATED SETTINGS -->
+<div>
+<span class="font-label text-label-sm uppercase tracking-wider text-ink-faint block mb-2">RELATED SETTINGS</span>
+<div class="divide-y divide-hairline border border-hairline rounded overflow-hidden">
+<a class="px-3 py-2 flex items-center justify-between text-body-sm font-medium text-ink hover:bg-canvas-sunken transition-colors" href="#">
+<span>Speculation Mode</span>
+<span class="material-symbols-outlined text-ink-faint text-[16px]">chevron_right</span>
+</a>
+<a class="px-3 py-2 flex items-center justify-between text-body-sm font-medium text-ink hover:bg-canvas-sunken transition-colors" href="#">
+<span>Eagerness</span>
+<span class="material-symbols-outlined text-ink-faint text-[16px]">chevron_right</span>
+</a>
+<a class="px-3 py-2 flex items-center justify-between text-body-sm font-medium text-ink hover:bg-canvas-sunken transition-colors" href="#">
+<span>Exclude URLs from Speculation</span>
+<span class="material-symbols-outlined text-ink-faint text-[16px]">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Inspector Footer -->
+<div class="mt-auto p-4 border-t border-hairline bg-surface-quiet flex items-center justify-between text-xs text-ink-faint">
+<span class="font-mono">speculation.docs.v2</span>
+<a class="text-primary hover:underline flex items-center gap-1 font-body" href="#">
+          Reference MDN
+          <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</a>
+</div>
+</aside>
+</div>
+</body></html>

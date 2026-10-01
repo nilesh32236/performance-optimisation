@@ -4042,7 +4042,7 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									description={ __(
-										'Instantly disable Delay JS, Defer JS, Combine CSS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
+										'Instantly disable Delay JS, Defer JS, Combine CSS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations. Minification, image optimisation, CDN rewriting and preload are NOT affected by safe mode — turn them off individually if the breakage came from one of those.',
 										'performance-optimisation'
 									) }
 									name="safeMode"
@@ -4054,7 +4054,7 @@ const FileOptimization = ( {
 									<NoticeBanner
 										type="warning"
 										message={ __(
-											'Safe mode is on — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved.',
+											'Safe mode is on — Delay, Defer, Combine and Used CSS are paused, and your settings are preserved. Minification, image optimisation, CDN rewriting and preload keep running, so disable any of those separately if your site is still not right.',
 											'performance-optimisation'
 										) }
 									/>

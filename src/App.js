@@ -11,15 +11,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import UnsavedChangesContext from './lib/UnsavedChangesContext';
 import {
-	faTachometerAlt,
-	faFileCode,
-	faBullseye,
-	faImages,
-	faDatabase,
-	faTools,
 	faBars,
 	faTimes,
-	faServer,
 	faBolt,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
@@ -31,9 +24,28 @@ import {
 } from './lib/apiRequest';
 import useServerRules from './lib/useServerRules';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import SectionShell from './components/SectionShell';
+import { useSectionRoute } from './lib/useSectionRoute';
+import {
+	DEFAULT_SECTION,
+	SECTIONS,
+	SECTION_IDS,
+	itemsForSection,
+} from './lib/informationArchitecture';
+
+// Ids of the screens an area owns. The route hook needs ids only; the
+// descriptors (icon, label) stay with the render.
+const areaItemIds = ( sectionId ) =>
+	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
+import MessageRegion from './components/common/MessageRegion';
 
+const Overview = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-overview" */ './components/overview/Overview'
+	)
+);
 const Dashboard = lazy( () =>
 	import( /* webpackChunkName: "tab-dashboard" */ './components/Dashboard' )
 );
@@ -96,7 +108,78 @@ export const isSafeCssColor = ( value ) =>
 	/^#[0-9a-fA-F]{3,4}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$/.test( value );
 
 const App = () => {
-	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
+	// Resolve a navigation target without performing it, so the dirty guard can
+	// compare the destination against what is currently on screen. Callers pass
+	// area ids, screen ids and legacy values, so the guard cannot compare the
+	// raw argument against the current area.
+	const resolveDestination = useCallback( ( target ) => {
+		const raw = String( target || '' );
+		if ( SECTION_IDS.includes( raw ) ) {
+			return { area: raw, view: areaItemIds( raw )[ 0 ] };
+		}
+		const legacy = new URLSearchParams( window.location.search ).get(
+			'tab'
+		);
+		for ( const candidate of [ raw, legacy ] ) {
+			if ( ! candidate ) {
+				continue;
+			}
+			const owner = SECTION_IDS.find( ( id ) =>
+				areaItemIds( id ).includes( candidate )
+			);
+			if ( owner ) {
+				return { area: owner, view: candidate };
+			}
+		}
+		return null;
+	}, [] );
+
+	// The URL is the single source of truth for BOTH the open area and the
+	// open screen within it. Proven live to be absent before this: walking every
+	// tab left location.href unchanged, so a refresh lost the section and
+	// Back/Forward did nothing.
+	//
+	// Both values come from one read of the URL, so the rendered panel cannot
+	// trail behind the address bar on a popstate — which is exactly what it did
+	// when the area and the screen were held separately.
+	// Refuse a Back/Forward that would move away from unsaved work.
+	//
+	// A popstate never reaches `navigate`, so without this the guard is
+	// bypassed entirely for browser history and a dirty form is destroyed with
+	// no dialog and no browser prompt — same-document navigation does not fire
+	// `beforeunload` either. Returning false puts the address bar back to what
+	// is on screen; `pendingRoute` then holds the route the user was trying to
+	// reach, so Discard honours the gesture they actually made.
+	//
+	// The live values are read through a ref rather than captured: this
+	// callback is *passed into* the hook that produces them, so referring to
+	// them directly would be a circular initialisation.
+	const popGuard = useRef( { isDirty: false, area: '', view: '' } );
+
+	const onBeforePop = useCallback( ( incoming ) => {
+		const current = popGuard.current;
+		if (
+			! current.isDirty ||
+			( incoming.area === current.area && incoming.view === current.view )
+		) {
+			return true;
+		}
+		setPendingRoute( incoming );
+		setShowGuard( true );
+		return false;
+	}, [] );
+
+	const {
+		area: activeSection,
+		view: activeView,
+		navigate,
+		navigateTo: navigateToRoute,
+	} = useSectionRoute( {
+		defaultArea: DEFAULT_SECTION,
+		areas: SECTION_IDS,
+		itemsFor: areaItemIds,
+		onBeforePop,
+	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
@@ -105,8 +188,14 @@ const App = () => {
 	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const [ isDirty, setIsDirty ] = useState( false );
-	const [ pendingTab, setPendingTab ] = useState( null );
+	const [ pendingTarget, setPendingTarget ] = useState( null );
+	const [ pendingRoute, setPendingRoute ] = useState( null );
 	const [ showGuard, setShowGuard ] = useState( false );
+
+	// Keep the popstate guard's view of the world current without making
+	// `onBeforePop` change identity (a changing identity would re-bind the
+	// listener on every render for no benefit).
+	popGuard.current = { isDirty, area: activeSection, view: activeView };
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
@@ -124,73 +213,76 @@ const App = () => {
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
 
-	const sidebarItems = useMemo(
-		() => [
-			{
-				name: 'dashboard',
-				icon: faTachometerAlt,
-				label: __( 'Dashboard', 'performance-optimisation' ),
-			},
-			{
-				name: 'fileOptimization',
-				icon: faFileCode,
-				label: __( 'File Optimisation', 'performance-optimisation' ),
-			},
-			{
-				name: 'preload',
-				icon: faBullseye,
-				label: __( 'Preload', 'performance-optimisation' ),
-			},
-			{
-				name: 'imageOptimization',
-				icon: faImages,
-				label: __( 'Image Optimisation', 'performance-optimisation' ),
-			},
-			{
-				name: 'databaseCleanup',
-				icon: faDatabase,
-				label: __( 'Database', 'performance-optimisation' ),
-			},
-			{
-				name: 'objectCache',
-				icon: faServer,
-				label: __( 'Object Cache', 'performance-optimisation' ),
-			},
-			{
-				name: 'tools',
-				icon: faTools,
-				label: __( 'Tools', 'performance-optimisation' ),
-			},
-		],
-		[]
+	const sidebarItems = useMemo( () => SECTIONS, [] );
+
+	// Any navigation away from unsaved work goes through the confirm dialog.
+	//
+	// This covers BOTH changing area and changing the screen within an area.
+	// Guarding only the area switch left a silent data-loss path: editing the
+	// Preload settings and then clicking the "Assets & Scripts" sub-tab
+	// discarded the edit with no prompt, because two settings forms share each
+	// area. The earlier comment here claimed that was intentional; it was not.
+	//
+	// The comparison is against the resolved destination rather than the raw
+	// argument, because callers pass area ids, screen ids and legacy values, and
+	// comparing a screen id against an area id is always "different".
+	const requestNavigation = useCallback(
+		( target ) => {
+			const destination = resolveDestination( target );
+			if ( ! destination ) {
+				// Unresolvable target: do nothing, and do not prompt about edits
+				// the user never navigated away from.
+				return false;
+			}
+			if (
+				isDirty &&
+				( destination.area !== activeSection ||
+					destination.view !== activeView )
+			) {
+				setPendingTarget( target );
+				setShowGuard( true );
+				return false;
+			}
+			navigate( target );
+			return true;
+		},
+		[ isDirty, activeSection, activeView, navigate, resolveDestination ]
 	);
 
 	const handleTabChange = useCallback(
-		( nextTab ) => {
-			if ( isDirty && nextTab !== activeTab ) {
-				setPendingTab( nextTab );
-				setShowGuard( true );
-				return;
-			}
-			setActiveTab( nextTab );
+		( nextSection ) => {
+			requestNavigation( nextSection );
 			setMobileMenuOpen( false );
 		},
-		[ isDirty, activeTab ]
+		[ requestNavigation ]
+	);
+
+	const handleViewChange = useCallback(
+		( nextView ) => {
+			requestNavigation( nextView );
+		},
+		[ requestNavigation ]
 	);
 
 	const confirmDiscard = useCallback( () => {
 		setShowGuard( false );
 		setIsDirty( false );
-		if ( pendingTab ) {
-			setActiveTab( pendingTab );
+		if ( pendingRoute ) {
+			// A refused Back/Forward: the URL was put back, so the route has to
+			// be written again now that the user confirmed the discard.
+			navigateToRoute( pendingRoute );
+			setPendingRoute( null );
+		} else if ( pendingTarget ) {
+			navigate( pendingTarget );
 			setMobileMenuOpen( false );
-			setPendingTab( null );
+			setPendingTarget( null );
 		}
-	}, [ pendingTab ] );
+	}, [ pendingTarget, pendingRoute, navigate, navigateToRoute ] );
 
 	const cancelGuard = useCallback( () => {
 		setShowGuard( false );
-		setPendingTab( null );
+		setPendingTarget( null );
+		setPendingRoute( null );
 	}, [] );
 
 	// Block browser unload when dirty — browsers show generic confirmation.
@@ -220,9 +312,15 @@ const App = () => {
 				? wppoSettings?.settings ?? {}
 				: {};
 		const components = {
+			overview: (
+				<Overview
+					onNavigate={ handleTabChange }
+					activities={ recentActivities }
+				/>
+			),
 			dashboard: (
 				<Dashboard
-					activities={ recentActivities?.activities }
+					activities={ recentActivities }
 					activitiesError={ activitiesError }
 					cacheSettings={ settings.cache_settings }
 					userRoles={
@@ -256,12 +354,29 @@ const App = () => {
 			tools: <PluginSettings options={ settings } />,
 		};
 
-		const activeComponent = components[ activeTab ] || components.dashboard;
+		const activeComponent =
+			components[ activeView ] || components.dashboard;
+		// The rendered area follows the AREA, not the view. Deriving it from the
+		// view is what froze the panel on Back: popstate updated the area and the
+		// sidebar, but this line kept rendering whichever area the stale view
+		// happened to belong to, so the URL and the screen disagreed permanently.
+		const area =
+			sidebarItems.find( ( item ) => item.id === activeSection ) ??
+			sidebarItems[ 0 ];
 
 		return (
-			<Suspense fallback={ <TabFallback /> }>
-				{ activeComponent }
-			</Suspense>
+			<SectionShell
+				id={ area.id }
+				title={ area.label }
+				purpose={ area.purpose }
+				items={ itemsForSection( area.id ) }
+				activeId={ activeView }
+				onSelect={ handleViewChange }
+			>
+				<Suspense fallback={ <TabFallback /> }>
+					{ activeComponent }
+				</Suspense>
+			</SectionShell>
 		);
 	};
 
@@ -381,8 +496,8 @@ const App = () => {
 		// a no-op, and aborting its controller would kill unrelated
 		// in-flight requests on every tab change.
 		const wantActivities =
-			( activeTab === 'overview' ||
-				activeTab === 'dashboard' ||
+			( activeSection === 'overview' ||
+				activeView === 'dashboard' ||
 				recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current;
 		const wantCcss = ! hasFetchedCcss.current || 0 !== ccssRefreshTrigger;
@@ -403,8 +518,8 @@ const App = () => {
 		const fetchActivities = async () => {
 			if (
 				! (
-					( activeTab === 'overview' ||
-						activeTab === 'dashboard' ||
+					( activeSection === 'overview' ||
+						activeView === 'dashboard' ||
 						recentActivities.length === 0 ) &&
 					! hasFetchedActivities.current
 				)
@@ -417,7 +532,16 @@ const App = () => {
 					activitiesController.signal
 				);
 				if ( ! activitiesController.signal.aborted ) {
-					setRecentActivities( data );
+					// `fetchRecentActivities` resolves the `{ success, data, message }`
+					// envelope, but both consumers read `activities.activities`.
+					// Storing the envelope made that permanently undefined, so a
+					// site with 42,091 logged entries rendered "No optimisation
+					// activity recorded yet." The dashboard reported no activity
+					// because of a shape mismatch, not because there was none.
+					const rows = Array.isArray( data )
+						? data
+						: data?.activities ?? data?.data?.activities;
+					setRecentActivities( Array.isArray( rows ) ? rows : [] );
 					setActivitiesError( false );
 					hasFetchedActivities.current = true;
 				}
@@ -488,13 +612,13 @@ const App = () => {
 		// fetch and could abort the parallel CCSS request when sibling
 		// state resolves first.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ activeTab, ccssRefreshTrigger ] );
+	}, [ activeSection, activeView, ccssRefreshTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab ] );
+	}, [ activeSection, activeView ] );
 
 	const wppoVersion = getWppoSettings()?.version ?? '';
 
@@ -507,6 +631,10 @@ const App = () => {
 
 	return (
 		<UnsavedChangesContext.Provider value={ unsavedContextValue }>
+			{ /* One visible place for every notice, wherever its card sits.
+			     See MessageRegion for why this is aria-hidden. */ }
+			<MessageRegion />
+
 			<div className="wppo-container">
 				{ /* Mobile Top Header */ }
 				<div className="wppo-mobile-header">
@@ -586,20 +714,20 @@ const App = () => {
 					>
 						<ul>
 							{ sidebarItems.map( ( item ) => (
-								<li key={ item.name }>
+								<li key={ item.id }>
 									<button
 										className={
-											activeTab === item.name
+											activeSection === item.id
 												? 'wppo-is-active'
 												: ''
 										}
 										aria-current={
-											activeTab === item.name
+											activeSection === item.id
 												? 'page'
 												: undefined
 										}
 										onClick={ () =>
-											handleTabChange( item.name )
+											handleTabChange( item.id )
 										}
 									>
 										<FontAwesomeIcon

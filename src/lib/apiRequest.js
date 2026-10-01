@@ -237,8 +237,11 @@ export const patchSettingsCache = ( tab, patch ) => {
  * every Dashboard load while keeping every caller on its own abort
  * semantics (see the per-caller race in apiCall()).
  *
- * Entries live only while the request is pending and are removed on
- * settle, so sequential calls (and tests) always hit the network.
+ * Entries live only while the *fetch* is pending and are removed when it
+ * settles, so sequential calls (and tests) always hit the network. They are
+ * deliberately not released when a waiter aborts: the fetch is un-signalled
+ * and uncancellable, so freeing the entry early would let the next identical
+ * GET start a duplicate request for work already in flight.
  *
  * @since 2.3.0
  * @type {Map<string, Promise<Object>>}
@@ -415,22 +418,52 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				return await handleResponse( response, false, doSharedFetch );
 			} )();
 			inflightGets.set( action, pending );
+			// The registry entry belongs to the **fetch**, not to a waiter.
+			//
+			// It used to be released in a `finally` around the waiter's own
+			// `await`, so a caller that aborted — leaving the un-signalled,
+			// uncancellable fetch still running — freed the entry immediately.
+			// The next identical GET then started a *second* request for work
+			// already in flight. Reproduced end to end in the real App:
+			// mount → navigate away → back produced two `recent_activities`
+			// network trips for one logical fetch (1 with no abort, 2 with).
+			//
+			// An independent review found this while reviewing an unrelated
+			// change. Severity is low — the duplicate returns the same data and
+			// the second caller's result wins — but it is a real duplicate round
+			// trip on every SPA GET, and the module's own doc comment claimed
+			// the opposite.
+			//
+			// `finally` on the promise itself, not on the wait, so the entry
+			// lives exactly as long as the underlying fetch settles.
+			//
+			// The `.catch` is load-bearing, and **not** because the waiter covers
+			// it. `.finally()` returns a *derived* promise, and that derived
+			// promise rejects when `pending` does. A waiter's `await` or
+			// `Promise.race` handles `pending`; it does not handle the derived
+			// promise, and nothing else holds it. An independent review removed
+			// only the `.catch` and measured 6 unhandled rejections across a
+			// 12-case matrix.
+			//
+			// So: do not drop the `.catch` on the reasoning that a caller is
+			// already awaiting this. The caller awaits `pending`, not this.
+			pending
+				.finally( () => {
+					if ( inflightGets.get( action ) === pending ) {
+						inflightGets.delete( action );
+					}
+				} )
+				.catch( () => {} );
+			if ( ! signal ) {
+				return await pending;
+			}
+			// Race even the first waiter locally so its abort rejects
+			// only itself while the shared fetch continues for others.
+			const abortPromise = onCallerAbort( signal );
 			try {
-				if ( ! signal ) {
-					return await pending;
-				}
-				// Race even the first waiter locally so its abort rejects
-				// only itself while the shared fetch continues for others.
-				const abortPromise = onCallerAbort( signal );
-				try {
-					return await Promise.race( [ pending, abortPromise ] );
-				} finally {
-					abortPromise.cleanup?.();
-				}
+				return await Promise.race( [ pending, abortPromise ] );
 			} finally {
-				if ( inflightGets.get( action ) === pending ) {
-					inflightGets.delete( action );
-				}
+				abortPromise.cleanup?.();
 			}
 		}
 		const response = await doFetch( null );

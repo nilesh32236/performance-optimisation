@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Instrument — Performance Optimisation</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Public+Sans:wght@500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            canvas: '#F4F6F9',
+            'canvas-sunken': '#EDF1F6',
+            surface: '#FFFFFF',
+            'surface-quiet': '#F8FAFC',
+            ink: '#0C1420',
+            'ink-muted': '#4A5A6E',
+            'ink-faint': '#7C8CA0',
+            hairline: '#DDE3EA',
+            'hairline-strong': '#C3CDD9',
+            primary: '#1B5FD9',
+            'primary-hover': '#1549AC',
+            'primary-soft': '#E8F0FE',
+            'on-primary': '#FFFFFF',
+            'signal-good': '#0B8A5C',
+            'signal-good-soft': '#E6F6EF',
+            'signal-watch': '#B26A00',
+            'signal-watch-soft': '#FFF4E0',
+            'signal-poor': '#C02626',
+            'signal-poor-soft': '#FDECEC',
+            'signal-idle': '#6B7A8D',
+            'signal-idle-soft': '#EEF1F5',
+            'rail-good': '#0B8A5C',
+            'rail-watch': '#E0A32E',
+            'rail-poor': '#C02626',
+            'rail-track': '#E4E9EF',
+            'rail-marker': '#0C1420'
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "xs": "3px",
+            "sm": "5px",
+            "md": "8px",
+            "lg": "10px",
+            "xl": "14px",
+            "full": "9999px"
+          },
+          fontFamily: {
+            headline: ["Space Grotesk", "sans-serif"],
+            display: ["Space Grotesk", "sans-serif"],
+            body: ["IBM Plex Sans", "sans-serif"],
+            label: ["IBM Plex Sans", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    /* Native custom scrollbars for subtle instrument aesthetic */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F4F6F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #DDE3EA;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #C3CDD9;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-ink font-body min-h-screen antialiased flex flex-col selection:bg-primary-soft selection:text-primary overflow-x-hidden">
+<!-- Top Instrument Context Bar (Shared Component: TopNavBar) -->
+<header class="w-full h-14 px-6 border-b border-hairline bg-surface flex justify-between items-center z-30 sticky top-0">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="font-headline text-lg font-semibold text-ink tracking-tight">Performance Optimisation</span>
+<span class="text-xs px-2 py-0.5 rounded font-mono text-ink-muted bg-surface-quiet border border-hairline">v2.4.0</span>
+</div>
+<div class="h-4 w-px bg-hairline hidden md:block"></div>
+<div class="hidden md:flex items-center gap-2 text-xs font-mono text-ink-muted">
+<span class="inline-block w-2 h-2 rounded-full bg-signal-good"></span>
+<span>LCP Engine: 1.42s</span>
+<span class="text-hairline-strong">·</span>
+<span>Cache: HIT (98.4%)</span>
+</div>
+</div>
+<!-- Actions matching Shared Component TopNavBar specs -->
+<div class="flex items-center gap-3">
+<button class="h-8 px-3 rounded-md border border-hairline bg-surface hover:bg-canvas-sunken text-ink text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px] text-ink-muted" data-icon="refresh">refresh</span>
+<span>Re-test Site</span>
+</button>
+<button class="h-8 px-3 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium flex items-center gap-1.5 transition-colors shadow-none active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px]" data-icon="tune">tune</span>
+<span>Purge Cache</span>
+</button>
+<div class="w-px h-5 bg-hairline mx-1"></div>
+<div class="w-8 h-8 rounded-full bg-surface-quiet border border-hairline flex items-center justify-center font-mono text-xs text-ink-muted cursor-pointer hover:border-hairline-strong" title="Site admin avatar">
+        AD
+      </div>
+</div>
+</header>
+<!-- Main 3-Column Instrument Container -->
+<div class="flex-1 flex w-full relative">
+<!-- 1. LEFT NAV (Shared Component: SideNavBar - 236px fixed) -->
+<aside class="w-[236px] flex-shrink-0 bg-surface-quiet border-r border-hairline flex flex-col justify-between min-h-[calc(100vh-56px)] sticky top-14 self-start">
+<div class="p-4 flex flex-col gap-6">
+<!-- Header Brand Anchor -->
+<div class="flex items-center gap-3 px-2 pt-1">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-none">
+<span class="material-symbols-outlined text-[18px]" data-icon="bolt">bolt</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-semibold text-sm text-ink leading-tight">Instrument</span>
+<span class="text-[11px] font-mono text-ink-faint">v2.4.0</span>
+</div>
+</div>
+<!-- Navigation Tabs: Exact Match for Active Intent ('Media') -->
+<nav class="flex flex-col gap-1">
+<!-- Overview -->
+<a class="text-ink-muted hover:text-ink hover:bg-surface pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="dashboard">dashboard</span>
+<span>Overview</span>
+</a>
+<!-- Speed -->
+<a class="text-ink-muted hover:text-ink hover:bg-surface pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="speed">speed</span>
+<span>Speed</span>
+</a>
+<!-- Media (ACTIVELY SELECTED) -->
+<a class="bg-surface text-primary font-semibold border-l-2 border-primary pl-3 py-2 flex items-center gap-3 text-[13.5px] rounded-r transition-colors duration-150 shadow-none" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="perm_media">perm_media</span>
+<span>Media</span>
+</a>
+<!-- Data & System -->
+<a class="text-ink-muted hover:text-ink hover:bg-surface pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="database">database</span>
+<span>Data &amp; System</span>
+</a>
+<!-- Manage -->
+<a class="text-ink-muted hover:text-ink hover:bg-surface pl-3 py-2 flex items-center gap-3 text-[13.5px] font-medium rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings">settings</span>
+<span>Manage</span>
+</a>
+</nav>
+</div>
+<!-- Navigation Footer -->
+<div class="p-4 border-t border-hairline flex flex-col gap-3 bg-surface-quiet">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-signal-good-soft border border-signal-good/20 text-signal-good text-[11px] font-mono font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good"></span>
+<span>Engine OK</span>
+</div>
+<span class="text-[11px] font-mono text-ink-faint">WP 6.7.1</span>
+</div>
+<div class="flex flex-col gap-1 text-[12px] font-mono text-ink-faint">
+<div class="flex justify-between items-center text-ink-muted">
+<span>PHP Version</span>
+<span class="font-medium text-ink">8.3.11</span>
+</div>
+<div class="flex justify-between items-center text-ink-muted">
+<span>Server Memory</span>
+<span class="font-medium text-ink">512M</span>
+</div>
+</div>
+<div class="pt-2 border-t border-hairline flex items-center justify-between text-xs text-ink-faint">
+<a class="flex items-center gap-1 hover:text-ink transition-colors" href="#">
+<span class="material-symbols-outlined text-[15px]" data-icon="help">help</span>
+<span>Documentation</span>
+</a>
+<a class="flex items-center gap-1 hover:text-ink transition-colors" href="#">
+<span class="material-symbols-outlined text-[15px]" data-icon="check_circle">check_circle</span>
+<span>Status</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- 2. WORK AREA (fluid middle zone, capped at 880px, left-aligned) -->
+<main class="flex-1 bg-canvas p-8 overflow-y-auto">
+<div class="max-w-[880px]">
+<!-- Page Header -->
+<div class="flex items-start justify-between mb-8 pb-4 border-b border-hairline">
+<div>
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-1">
+              MEDIA
+            </div>
+<h1 class="font-headline font-semibold text-2xl text-ink tracking-tight">Images</h1>
+<p class="font-body text-[13.5px] text-ink-muted mt-1">
+              Make images smaller, load sooner, and avoid shifting the page.
+            </p>
+</div>
+<button class="bg-primary hover:bg-primary-hover text-on-primary px-4 py-2 rounded-md font-medium text-xs flex items-center gap-2 transition-colors active:scale-[0.98] shadow-none">
+<span class="material-symbols-outlined text-[16px]" data-icon="save">save</span>
+<span>Save Settings</span>
+</button>
+</div>
+<!-- CONVERSION SUMMARY PANEL -->
+<div class="bg-surface rounded-md border border-hairline p-5 mb-7">
+<div class="flex items-center justify-between mb-3">
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
+              CONVERSION OVERVIEW
+            </div>
+<span class="inline-flex items-center gap-1 text-[11.5px] font-mono text-signal-good bg-signal-good-soft px-2 py-0.5 rounded border border-signal-good/20">
+<span class="w-1.5 h-1.5 rounded-full bg-signal-good animate-pulse"></span>
+              Optimization daemon active
+            </span>
+</div>
+<div class="font-mono text-[13px] font-semibold text-ink bg-surface-quiet p-3 rounded border border-hairline mb-4 flex items-center justify-between">
+<span>Original 2.41 GB → Optimised 612 MB <span class="text-signal-good">(75% smaller · 412 images)</span></span>
+<button class="text-xs font-body font-medium text-primary hover:text-primary-hover flex items-center gap-1">
+<span>View Log</span>
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+<!-- Progress Bar 1 -->
+<div>
+<div class="flex justify-between items-baseline mb-1.5">
+<span class="text-xs text-ink font-medium">Converted Library</span>
+<span class="font-mono text-xs text-ink-muted font-medium">412 / 914 images (45%)</span>
+</div>
+<div class="w-full h-1.5 bg-rail-track rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 45%;"></div>
+</div>
+</div>
+<!-- Progress Bar 2 -->
+<div>
+<div class="flex justify-between items-baseline mb-1.5">
+<span class="text-xs text-ink font-medium">Disk Space Reclaimed</span>
+<span class="font-mono text-xs text-signal-good font-medium">1.80 GB saved (75%)</span>
+</div>
+<div class="w-full h-1.5 bg-rail-track rounded-full overflow-hidden">
+<div class="bg-signal-good h-full rounded-full" style="width: 75%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- SETTINGS CARDS CONTAINER -->
+<div class="space-y-7">
+<!-- CARD 1: Lazy Loading -->
+<section class="bg-surface rounded-md border border-hairline overflow-hidden">
+<div class="p-5 border-b border-hairline bg-surface">
+<h2 class="font-headline font-semibold text-base text-ink">Lazy Loading</h2>
+<p class="text-[13px] text-ink-muted mt-0.5">Defer non-critical offscreen imagery to preserve bandwidth and initial render.</p>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Enable Lazy Load -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Enable Lazy Load</label>
+<p class="text-[12.5px] text-ink-muted">Defer offscreen images until they scroll into view.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-primary rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-4 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 2: Exclude First N Images -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Exclude First N Images</label>
+<p class="text-[12.5px] text-ink-muted">Bypass lazy loading for above-the-fold images to prevent LCP delays.</p>
+</div>
+<div class="flex items-center gap-2">
+<input class="w-20 h-8 font-mono text-xs rounded border-hairline bg-surface text-ink text-center focus:border-primary focus:ring-1 focus:ring-primary-soft" min="0" type="number" value="0"/>
+<span class="text-xs text-ink-faint">images</span>
+</div>
+</div>
+<!-- Row 3: Use Native Lazy Loading -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Use Native Lazy Loading</label>
+<p class="text-[12.5px] text-ink-muted">Use the browser's native <code class="font-mono text-xs bg-canvas-sunken px-1 py-0.5 rounded text-ink">loading="lazy"</code> attribute when supported.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-primary rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-4 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 4: Lazy-load CSS Background Images -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Lazy-load CSS Background Images</label>
+<p class="text-[12.5px] text-ink-muted">Detect elements with background-image and swap via IntersectionObserver.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 5: Placeholder Type -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Placeholder Type</label>
+<p class="text-[12.5px] text-ink-muted">Render low-footprint vector silhouette while the full image fetches.</p>
+</div>
+<div class="w-64">
+<select class="w-full h-8 text-xs rounded border-hairline bg-surface text-ink focus:border-primary focus:ring-1 focus:ring-primary-soft">
+<option selected="">SVG Placeholder (Lightweight)</option>
+<option>Dominant Color Box</option>
+<option>LQIP (BlurHash Low Quality)</option>
+<option>Blank Transparent Pixel</option>
+</select>
+</div>
+</div>
+<!-- Row 6: Auto-fill Missing Alt Text -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Auto-fill Missing Alt Text</label>
+<p class="text-[12.5px] text-ink-muted">Fallback to sanitized media filename when explicit alt attributes are omitted.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 7: Lazy-render Below-fold Sections -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Lazy-render Below-fold Sections</label>
+<p class="text-[12.5px] text-ink-muted">Apply content-visibility: auto to offscreen structural DOM nodes.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 2: Video & Media -->
+<section class="bg-surface rounded-md border border-hairline overflow-hidden">
+<div class="p-5 border-b border-hairline bg-surface">
+<h2 class="font-headline font-semibold text-base text-ink">Video &amp; Media</h2>
+<p class="text-[13px] text-ink-muted mt-0.5">Streamline embedded players, iframe loads, and heavy container formats.</p>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Video Lazy Loading -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Video Lazy Loading</label>
+<p class="text-[12.5px] text-ink-muted">Prevent preload of &lt;video&gt; sources and embedded iframes until user scroll.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 2: Video Placeholder -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Video Placeholder</label>
+<p class="text-[12.5px] text-ink-muted">Display high-res static poster thumbnail before video iframe initializes.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 3: Next-Gen Conversion -->
+<section class="bg-surface rounded-md border border-hairline overflow-hidden">
+<div class="p-5 border-b border-hairline bg-surface flex items-center justify-between">
+<div>
+<h2 class="font-headline font-semibold text-base text-ink">Next-Gen Conversion</h2>
+<p class="text-[13px] text-ink-muted mt-0.5">Encode static imagery into high-efficiency modern visual formats.</p>
+</div>
+<span class="text-xs font-mono bg-primary-soft text-primary px-2.5 py-1 rounded font-medium">libvips 8.15</span>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Auto Convert Formats -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Auto Convert Formats</label>
+<p class="text-[12.5px] text-ink-muted">Automatically generate modern WebP/AVIF equivalents upon upload.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-primary rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-4 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 2: Target Format (VISIBLY SELECTED CONTROL) -->
+<div class="p-4 bg-primary-soft/40 border-l-4 border-primary flex items-center justify-between transition-colors relative">
+<div class="pr-6">
+<div class="flex items-center gap-2 mb-0.5">
+<label class="text-[13.5px] font-semibold text-primary">Target Format</label>
+<span class="px-1.5 py-0.5 bg-primary text-on-primary text-[10px] font-mono uppercase tracking-wider rounded font-medium">Inspecting</span>
+</div>
+<p class="text-[12.5px] text-ink-muted">Choose file type container for converted asset deliverable.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-72">
+<select class="w-full h-8 text-xs font-medium rounded border-primary bg-surface text-ink focus:border-primary focus:ring-1 focus:ring-primary-soft shadow-none">
+<option selected="">WebP (Standard — 95%+ browser support)</option>
+<option>AVIF (Ultra compression — modern engines)</option>
+<option>Dual Generation (AVIF with WebP fallback)</option>
+</select>
+</div>
+<span class="material-symbols-outlined text-[18px] text-primary" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+<!-- Row 3: Exclude from Conversion -->
+<div class="p-4 flex flex-col gap-2 hover:bg-surface-quiet transition-colors">
+<div class="flex justify-between items-baseline">
+<label class="text-[13.5px] font-semibold text-ink">Exclude from Conversion</label>
+<span class="text-[11.5px] font-mono text-ink-faint">Regex supported</span>
+</div>
+<p class="text-[12.5px] text-ink-muted">One filename, directory, or pattern per line.</p>
+<textarea class="w-full font-mono text-xs rounded border-hairline bg-surface text-ink p-2 focus:border-primary focus:ring-1 focus:ring-primary-soft" placeholder="e.g. logo.png, banner-hero.jpg, /uploads/critical/*" rows="2"></textarea>
+</div>
+<!-- Row 4: Discard Oversized Conversions -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Discard Oversized Conversions</label>
+<p class="text-[12.5px] text-ink-muted">Keep original file if converted WebP/AVIF file size exceeds the original.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-primary rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-4 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 5: Override Client-Side MIME Types -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Override Client-Side MIME Types</label>
+<p class="text-[12.5px] text-ink-muted">Force rewrite header <code class="font-mono text-xs bg-canvas-sunken px-1 py-0.5 rounded text-ink">Content-Type</code> headers via server rewrite rules.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 4: Responsive Limits -->
+<section class="bg-surface rounded-md border border-hairline overflow-hidden">
+<div class="p-5 border-b border-hairline bg-surface">
+<h2 class="font-headline font-semibold text-base text-ink">Responsive Limits</h2>
+<p class="text-[13px] text-ink-muted mt-0.5">Enforce viewport dimensional bounding to avoid serving raw unscaled photography.</p>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Max Image Width (px) -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Max Image Width (px)</label>
+<p class="text-[12.5px] text-ink-muted">Downscale uploaded images exceeding this ceiling width (0 = unrestricted).</p>
+</div>
+<div class="flex items-center gap-2">
+<input class="w-24 h-8 font-mono text-xs rounded border-hairline bg-surface text-ink text-center focus:border-primary focus:ring-1 focus:ring-primary-soft" min="0" type="number" value="0"/>
+<span class="text-xs text-ink-faint">px</span>
+</div>
+</div>
+<!-- Row 2: Exclude Classes from Max Width -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Exclude Classes from Max Width</label>
+<p class="text-[12.5px] text-ink-muted">Comma-separated CSS classes to bypass responsive image clamping.</p>
+</div>
+<div class="w-64">
+<input class="w-full h-8 font-mono text-xs rounded border-hairline bg-surface text-ink px-2.5 focus:border-primary focus:ring-1 focus:ring-primary-soft" placeholder="e.g. no-resize, full-bleed, hero-banner" type="text"/>
+</div>
+</div>
+<!-- Row 3: Max Longest Edge (px) -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Max Longest Edge (px)</label>
+<p class="text-[12.5px] text-ink-muted">Clamp either portrait height or landscape width to a maximum pixel boundary.</p>
+</div>
+<div class="flex items-center gap-2">
+<input class="w-24 h-8 font-mono text-xs rounded border-hairline bg-surface text-ink text-center focus:border-primary focus:ring-1 focus:ring-primary-soft" min="0" type="number" value="2560"/>
+<span class="text-xs text-ink-faint">px</span>
+</div>
+</div>
+</div>
+</section>
+<!-- CARD 5: Advanced Preloading -->
+<section class="bg-surface rounded-md border border-hairline overflow-hidden mb-8">
+<div class="p-5 border-b border-hairline bg-surface">
+<h2 class="font-headline font-semibold text-base text-ink">Advanced Preloading</h2>
+<p class="text-[13px] text-ink-muted mt-0.5">Inject high-priority resource hints into document head for early discovery.</p>
+</div>
+<div class="divide-y divide-hairline">
+<!-- Row 1: Auto-preload LCP Image -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Auto-preload LCP Image</label>
+<p class="text-[12.5px] text-ink-muted">Predictively synthesize &lt;link rel="preload" as="image"&gt; for primary viewport element.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 2: Prioritize LCP Images in Final HTML -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Prioritize LCP Images in Final HTML</label>
+<p class="text-[12.5px] text-ink-muted">Append <code class="font-mono text-xs bg-canvas-sunken px-1 py-0.5 rounded text-ink">fetchpriority="high"</code> and omit async decoding.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 3: Preload Front Page Images -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Preload Front Page Images</label>
+<p class="text-[12.5px] text-ink-muted">Inject preload tags specifically when routing the homepage template.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+<!-- Row 4: Preload Featured Images -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-quiet transition-colors">
+<div class="pr-6">
+<label class="text-[13.5px] font-semibold text-ink block">Preload Featured Images</label>
+<p class="text-[12.5px] text-ink-muted">Automatically link WordPress post thumbnails on singular content queries.</p>
+</div>
+<div class="flex items-center">
+<button class="w-9 h-5 bg-hairline-strong rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer" type="button">
+<span class="w-4 h-4 bg-surface rounded-full transition-transform transform translate-x-0 shadow-sm"></span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- 3. RIGHT INSPECTOR (344px width, white bg, sticky right side) -->
+<aside class="w-[344px] flex-shrink-0 bg-surface border-l border-hairline min-h-[calc(100vh-56px)] sticky top-14 self-start flex flex-col justify-between overflow-y-auto">
+<div class="p-6 flex flex-col gap-6">
+<!-- Inspector Subject Header -->
+<div class="pb-4 border-b border-hairline">
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-1">
+            INSPECTOR · SELECTED CONTROL
+          </div>
+<div class="flex items-center justify-between gap-2">
+<h2 class="font-headline font-semibold text-xl text-ink">Target Format</h2>
+<span class="px-2 py-0.5 rounded text-[11px] font-mono font-medium text-signal-good bg-signal-good-soft border border-signal-good/20">
+              Working
+            </span>
+</div>
+<p class="font-mono text-xs text-ink-muted mt-1">Next-Gen Conversion Engine</p>
+</div>
+<!-- Section: WHAT IT DOES -->
+<div>
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-2">
+            WHAT IT DOES
+          </div>
+<p class="text-[13.5px] text-ink leading-relaxed">
+            Chooses which modern format converted images are served in.
+          </p>
+<p class="text-[12.5px] text-ink-muted mt-1.5 leading-normal">
+            Intercepts document requests and swaps standard JPEG and PNG files for compressed modern variants using content negotiation.
+          </p>
+</div>
+<!-- Section: WHAT IT COSTS YOU -->
+<div>
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-2">
+            WHAT IT COSTS YOU
+          </div>
+<div class="bg-surface-quiet p-3.5 rounded border border-hairline text-[12.5px] text-ink-muted leading-relaxed">
+<span class="font-medium text-ink">AVIF compresses roughly 30% smaller than WebP</span> but takes longer to encode and is not supported by every browser. Choosing Dual Generation serves AVIF where it is supported and falls back to WebP.
+          </div>
+</div>
+<!-- Section: WHERE YOU STAND NOW -->
+<div>
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-2.5">
+            WHERE YOU STAND NOW
+          </div>
+<div class="border border-hairline rounded divide-y divide-hairline bg-surface text-xs">
+<div class="p-2.5 flex items-center justify-between">
+<span class="text-ink-muted">Active Format</span>
+<span class="font-mono font-semibold text-ink">WebP</span>
+</div>
+<div class="p-2.5 flex items-center justify-between">
+<span class="text-ink-muted">Engine Status</span>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-signal-good"></span>
+<span class="font-mono text-signal-good font-medium">Working</span>
+</div>
+</div>
+<div class="p-2.5 flex items-center justify-between">
+<span class="text-ink-muted">Converted Progress</span>
+<span class="font-mono text-ink">412 of 914 converted</span>
+</div>
+<div class="p-2.5 flex items-center justify-between">
+<span class="text-ink-muted">Storage Saved</span>
+<span class="font-mono font-semibold text-signal-good">1.80 GB (75%)</span>
+</div>
+<div class="p-2.5 flex items-center justify-between">
+<span class="text-ink-muted">Last Run</span>
+<span class="font-mono text-ink-faint">2026-09-28 08:52</span>
+</div>
+</div>
+<!-- Threshold Rail component demonstrating safe scale -->
+<div class="mt-4 p-3 bg-surface-quiet rounded border border-hairline">
+<div class="flex justify-between items-center text-xs mb-1.5">
+<span class="text-ink-muted font-medium">Compression Ratio</span>
+<span class="font-mono font-semibold text-ink">75.0%</span>
+</div>
+<div class="w-full h-1.5 bg-rail-track rounded-full relative flex overflow-hidden">
+<div class="w-[30%] bg-rail-poor h-full"></div>
+<div class="w-[30%] bg-rail-watch h-full"></div>
+<div class="w-[40%] bg-rail-good h-full"></div>
+</div>
+<div class="flex justify-between items-center text-[10px] font-mono text-ink-faint mt-1">
+<span>0%</span>
+<span>Needs Work (40%)</span>
+<span>Target (70%+)</span>
+</div>
+</div>
+</div>
+<!-- Section: RELATED SETTINGS -->
+<div>
+<div class="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint mb-2">
+            RELATED SETTINGS
+          </div>
+<div class="flex flex-col gap-1 text-xs">
+<a class="p-2 rounded hover:bg-surface-quiet flex items-center justify-between text-ink transition-colors group" href="#">
+<span class="group-hover:text-primary transition-colors">Image Quality Threshold</span>
+<span class="material-symbols-outlined text-[14px] text-ink-faint group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</a>
+<a class="p-2 rounded hover:bg-surface-quiet flex items-center justify-between text-ink transition-colors group" href="#">
+<span class="group-hover:text-primary transition-colors">Server Encoding Engine (cwebp / libvips)</span>
+<span class="material-symbols-outlined text-[14px] text-ink-faint group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</a>
+<a class="p-2 rounded hover:bg-surface-quiet flex items-center justify-between text-ink transition-colors group" href="#">
+<span class="group-hover:text-primary transition-colors">Cloudflare Polish &amp; CDN Sync</span>
+<span class="material-symbols-outlined text-[14px] text-ink-faint group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Sticky/Pinned Inspector Bottom Bar -->
+<div class="p-3 border-t border-hairline bg-surface-quiet text-[11px] font-mono text-ink-faint flex items-center justify-between">
+<span class="truncate">Active: Next-Gen / TargetFormat</span>
+<span class="text-ink">v2.4.0</span>
+</div>
+</aside>
+</div>
+</body></html>

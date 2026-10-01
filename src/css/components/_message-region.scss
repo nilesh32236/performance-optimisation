@@ -1,0 +1,107 @@
+/**
+ * The app-level message region.
+ *
+ * Fixed to the bottom-right, above everything, so a confirmation is visible
+ * wherever the card that produced it sits. It carries the design system's
+ * hairlines rather than shadows, so it reads as part of the interface rather
+ * than as an overlay floating on top of it.
+ */
+
+.wppo-message-region {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	z-index: 100000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: min(360px, calc(100vw - 48px));
+	pointer-events: none;
+}
+
+.wppo-message-region__item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: #0f172a;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-left-width: 3px;
+	border-radius: 8px;
+	box-shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 8px 24px -12px rgb(15 23 42 / 18%);
+	pointer-events: auto;
+}
+
+.wppo-message-region__icon {
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	display: grid;
+	place-items: center;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+	color: #fff;
+	border-radius: 50%;
+	background: #64748b;
+}
+
+.wppo-message-region__text {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* The left rule carries the tone; the icon repeats it, so neither is the only
+   signal — which also keeps it readable without relying on colour alone. */
+.wppo-message-region__item--success {
+	border-left-color: #0f7b4f;
+}
+.wppo-message-region__item--success .wppo-message-region__icon {
+	background: #0f7b4f;
+}
+
+.wppo-message-region__item--error {
+	border-left-color: #b3261e;
+}
+.wppo-message-region__item--error .wppo-message-region__icon {
+	background: #b3261e;
+}
+
+.wppo-message-region__item--warning {
+	border-left-color: #8a5a00;
+}
+.wppo-message-region__item--warning .wppo-message-region__icon {
+	background: #8a5a00;
+}
+
+.wppo-message-region__item--info {
+	border-left-color: #0b6e75;
+}
+.wppo-message-region__item--info .wppo-message-region__icon {
+	background: #0b6e75;
+}
+
+@media (max-width: 600px) {
+	.wppo-message-region {
+		left: 12px;
+		right: 12px;
+		bottom: 12px;
+		max-width: none;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.wppo-message-region__item {
+		animation: wppo-message-in 160ms ease-out;
+	}
+
+	@keyframes wppo-message-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+	}
+}

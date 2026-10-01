@@ -1,4 +1,10 @@
-import { useState, useEffect, useContext, useMemo } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useContext,
+	useMemo,
+	useRef,
+} from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -222,6 +228,26 @@ const ImageOptimization = ( { options = {} } ) => {
 	const [ isCandidateLoading, setIsCandidateLoading ] = useState( false );
 	const [ isApplyingLcp, setIsApplyingLcp ] = useState( false );
 
+	// Mount/abort guards for the two `update_settings` save paths below.
+	// ObjectCache.js and PreloadSettings.js already do this (audit #1420);
+	// ImageOptimization was the one settings tab that did not, so a save that
+	// resolved after unmount still called setState and fired a notice banner.
+	const isMountedRef = useRef( true );
+	const lcpSaveControllerRef = useRef( null );
+	const submitControllerRef = useRef( null );
+	useEffect( () => {
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+			if ( lcpSaveControllerRef.current ) {
+				lcpSaveControllerRef.current.abort();
+			}
+			if ( submitControllerRef.current ) {
+				submitControllerRef.current.abort();
+			}
+		};
+	}, [] );
+
 	useEffect( () => {
 		let cancelled = false;
 		// Audit #1354: cancel the request on unmount, not just ignore it.
@@ -280,16 +306,26 @@ const ImageOptimization = ( { options = {} } ) => {
 			return;
 		}
 		setIsApplyingLcp( true );
+		const controller = new AbortController();
+		lcpSaveControllerRef.current = controller;
 		try {
 			const next = {
 				...settings,
 				autoPreloadLCP: true,
 				prioritizeLCPImages: true,
 			};
-			const res = await apiCall( 'update_settings', {
-				tab: 'image_optimisation',
-				settings: next,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'image_optimisation',
+					settings: next,
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( res && res.success ) {
 				// Merge functionally so edits typed during the request
 				// are not clobbered by the pre-await snapshot.
@@ -325,6 +361,10 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			// An abort on unmount is not a user-facing failure.
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			// Audit #1354: translated string to users; raw error to console.
 			console.error(
 				'Could not apply the LCP preload.',
@@ -339,7 +379,9 @@ const ImageOptimization = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsApplyingLcp( false );
+			if ( isMountedRef.current ) {
+				setIsApplyingLcp( false );
+			}
 		}
 	};
 	useEffect( () => {
@@ -457,11 +499,21 @@ const ImageOptimization = ( { options = {} } ) => {
 		setIsLoading( true );
 		// Audit #1354: clear any prior notice before a new save attempt.
 		dismiss();
+		const controller = new AbortController();
+		submitControllerRef.current = controller;
 		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'image_optimisation',
-				settings,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'image_optimisation',
+					settings,
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 
 			if ( res.success ) {
 				setBaseline( { ...settings } );
@@ -489,6 +541,10 @@ const ImageOptimization = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			// An abort on unmount is not a user-facing failure.
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			// Audit #1420: raw backend text stays in console; UI gets the
 			// translated generic string.
 			console.error(
@@ -504,7 +560,9 @@ const ImageOptimization = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsLoading( false );
+			if ( isMountedRef.current ) {
+				setIsLoading( false );
+			}
 		}
 	};
 

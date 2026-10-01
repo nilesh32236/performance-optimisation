@@ -17,6 +17,8 @@
 @use 'components/notices';
 @use 'components/progress';
 @use 'components/tabs';
+@use 'components/section';
+@use 'components/overview';
 @use 'components/fields';
 @use 'components/dialog';
 @use 'components/tooltip';
@@ -25,3 +27,4 @@
 @use 'components/video-placeholder';
 @use 'components/lazy-placeholder';
 @use 'components/welcome';
+@use 'components/message-region' as *;

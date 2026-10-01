@@ -29,6 +29,7 @@ import {
 	getErrorLogMessage,
 } from '../lib/apiRequest';
 import { scoreToStatus } from '../lib/status';
+import { getPollDelay, MAX_POLL_ATTEMPTS } from '../lib/polling';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
@@ -37,41 +38,6 @@ import NoticeBanner from './common/NoticeBanner';
 import { __, sprintf } from '@wordpress/i18n';
 
 // apiKeyConfigured is now derived inside the component for reactivity.
-
-/**
- * Polling interval in milliseconds.
- * PageSpeed API typically takes 15–60 seconds.
- */
-const POLL_INTERVAL_MS = 5000;
-
-/**
- * Maximum number of poll attempts before giving up (~5 minutes).
- */
-const MAX_POLL_ATTEMPTS = 60;
-
-/**
- * Maximum delay between PageSpeed poll ticks.
- *
- * Polling backs off (5s for the first 10 attempts, then +5s per 10
- * attempts, capped at 15s) so slow PageSpeed jobs do not hit the REST
- * endpoint at the same rate as near-complete ones.
- *
- * @since 2.3.0
- */
-const MAX_POLL_DELAY_MS = 15000;
-
-/**
- * Delay before the next poll tick, backing off with the attempt count.
- *
- * @since 2.3.0
- * @param {number} attempts 1-based poll attempt count.
- * @return {number} Milliseconds to wait before the next tick.
- */
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
 
 /**
  * Score colour based on Lighthouse thresholds.

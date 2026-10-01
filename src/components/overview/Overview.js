@@ -1,0 +1,572 @@
+/**
+ * Overview — the admin's landing page.
+ *
+ * Answers one question: *what state is my site in, and what should I do next?*
+ * It is not the old Dashboard with a new heading. The Dashboard's thirteen
+ * panels are all still reachable, under "All diagnostics" in this same area.
+ *
+ * ## Data strategy
+ *
+ * Every fact here comes from an endpoint the plugin already exposes, through
+ * the existing typed helpers in `apiRequest.js`. No new backend route, and no
+ * duplicated query. The requests are issued together once on mount and are not
+ * repeated on harmless navigation, because they are local to this component.
+ *
+ * Failure is per-source, not per-page: a failed object-cache call leaves that
+ * one row as "Unavailable" rather than blanking the whole Overview.
+ *
+ * @package
+ */
+
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
+
+import SiteStatusCard from './SiteStatusCard';
+import QuickActionsCard from './QuickActionsCard';
+import { buildStatusModel } from '../../lib/overviewStatus';
+import { readObjectCacheStatus } from '../../lib/objectCacheStatus';
+import {
+	apiCall,
+	fetchSystemInfo,
+	fetchWebVitalsTrends,
+} from '../../lib/apiRequest';
+
+/**
+ * How long the Overview waits for a source before giving up on it.
+ *
+ * Without this, one hanging request held the page in its loading state
+ * indefinitely. Comfortably above any healthy response time, and well below the
+ * point where a user would assume the page is broken.
+ */
+export const OVERVIEW_SETTLE_TIMEOUT_MS = 15000;
+
+/**
+ * Pull the object-cache status, which has no dedicated typed helper.
+ *
+ * The endpoint dispatches on an `action` and answers 400 without one, so this
+ * asks for `status` explicitly. It is also throttled to five calls a minute, so
+ * it is issued once per mount and never polled.
+ *
+ * Exported for testing: the envelope handling here is what stops a failed
+ * request being reported as a switched-off feature, and it cannot be pinned
+ * from the rendered page alone.
+ *
+ * @param {AbortSignal} signal Cancellation signal.
+ * @return {Promise<Object|null>} The object-cache payload, or null.
+ */
+// `object_cache` is throttled to five calls a minute, and the Overview remounts
+// on every sub-item change. An independent review drove 7 mounts in 20 s and got
+// 8 requests, 3 of them HTTP 429, which turned a perfectly healthy Redis into a
+// grey "Unavailable" row with no visible cause. One read per page session is
+// enough: this is a status snapshot, not a live gauge, and nothing on this page
+// asks for it to be fresh.
+//
+// A module-level memo rather than a React ref, so it survives the component
+// unmounting and remounting — which is the entire problem.
+export const fetchObjectCache = async ( signal ) => {
+	const response = await apiCall(
+		'object_cache',
+		{ action: 'status' },
+		'POST',
+		signal
+	);
+	// The REST layer answers `{ success, data, message }`; the status model
+	// works on the payload, not the envelope. Reading the envelope directly made
+	// every row report "Unavailable" or "Not set up".
+	//
+	// Only an explicit success is a payload. This has to be an allow-list, not
+	// `success === false`: a `WP_Error`-shaped body (`{ code, message, data }`)
+	// has **no** `success` key at all, so a negative check lets it through and
+	// its `data` — `{ status: 429 }` — reaches the model as if it were a status
+	// report. An independent review found the first half of this; a test I wrote
+	// while covering the review's recommendation found the second.
+	//
+	// A failed request is not evidence that a feature is switched off.
+	if ( ! response || response.success !== true ) {
+		return null;
+	}
+	return response.data ?? null;
+};
+
+/**
+ * Pull the stored performance scans and summarise them per device class.
+ *
+ * Reads the plugin's own recorded history rather than issuing a fresh
+ * measurement: the Overview must stay fast, and a per-device number is more
+ * honest than a lab score anyway.
+ *
+ * ## The real shape
+ *
+ * `web_vitals_trends` returns `data.trends` as an **object keyed by
+ * `<url-hash>_<strategy>`**, each value an array of history rows — not the flat
+ * array this originally assumed. An independent review confirmed the assumed
+ * shape never matched, so the vitals feature was dead: zero of three rows ever
+ * rendered. The history rows carry `performance`, `lcp`, `cls` and `tbt`; there
+ * is **no `inp` field**, so INP is reported only when a source actually
+ * provides it rather than being faked from a neighbouring metric.
+ *
+ * Exported for testing against the literal captured response.
+ *
+ * @param {Object} payload The decoded `web_vitals_trends` payload.
+ * @return {Object|null} `{ lcp, cls, inp? }`, or null when nothing is measured.
+ */
+export const summariseVitals = ( payload ) => {
+	// Accepts the `{ success, data }` envelope, the decoded payload, or the
+	// `trends` object itself. Unwrapping here rather than only at the call site
+	// means a caller that passes the raw response gets the same answer.
+	const container =
+		payload?.trends ?? payload?.data?.trends ?? payload?.data ?? payload;
+	if ( ! container || typeof container !== 'object' ) {
+		return null;
+	}
+
+	// Accepts both the keyed map the endpoint really returns and a flat array,
+	// because a filter could hand back either and neither should silently
+	// produce an empty page.
+	// Group by **device class** rather than pooling.
+	//
+	// The endpoint's keys carry a `_desktop` or `_mobile` suffix, and pooling
+	// them produced a median that was neither device's. Measured on this site
+	// (37 stored scans): desktop 345.5 ms, mobile 1202 ms, pooled **504.5 ms** —
+	// which is the desktop *maximum*, presented as if it were typical. Mobile,
+	// normally the majority of traffic, was 2.4x worse and invisible.
+	//
+	// A final review caught this by splitting the store with WP-CLI. An
+	// independent review had already raised the pooling in round 26 and it was
+	// recorded as an accepted trade-off, which was the wrong call: the number is
+	// the Overview's headline performance claim.
+	const byDevice = new Map();
+	if ( Array.isArray( container ) ) {
+		byDevice.set(
+			'all',
+			container.filter( ( r ) => r && typeof r === 'object' )
+		);
+	} else {
+		for ( const [ key, value ] of Object.entries( container ) ) {
+			if ( ! Array.isArray( value ) ) {
+				continue;
+			}
+			// An unsuffixed key is an **unlabelled** source, not a device called
+			// "all". Reporting it as `all` rendered "on all" in the sentence; a
+			// container key literally named `desktop` (no underscore) landed there
+			// too, and was mislabelled.
+			let device = null;
+			if ( /_mobile$/i.test( key ) ) {
+				device = 'mobile';
+			} else if ( /_desktop$/i.test( key ) ) {
+				device = 'desktop';
+			}
+			const bucket = device ?? 'all';
+			if ( ! byDevice.has( bucket ) ) {
+				byDevice.set( bucket, [] );
+			}
+			byDevice
+				.get( bucket )
+				.push( ...value.filter( ( r ) => r && typeof r === 'object' ) );
+		}
+	}
+	if ( ! [ ...byDevice.values() ].some( ( rows ) => rows.length ) ) {
+		return null;
+	}
+
+	/**
+	 * Median of a real, finite, non-negative measurement.
+	 *
+	 * Absence is decided **explicitly**, not by a `> 0` test. Both are needed
+	 * and they are not the same thing:
+	 *
+	 * - `Number( null )`, `Number( '' )` and `Number( false )` are all `0`, so
+	 *   treating zero as a measurement is how an unmeasured site reports a
+	 *   perfect vitals row.
+	 * - A **genuine** CLS of `0` is an excellent real measurement, not a
+	 *   missing one. A `> 0` filter discards it, which made a fast site render
+	 *   "No real-user data yet" while the plugin was holding the data. On the
+	 *   live site 7 of 37 stored rows are true zeros, and dropping them moved
+	 *   the reported median from 0.0026 to 0.0046 — a 76% overstatement.
+	 *
+	 * `deriveVitalsStatus` already draws the same distinction, and both layers
+	 * must agree or the row contradicts itself.
+	 *
+	 * @param {string[]} keys       Candidate field names, in order.
+	 * @param {Object[]} deviceRows The rows for one device class.
+	 * @return {number|undefined} The median, or undefined when unmeasured.
+	 */
+	const medianOf = ( keys, deviceRows ) => {
+		const values = [];
+		for ( const row of deviceRows ) {
+			if ( ! row || typeof row !== 'object' ) {
+				continue;
+			}
+			for ( const key of keys ) {
+				const raw = row[ key ];
+				if ( raw === null || raw === '' || typeof raw === 'boolean' ) {
+					continue;
+				}
+				// Only a real number counts. `Number()` accepts hex
+				// (`'0x4d2'` -> 1234) and arbitrary-precision digit strings
+				// (`'999999999999999999999999'` -> 1e+24), so a corrupt stored
+				// value became a plausible-looking measurement — and one large
+				// enough flipped the whole Overview to "Needs attention". An
+				// independent review reproduced all three live.
+				if (
+					typeof raw !== 'number' &&
+					! /^\d+(?:\.\d+)?$/.test( String( raw ).trim() )
+				) {
+					continue;
+				}
+				const value = Number( raw );
+				// A vital is milliseconds (or a unitless CLS). Anything past a
+				// day in ms is a corrupt value, not a slow page.
+				if ( value >= 86400000 ) {
+					continue;
+				}
+				// Explicit absence, then accept a real zero.
+				const isNumber =
+					typeof raw === 'number' ||
+					( typeof raw === 'string' && raw.trim() !== '' );
+				if ( isNumber && Number.isFinite( value ) && value >= 0 ) {
+					values.push( value );
+					break;
+				}
+			}
+		}
+		if ( ! values.length ) {
+			return undefined;
+		}
+		values.sort( ( a, b ) => a - b );
+		return values[ Math.floor( values.length / 2 ) ];
+	};
+
+	// One summary per device class, and the device is named on the row.
+	//
+	// Pooling hid a 2.4x difference on the live site, and the pooled figure
+	// happened to equal the desktop maximum — so the "typical" number the page
+	// showed was the best case anyone recorded.
+	const measure = ( deviceRows ) => ( {
+		lcp: medianOf( [ 'lcp', 'LCP', 'lcp_ms' ], deviceRows ),
+		cls: medianOf( [ 'cls', 'CLS', 'cls_value' ], deviceRows ),
+		// Only when the source genuinely measures it. There is no INP field in
+		// the stored history, so this stays undefined and the row is reported as
+		// unmeasured instead of borrowing a different metric.
+		inp: medianOf( [ 'inp', 'INP' ], deviceRows ),
+	} );
+
+	const out = {};
+	let unlabelled = null;
+	for ( const [ device, deviceRows ] of byDevice ) {
+		if ( ! deviceRows.length ) {
+			continue;
+		}
+		const measured = measure( deviceRows );
+		if ( ! Object.values( measured ).some( ( v ) => v !== undefined ) ) {
+			continue;
+		}
+		// The unlabelled bucket is returned **flat**, not wrapped in an `all`
+		// key. Wrapping it made the model treat `all` as a device name and the
+		// sentence read "…on all (PageSpeed lab scan)".
+		if ( device === 'all' ) {
+			unlabelled = measured;
+			continue;
+		}
+		out[ device ] = measured;
+	}
+
+	// A source that could not be labelled is reported on its own, with no
+	// device word, so the consumer falls back to its flat reading.
+	if ( ! Object.keys( out ).length ) {
+		return unlabelled;
+	}
+	return out;
+};
+
+/**
+ * Fetch the stored performance scans.
+ *
+ * @param {AbortSignal} signal Cancellation signal.
+ * @return {Promise<Object|null>} `{ lcp, cls, inp? }` or null.
+ */
+const fetchVitals = async ( signal ) => {
+	try {
+		// The typed helper, not a raw call: this action requires a url and a
+		// strategy, and building the action by hand is how arguments get lost.
+		const response = await fetchWebVitalsTrends( '', '', signal );
+		// The same allow-list `fetchObjectCache` uses. A response that declares
+		// failure must not be read as measurements — otherwise a failed request
+		// escalates the whole page to "Needs attention".
+		if ( ! response || response.success !== true ) {
+			return null;
+		}
+		return summariseVitals( response.data ?? response );
+	} catch ( error ) {
+		// A missing vitals source is a normal state, not an error to show.
+		if ( error?.name === 'AbortError' ) {
+			throw error;
+		}
+		return null;
+	}
+};
+
+/**
+ * The Overview page.
+ *
+ * @param {Object}   props            Component props.
+ * @param {Function} props.onNavigate Navigate to an area id.
+ * @param {Array}    props.activities Recent activity rows, already fetched by App.
+ * @return {Object} The page.
+ */
+export default function Overview( { onNavigate, activities = [] } ) {
+	const [ payload, setPayload ] = useState( {} );
+	const [ loading, setLoading ] = useState( true );
+	// Per-source outcome: 'ok' | 'unavailable' | 'unmeasured' | 'error', or
+	// absent while a source is still in flight.
+	const [ settled, setSettled ] = useState( {} );
+
+	// Guards a state update after unmount, and lets a retry start clean.
+	const mounted = useRef( true );
+	const controllerRef = useRef( null );
+	const timerRef = useRef( null );
+
+	// One request per source, issued once on mount. The promises are shared so
+	// nothing is ever fetched twice — `object_cache` allows only five calls a
+	// minute, and the Overview remounts on every sub-item change.
+	const request = useCallback( ( controller, force = false ) => {
+		// The same allow-list `fetchObjectCache` and `fetchVitals` use.
+		//
+		// `apiCall` **resolves** rather than throws for a `WP_Error` body on a
+		// 500, so `response?.data` was a truthy `{ status: 500 }` and the source
+		// settled as a *success*. The page then said "the plugin did not report
+		// the PHP or WordPress version" when the truth was that the request
+		// failed — and, because it counted as a success, no "Try again" was
+		// offered at all. Reproduced live by fault injection.
+		const systemInfo = fetchSystemInfo( controller.signal ).then(
+			( response ) =>
+				response?.success === true ? response.data ?? null : null
+		);
+		const objectCache = readObjectCacheStatus(
+			() => fetchObjectCache( controller.signal ),
+			force
+		);
+		const vitals = fetchVitals( controller.signal ).catch( () => null );
+		return { systemInfo, objectCache, vitals };
+	}, [] );
+
+	const load = useCallback(
+		( { force = false } = {} ) => {
+			controllerRef.current?.abort();
+			clearTimeout( timerRef.current );
+			const controller = new AbortController();
+			controllerRef.current = controller;
+			setLoading( true );
+			// Every source starts pending, so a row can say "still checking" rather
+			// than claiming "Unavailable" while its request is still in flight.
+			setSettled( {} );
+
+			const requests = request( controller, force );
+
+			// Sources the page cannot render meaningfully without.
+			const REQUIRED = [ 'systemInfo', 'objectCache' ];
+			const outstanding = new Set( [ ...REQUIRED, 'vitals' ] );
+
+			/**
+			 * Record one source's outcome, keeping the page honest about what is
+			 * known versus what is still being asked for.
+			 *
+			 * @param {string} key    Which source finished.
+			 * @param {*}      value  Its payload, or null when it produced none.
+			 * @param {string} reason Why it produced none, if it did.
+			 */
+			const settle = ( key, value, reason ) => {
+				outstanding.delete( key );
+				if ( controller.signal.aborted || ! mounted.current ) {
+					return;
+				}
+				if ( value !== undefined ) {
+					setPayload( ( prev ) => ( { ...prev, [ key ]: value } ) );
+				}
+				setSettled( ( prev ) => ( { ...prev, [ key ]: reason } ) );
+				// Release the page as soon as the required sources have answered,
+				// rather than waiting on an optional one.
+				if ( REQUIRED.every( ( k ) => ! outstanding.has( k ) ) ) {
+					setLoading( false );
+				}
+			};
+
+			requests.systemInfo
+				.then( ( value ) =>
+					settle( 'systemInfo', value, value ? 'ok' : 'unavailable' )
+				)
+				.catch( () => settle( 'systemInfo', null, 'error' ) );
+
+			// A throttled endpoint answers 429 with a *resolved* response rather than
+			// rejecting, so treating "resolved" as success would leave the row wrong
+			// with no way to retry. Reproduced live: `object_cache` allows five calls
+			// a minute and this page remounts on every sub-item change. Each source
+			// therefore reports explicitly whether it produced data.
+			requests.objectCache
+				.then( ( value ) =>
+					settle( 'objectCache', value, value ? 'ok' : 'unavailable' )
+				)
+				.catch( () => settle( 'objectCache', null, 'error' ) );
+
+			// Vitals are optional: a site with no stored measurements is a normal
+			// state, so their absence is never a failure and never blocks the page.
+			requests.vitals
+				.then( ( value ) =>
+					settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
+				)
+				.catch( () => settle( 'vitals', null, 'unmeasured' ) );
+
+			// Backstop: a request that never settles must not hold the page in
+			// its loading state for ever. `setLoading( false )` used to live only in
+			// the vitals `.finally()`, so a hanging `web_vitals_trends` left the
+			// whole Overview reading "Checking your site…" indefinitely —
+			// measured live at 5s, 20s and 45s, with no rows and no retry.
+			//
+			// Anything still outstanding when this fires is recorded as an error,
+			// so the page offers a retry instead of hanging.
+			timerRef.current = setTimeout( () => {
+				if ( controller.signal.aborted || ! mounted.current ) {
+					return;
+				}
+				[ ...outstanding ].forEach( ( key ) => {
+					outstanding.delete( key );
+					// Only a *required* source that never answered is a failure.
+					//
+					// Marking an optional one produced a banner on a page that was
+					// completely fine: hanging `web_vitals_trends` gave 3 correct
+					// rows and a "Working" verdict at 0.5s, and then at 15s claimed
+					// "Some information could not be loaded" with byte-identical
+					// content. An *absent* vitals source produces no banner at all, so
+					// slow was being reported as broken.
+					//
+					// Worse, the affordance could not work: `apiCall` shares the still
+					// pending GET, so "Try again" issued zero new requests and the
+					// banner returned 15s after every click. A retry that cannot retry
+					// is worse than no retry, and it contradicted the invariant five
+					// lines above this: "Vitals are optional… their absence is never a
+					// failure."
+					if ( ! REQUIRED.includes( key ) ) {
+						setSettled( ( prev ) => ( {
+							...prev,
+							[ key ]: 'unmeasured',
+						} ) );
+						return;
+					}
+					setSettled( ( prev ) => ( { ...prev, [ key ]: 'error' } ) );
+				} );
+				setLoading( false );
+			}, OVERVIEW_SETTLE_TIMEOUT_MS );
+		},
+		[ request ]
+	);
+
+	useEffect( () => {
+		mounted.current = true;
+		load();
+		return () => {
+			mounted.current = false;
+			clearTimeout( timerRef.current );
+			controllerRef.current?.abort();
+		};
+	}, [ load ] );
+
+	// The settings the plugin already injected; no extra request for them.
+	const settings = useMemo( () => {
+		if ( typeof wppoSettings === 'undefined' ) {
+			return {};
+		}
+		return wppoSettings?.settings ?? {};
+	}, [] );
+
+	// A page-level failure means nothing usable arrived from any required
+	// source. Vitals are excluded: their absence is a normal state, not a
+	// failure, and must not blank the page.
+	const requiredSettled = Object.entries( settled ).filter(
+		( [ key ] ) => key !== 'vitals'
+	);
+	const failedNow =
+		requiredSettled.length > 0 &&
+		requiredSettled.every(
+			( [ , reason ] ) => reason === 'unavailable' || reason === 'error'
+		);
+
+	const model = useMemo(
+		() =>
+			buildStatusModel( {
+				cacheSettings: settings.cache_settings,
+				// Already injected server-side by Cache::get_cache_stats(); using
+				// it costs no request.
+				cacheStats:
+					typeof wppoSettings !== 'undefined'
+						? wppoSettings?.cache_size
+						: undefined,
+				...payload,
+			} ),
+		[ payload, settings ]
+	);
+
+	return (
+		<div className="wppo-overview">
+			<SiteStatusCard
+				onNavigate={ onNavigate }
+				rows={ model.rows }
+				overall={ model.overall }
+				loading={ loading }
+				failed={ failedNow }
+				onRetry={ load }
+				// A source that produced nothing gets a real retry affordance
+				// rather than sitting wrong for the rest of the throttle window.
+				partialFailure={ Object.values( settled ).some(
+					( reason ) => reason === 'unavailable' || reason === 'error'
+				) }
+			/>
+
+			<QuickActionsCard onNavigate={ onNavigate } />
+
+			{ activities?.length ? (
+				<section
+					className="wppo-card wppo-overview__card"
+					aria-labelledby="wppo-overview-activity"
+				>
+					<h2
+						className="wppo-card__title"
+						id="wppo-overview-activity"
+					>
+						{ __( 'Recent activity', 'performance-optimisation' ) }
+					</h2>
+					<div className="wppo-card__body">
+						<ul className="wppo-overview__activity">
+							{ activities
+								.slice( 0, 8 )
+								.map( ( entry, index ) => (
+									<li key={ entry?.id ?? index }>
+										<span className="wppo-overview__activity-text">
+											{ entry?.activity ??
+												entry?.message ??
+												'' }
+										</span>
+										{ entry?.created_at ? (
+											<time
+												className="wppo-overview__activity-time"
+												dateTime={ String(
+													entry.created_at
+												) }
+											>
+												{ String( entry.created_at ) }
+											</time>
+										) : null }
+									</li>
+								) ) }
+						</ul>
+					</div>
+				</section>
+			) : null }
+		</div>
+	);
+}

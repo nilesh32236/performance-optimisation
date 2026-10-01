@@ -12,17 +12,9 @@ import { useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall, getErrorLogMessage } from './apiRequest';
 import { isAbortError, useAsyncWorkflow } from './useAbortableFetch';
+import { getPollDelay, MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from './polling';
 
-const POLL_INTERVAL_MS = 5000;
-const MAX_POLL_ATTEMPTS = 60;
-const MAX_POLL_DELAY_MS = 15000;
 const MAX_POLL_FAILURES = 5;
-
-const getPollDelay = ( attempts ) =>
-	Math.min(
-		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
-		MAX_POLL_DELAY_MS
-	);
 
 /**
  * Own the Dashboard image-job polling lifecycle.
