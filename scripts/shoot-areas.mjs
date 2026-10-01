@@ -154,8 +154,14 @@ for ( const area of areas ) {
 	await page.goto( `${ APP }${ APP.includes( '?' ) ? '&' : '?' }section=${ slug }`, {
 		waitUntil: 'domcontentloaded',
 	} );
-	await page.waitForSelector( '.wppo-section', { timeout: 45000 } ); await page.waitForTimeout( 1200 );
-	await page.waitForTimeout( 700 );
+	await page.waitForSelector( '.wppo-section', { timeout: 45000 } );
+	// Fonts must settle before anything is measured. The plugin self-hosts IBM
+	// Plex Sans and JetBrains Mono; measuring while they are still swapping in
+	// means text is laid out in the fallback, whose metrics differ, so the squash
+	// probe reported crushed text that was not crushed. It fired on a different
+	// element on each run, which is the tell.
+	await page.evaluate( () => document.fonts?.ready ?? null );
+	await page.waitForTimeout( 900 );
 
 	const head = await page.evaluate( HEAD_PROBE );
 	const ctl = await page.evaluate( CONTROL_PROBE );

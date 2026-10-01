@@ -42,6 +42,7 @@ const areaItemIds = ( sectionId ) =>
 import { __ } from '@wordpress/i18n';
 import MessageRegion from './components/common/MessageRegion';
 import InspectorProvider from './components/common/InspectorProvider';
+import Toolbar from './components/common/Toolbar';
 import InspectorPanel from './components/common/InspectorPanel';
 
 const Overview = lazy( () =>
@@ -263,6 +264,20 @@ const App = () => {
 	const handleViewChange = useCallback(
 		( nextView ) => {
 			requestNavigation( nextView );
+		},
+		[ requestNavigation ]
+	);
+
+	// Toolbar navigation: go to an area, then to a screen inside it. Two calls
+	// rather than one because requestNavigation sets state asynchronously, so a
+	// single call that did both would race the section it had just set.
+	const handleToolbarNavigate = useCallback(
+		( { section, view } ) => {
+			requestNavigation( section );
+			if ( view ) {
+				requestNavigation( view );
+			}
+			setMobileMenuOpen( false );
 		},
 		[ requestNavigation ]
 	);
@@ -646,6 +661,8 @@ const App = () => {
 					{ /* One visible place for every notice, wherever its card sits.
 			     See MessageRegion for why this is aria-hidden. */ }
 					<MessageRegion />
+
+					<Toolbar onNavigate={ handleToolbarNavigate } />
 
 					<div className="wppo-container">
 						{ /* Mobile Top Header */ }
