@@ -178,3 +178,36 @@ describe( 'wires the inspector', () => {
 		).toBeInTheDocument();
 	} );
 } );
+
+describe( 'numeric bounds survive the conversion', () => {
+	// Regression: an earlier conversion silently dropped `min`/`max`/`step`
+	// from every number field it touched, because the component did not accept
+	// them. Nothing failed — the inputs just stopped steering the person, and
+	// the server clamps behind the scenes, so a bound lost its only visible
+	// effect.
+	it( 'forwards min, max and step to a number input', () => {
+		renderField( { type: 'number', min: 5, max: 50, step: 1 } );
+		const el = screen.getByLabelText( 'Safelist Selectors' );
+		expect( el ).toHaveAttribute( 'min', '5' );
+		expect( el ).toHaveAttribute( 'max', '50' );
+		expect( el ).toHaveAttribute( 'step', '1' );
+	} );
+
+	it( 'omits them entirely when unset, rather than passing undefined', () => {
+		renderField( { type: 'number' } );
+		const el = screen.getByLabelText( 'Safelist Selectors' );
+		[ 'min', 'max', 'step' ].forEach( ( a ) => {
+			expect( el ).not.toHaveAttribute( a );
+		} );
+	} );
+
+	it( 'never puts a bound on a control that has none', () => {
+		// Passing min to a <textarea> would add an invalid attribute, so they
+		// are forwarded to the number input only.
+		renderField( { type: 'textarea', min: 1, max: 2, step: 3 } );
+		const el = screen.getByLabelText( 'Safelist Selectors' );
+		[ 'min', 'max', 'step' ].forEach( ( a ) => {
+			expect( el ).not.toHaveAttribute( a );
+		} );
+	} );
+} );

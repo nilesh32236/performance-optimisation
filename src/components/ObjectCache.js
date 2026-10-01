@@ -33,6 +33,9 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import SettingField from './common/SettingField';
+import SettingRow from './common/SettingRow';
+import { subjectFor } from './object-cache/subjects';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
@@ -908,149 +911,127 @@ const ObjectCache = ( { options = {} } ) => {
 						{ settings.mode === 'standalone' ? (
 							<div className="wppo-grid-2-col wppo-mt-24">
 								<div>
-									<label
-										className="wppo-field-label"
-										htmlFor="host"
-									>
-										{ __(
+									<SettingField
+										name="host"
+										type="text"
+										label={ __(
 											'Host',
 											'performance-optimisation'
 										) }
-									</label>
-									<input
-										className="wppo-input wppo-input--mono"
-										id="host"
-										type="text"
-										name="host"
+										description={ __(
+											'The address of the machine running your cache — usually something your host gives you, such as a name on their private network.',
+											'performance-optimisation'
+										) }
+										mono
+										subject={ subjectFor(
+											'host',
+											settings
+										) }
 										value={ settings.host }
 										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
 								<div>
-									<label
-										className="wppo-field-label"
-										htmlFor="port"
-									>
-										{ __(
+									<SettingField
+										name="port"
+										type="number"
+										label={ __(
 											'Port',
 											'performance-optimisation'
 										) }
-									</label>
-									<input
-										className="wppo-input wppo-input--mono"
-										id="port"
-										type="number"
-										inputMode="numeric"
-										name="port"
+										description={ __(
+											'Which door on that machine the cache is listening on. Redis usually uses 6379.',
+											'performance-optimisation'
+										) }
+										subject={ subjectFor(
+											'port',
+											settings
+										) }
 										value={ settings.port }
 										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
 							</div>
 						) : (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="nodes"
-								>
-									{ __(
-										'Server Nodes',
-										'performance-optimisation'
-									) }
-								</label>
-								<textarea
-									className="wppo-textarea wppo-textarea--mono"
-									id="nodes"
-									name="nodes"
-									rows="3"
-									placeholder={ __(
-										'host:port (one per line)',
-										'performance-optimisation'
-									) }
-									value={ settings.nodes }
-									onChange={ handleChange( setSettings ) }
-								/>
-								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
-									{ __(
-										'One host:port per line. Example: 10.0.0.1:6379',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
+							<SettingField
+								name="nodes"
+								type="textarea"
+								label={ __(
+									'Server Nodes',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Lists every server in the cluster, so the plugin can find whichever ones are currently up. One address per line.',
+									'performance-optimisation'
+								) }
+								rows={ 3 }
+								mono
+								subject={ subjectFor( 'nodes', settings ) }
+								value={ settings.nodes }
+								onChange={ handleChange( setSettings ) }
+							/>
 						) }
 
 						{ settings.mode === 'sentinel' && (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="master_name"
-								>
-									{ __(
-										'Sentinel Master Name',
-										'performance-optimisation'
-									) }
-								</label>
-								<input
-									className="wppo-input wppo-input--mono"
-									id="master_name"
-									type="text"
-									name="master_name"
-									value={ settings.master_name }
-									onChange={ handleChange( setSettings ) }
-									aria-describedby="master_name-desc"
-								/>
-								<p
-									id="master_name-desc"
-									className="wppo-text-muted wppo-text-small wppo-mt-10"
-								>
-									{ __(
-										'Name of the Redis master as configured in sentinel.conf.',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
+							<SettingField
+								name="master_name"
+								type="text"
+								label={ __(
+									'Sentinel Master Name',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'The name Sentinel uses to identify which server is in charge. The plugin asks that server which one to read and write through.',
+									'performance-optimisation'
+								) }
+								mono
+								subject={ subjectFor(
+									'master_name',
+									settings
+								) }
+								value={ settings.master_name }
+								onChange={ handleChange( setSettings ) }
+							/>
 						) }
 
 						<div className="wppo-grid-2-col wppo-mt-24">
 							<div>
-								<label
-									className="wppo-field-label"
-									htmlFor="password"
-								>
-									{ __(
+								<SettingField
+									name="password"
+									type="password"
+									label={ __(
 										'Auth Password',
 										'performance-optimisation'
 									) }
-								</label>
-								<input
-									className="wppo-input"
-									id="password"
-									type="password"
-									name="password"
-									placeholder={ __(
-										'Optional',
+									description={ __(
+										'The password required to talk to the cache, if your host sets one. Leave it empty if the cache is only reachable from your server.',
 										'performance-optimisation'
+									) }
+									mono
+									subject={ subjectFor(
+										'password',
+										settings
 									) }
 									value={ settings.password }
 									onChange={ handleChange( setSettings ) }
 								/>
 							</div>
 							<div>
-								<label
-									className="wppo-field-label"
-									htmlFor="database"
-								>
-									{ __(
+								<SettingField
+									name="database"
+									type="number"
+									label={ __(
 										'Database ID',
 										'performance-optimisation'
 									) }
-								</label>
-								<input
-									className="wppo-input wppo-input--mono"
-									id="database"
-									type="number"
-									inputMode="numeric"
-									name="database"
+									description={ __(
+										'Which numbered slot your cache data is kept in, so a busy site does not share one with anything else on the same server.',
+										'performance-optimisation'
+									) }
+									subject={ subjectFor(
+										'database',
+										settings
+									) }
 									value={ settings.database }
 									onChange={ handleChange( setSettings ) }
 								/>
@@ -1097,116 +1078,139 @@ const ObjectCache = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
 				>
 					<div className="wppo-field-group">
-						<div>
-							<label
-								className="wppo-field-label"
-								htmlFor="compression"
-							>
-								{ __(
-									'Memory Compression',
-									'performance-optimisation'
-								) }
-							</label>
-							<select
-								className="wppo-select"
-								id="compression"
-								name="compression"
-								value={ settings.compression }
-								onChange={ handleChange( setSettings ) }
-								aria-describedby="compression-desc"
-							>
-								<option value="none">
+						<SettingRow
+							subject={ subjectFor( 'compression', settings ) }
+						>
+							<div>
+								<label
+									className="wppo-field-label"
+									htmlFor="compression"
+								>
 									{ __(
-										'None (Fastest)',
+										'Memory Compression',
 										'performance-optimisation'
 									) }
-								</option>
-								<option
-									value="lzf"
-									disabled={
-										cacheStatus.statusLoaded &&
+								</label>
+								<select
+									className="wppo-select"
+									id="compression"
+									name="compression"
+									value={ settings.compression }
+									onChange={ handleChange( setSettings ) }
+									aria-describedby="compression-desc"
+								>
+									<option value="none">
+										{ __(
+											'None (Fastest)',
+											'performance-optimisation'
+										) }
+									</option>
+									<option
+										value="lzf"
+										disabled={
+											cacheStatus.statusLoaded &&
+											! cacheStatus.supported_compressors
+												?.lzf
+										}
+									>
+										{ __(
+											'LZF',
+											'performance-optimisation'
+										) }{ ' ' }
+										{ cacheStatus.statusLoaded &&
 										! cacheStatus.supported_compressors?.lzf
-									}
-								>
-									{ __( 'LZF', 'performance-optimisation' ) }{ ' ' }
-									{ cacheStatus.statusLoaded &&
-									! cacheStatus.supported_compressors?.lzf
-										? __(
-												'(Disabled)',
-												'performance-optimisation'
-										  )
-										: '' }
-								</option>
-								<option
-									value="zstd"
-									disabled={
-										cacheStatus.statusLoaded &&
-										! cacheStatus.supported_compressors
-											?.zstd
-									}
-								>
-									{ __( 'ZSTD', 'performance-optimisation' ) }
-									{ getCompressionLabel(
-										cacheStatus.statusLoaded,
-										cacheStatus.supported_compressors,
-										'zstd'
-									) }
-								</option>
-								<option
-									value="lz4"
-									disabled={
-										cacheStatus.statusLoaded &&
+											? __(
+													'(Disabled)',
+													'performance-optimisation'
+											  )
+											: '' }
+									</option>
+									<option
+										value="zstd"
+										disabled={
+											cacheStatus.statusLoaded &&
+											! cacheStatus.supported_compressors
+												?.zstd
+										}
+									>
+										{ __(
+											'ZSTD',
+											'performance-optimisation'
+										) }
+										{ getCompressionLabel(
+											cacheStatus.statusLoaded,
+											cacheStatus.supported_compressors,
+											'zstd'
+										) }
+									</option>
+									<option
+										value="lz4"
+										disabled={
+											cacheStatus.statusLoaded &&
+											! cacheStatus.supported_compressors
+												?.lz4
+										}
+									>
+										{ __(
+											'LZ4',
+											'performance-optimisation'
+										) }{ ' ' }
+										{ cacheStatus.statusLoaded &&
 										! cacheStatus.supported_compressors?.lz4
-									}
+											? __(
+													'(Disabled)',
+													'performance-optimisation'
+											  )
+											: '' }
+									</option>
+								</select>
+								<p
+									id="compression-desc"
+									className="wppo-text-muted wppo-mt-12 wppo-text-small"
 								>
-									{ __( 'LZ4', 'performance-optimisation' ) }{ ' ' }
-									{ cacheStatus.statusLoaded &&
-									! cacheStatus.supported_compressors?.lz4
-										? __(
-												'(Disabled)',
-												'performance-optimisation'
-										  )
-										: '' }
-								</option>
-							</select>
-							<p
-								id="compression-desc"
-								className="wppo-text-muted wppo-mt-12 wppo-text-small"
-							>
-								{ __(
-									'Reduces memory footprint for enterprise caches.',
+									{ __(
+										'Reduces memory footprint for enterprise caches.',
+										'performance-optimisation'
+									) }
+								</p>
+							</div>
+						</SettingRow>
+
+						<SettingRow
+							subject={ subjectFor( 'persistent', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Persistent Connections',
 									'performance-optimisation'
 								) }
-							</p>
-						</div>
+								description={ __(
+									'Keep connections alive between PHP requests.',
+									'performance-optimisation'
+								) }
+								name="persistent"
+								checked={ settings.persistent }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</SettingRow>
 
-						<SwitchField
-							label={ __(
-								'Persistent Connections',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Keep connections alive between PHP requests.',
-								'performance-optimisation'
-							) }
-							name="persistent"
-							checked={ settings.persistent }
-							onChange={ handleChange( setSettings ) }
-						/>
-
-						<SwitchField
-							label={ __(
-								'TLS / SSL Encryption',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Encrypt traffic between WordPress and Redis.',
-								'performance-optimisation'
-							) }
-							name="use_tls"
-							checked={ settings.use_tls }
-							onChange={ handleChange( setSettings ) }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'use_tls', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'TLS / SSL Encryption',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Encrypt traffic between WordPress and Redis.',
+									'performance-optimisation'
+								) }
+								name="use_tls"
+								checked={ settings.use_tls }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</SettingRow>
 					</div>
 				</FeatureCard>
 			</form>

@@ -624,9 +624,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									'performance-optimisation'
 								) }
 								description={ __(
-									'Delete post revisions older than this many days.',
+									'Delete post revisions older than this many days. One day is the lowest this can go.',
 									'performance-optimisation'
 								) }
+								min={ 1 }
 								subject={ subjectFor(
 									'dbRevMaxAge',
 									settings
@@ -647,6 +648,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									'Always retain this many recent revisions per post, regardless of age.',
 									'performance-optimisation'
 								) }
+								min={ 0 }
 								subject={ subjectFor(
 									'dbRevKeepLatest',
 									settings

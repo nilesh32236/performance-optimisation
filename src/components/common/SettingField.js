@@ -51,7 +51,14 @@ import { useId } from '@wordpress/element';
 import SettingRow from './SettingRow';
 
 /** The control types this component knows how to render. */
-const TYPES = [ 'text', 'number', 'textarea', 'select', 'checkbox' ];
+const TYPES = [
+	'text',
+	'number',
+	'textarea',
+	'select',
+	'checkbox',
+	'password',
+];
 
 /**
  * Render one setting: label, control, description, and inspector wiring.
@@ -77,6 +84,10 @@ const TYPES = [ 'text', 'number', 'textarea', 'select', 'checkbox' ];
  * @param {string}   [props.id]          Explicit DOM id. Rarely needed;
  *                                       generated when absent.
  * @param {string}   props.className     Extra class on the field wrapper.
+ * @param {number}   [props.min]         Lower bound, for `number`. Forwarded
+ *                                       only to a number input.
+ * @param {number}   [props.max]         Upper bound, for `number`.
+ * @param {number}   [props.step]        Step, for `number`.
  * @return {Element} The field.
  */
 export default function SettingField( {
@@ -92,6 +103,9 @@ export default function SettingField( {
 	rows = 4,
 	mono = false,
 	nested = false,
+	min,
+	max,
+	step,
 	id: idProp = '',
 	className = '',
 } ) {
@@ -179,6 +193,10 @@ export default function SettingField( {
 			break;
 
 		case 'number':
+			// Only a number input takes these, and passing them to a <textarea>
+			// would put invalid attributes on the element. Omitted entirely
+			// when unset, rather than passed as undefined, so the attribute is
+			// simply absent from the DOM.
 			control = (
 				<input
 					{ ...controlProps }
@@ -187,6 +205,26 @@ export default function SettingField( {
 						mono ? ' wppo-input--mono' : ''
 					} ` }
 					placeholder={ placeholder }
+					value={ value ?? '' }
+					{ ...( min !== undefined ? { min } : {} ) }
+					{ ...( max !== undefined ? { max } : {} ) }
+					{ ...( step !== undefined ? { step } : {} ) }
+				/>
+			);
+			break;
+
+		case 'password':
+			// Kept distinct from `text` so the field is masked by default. The
+			// inspector's "where you stand now" row reports only whether a
+			// value is set (see the screen's `subjectFor`), so nothing here
+			// displays the secret back to the reader.
+			control = (
+				<input
+					{ ...controlProps }
+					type="password"
+					className="wppo-input"
+					placeholder={ placeholder }
+					autoComplete="off"
 					value={ value ?? '' }
 				/>
 			);

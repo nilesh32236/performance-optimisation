@@ -3308,6 +3308,9 @@ const FileOptimization = ( {
 														'performance-optimisation'
 													) }
 													nested
+													min={ 5 }
+													max={ 50 }
+													step={ 1 }
 													subject={ subjectFor(
 														'unusedCSSRegressionThreshold',
 														settings
@@ -3610,6 +3613,9 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											nested
+											min={ 1024 }
+											max={ 102400 }
+											step={ 1024 }
 											subject={ subjectFor(
 												'ccssMaxSize',
 												settings
@@ -3673,6 +3679,9 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											nested
+											min={ 0 }
+											max={ 5 }
+											step={ 1 }
 											subject={ subjectFor(
 												'ccssMaxRetries',
 												settings
