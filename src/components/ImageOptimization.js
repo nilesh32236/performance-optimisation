@@ -13,6 +13,9 @@ import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
+import SettingField from './common/SettingField';
+import SettingRow from './common/SettingRow';
+import { subjectFor } from './image-optimization/subjects';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faEye,
@@ -656,234 +659,271 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faEye } /> }
 				>
 					<div className="wppo-field-group">
-						<SwitchField
-							label={ __(
-								'Enable Lazy Load',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content.',
-								'performance-optimisation'
-							) }
-							name="lazyLoadImages"
-							checked={ settings.lazyLoadImages }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'lazyLoadImages', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Enable Lazy Load',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content.',
+									'performance-optimisation'
+								) }
+								name="lazyLoadImages"
+								checked={ settings.lazyLoadImages }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
 						{ settings.lazyLoadImages && (
 							<div className="wppo-field-nest">
 								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="excludeFirstImages"
-									>
-										{ __(
+									<SettingField
+										name="excludeFirstImages"
+										type="number"
+										label={ __(
 											'Exclude First N Images',
 											'performance-optimisation'
 										) }
-									</label>
-									<input
-										className="wppo-input"
-										id="excludeFirstImages"
-										type="number"
-										inputMode="numeric"
-										name="excludeFirstImages"
-										value={ settings.excludeFirstImages }
-										onChange={ onFieldChange }
-										aria-describedby="excludeFirstImages-desc"
-									/>
-									<p
-										id="excludeFirstImages-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
+										description={ __(
 											'Skip lazy loading for the first N images on the page. Set to 1–3 to ensure your hero/banner image loads immediately without waiting for scroll.',
 											'performance-optimisation'
 										) }
-									</p>
-								</div>
-								<SwitchField
-									label={ __(
-										'Use Native Lazy Loading',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. On by default; disable to fall back to the legacy JS lazy loader. Supported in all modern browsers and reduces JS overhead.',
-										'performance-optimisation'
-									) }
-									name="lazyLoadNative"
-									checked={ settings.lazyLoadNative }
-									onChange={ onFieldChange }
-								/>
-								<SwitchField
-									label={ __(
-										'Lazy-load CSS Background Images',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Defer inline background-image URLs (e.g. hero and section backgrounds) until they scroll near the viewport.',
-										'performance-optimisation'
-									) }
-									name="lazyLoadBackgroundImages"
-									checked={
-										settings.lazyLoadBackgroundImages
-									}
-									onChange={ onFieldChange }
-								/>
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="placeholderType"
-									>
-										{ __(
-											'Placeholder Type',
-											'performance-optimisation'
+										subject={ subjectFor(
+											'excludeFirstImages',
+											settings
 										) }
-									</label>
-									<select
-										className="wppo-select"
-										id="placeholderType"
-										name="placeholderType"
-										value={ settings.placeholderType }
+										value={ settings.excludeFirstImages }
 										onChange={ onFieldChange }
-									>
-										<option value="none">
-											{ __(
-												'None',
-												'performance-optimisation'
-											) }
-										</option>
-										<option value="svg">
-											{ __(
-												'SVG Placeholder (Lightweight)',
-												'performance-optimisation'
-											) }
-										</option>
-										<option value="dominant_color">
-											{ __(
-												'Dominant Color (Extracted from Image)',
-												'performance-optimisation'
-											) }
-										</option>
-										<option value="lqip">
-											{ __(
-												'LQIP (Blur Preview)',
-												'performance-optimisation'
-											) }
-										</option>
-									</select>
-									<div className="wppo-help-box wppo-mt-10 wppo-text-small wppo-text-muted">
-										<strong>
-											{ __(
-												'None',
-												'performance-optimisation'
-											) }
-											:
-										</strong>{ ' ' }
-										{ __(
-											'The src attribute is removed until the image is in view.',
-											'performance-optimisation'
-										) }
-										<br />
-										<strong>
-											{ __(
-												'SVG',
-												'performance-optimisation'
-											) }
-											:
-										</strong>{ ' ' }
-										{ __(
-											'Lightweight inline SVG while the real image loads. Prevents layout shift.',
-											'performance-optimisation'
-										) }
-										<br />
-										<strong>
-											{ __(
-												'Dominant Color',
-												'performance-optimisation'
-											) }
-											:
-										</strong>{ ' ' }
-										{ __(
-											'Extracted during image conversion. Smooth background-color fade transition.',
-											'performance-optimisation'
-										) }
-										<br />
-										<strong>
-											{ __(
-												'LQIP',
-												'performance-optimisation'
-											) }
-											:
-										</strong>{ ' ' }
-										{ __(
-											'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
-											'performance-optimisation'
-										) }
-									</div>
+									/>
 								</div>
+								<SettingRow
+									subject={ subjectFor(
+										'lazyLoadNative',
+										settings
+									) }
+								>
+									<SwitchField
+										label={ __(
+											'Use Native Lazy Loading',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. On by default; disable to fall back to the legacy JS lazy loader. Supported in all modern browsers and reduces JS overhead.',
+											'performance-optimisation'
+										) }
+										name="lazyLoadNative"
+										checked={ settings.lazyLoadNative }
+										onChange={ onFieldChange }
+									/>
+								</SettingRow>
+								<SettingRow
+									subject={ subjectFor(
+										'lazyLoadBackgroundImages',
+										settings
+									) }
+								>
+									<SwitchField
+										label={ __(
+											'Lazy-load CSS Background Images',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Defer inline background-image URLs (e.g. hero and section backgrounds) until they scroll near the viewport.',
+											'performance-optimisation'
+										) }
+										name="lazyLoadBackgroundImages"
+										checked={
+											settings.lazyLoadBackgroundImages
+										}
+										onChange={ onFieldChange }
+									/>
+								</SettingRow>
+								<SettingRow
+									subject={ subjectFor(
+										'placeholderType',
+										settings
+									) }
+								>
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="placeholderType"
+										>
+											{ __(
+												'Placeholder Type',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="placeholderType"
+											name="placeholderType"
+											value={ settings.placeholderType }
+											onChange={ onFieldChange }
+										>
+											<option value="none">
+												{ __(
+													'None',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="svg">
+												{ __(
+													'SVG Placeholder (Lightweight)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="dominant_color">
+												{ __(
+													'Dominant Color (Extracted from Image)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="lqip">
+												{ __(
+													'LQIP (Blur Preview)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<div className="wppo-help-box wppo-mt-10 wppo-text-small wppo-text-muted">
+											<strong>
+												{ __(
+													'None',
+													'performance-optimisation'
+												) }
+												:
+											</strong>{ ' ' }
+											{ __(
+												'The src attribute is removed until the image is in view.',
+												'performance-optimisation'
+											) }
+											<br />
+											<strong>
+												{ __(
+													'SVG',
+													'performance-optimisation'
+												) }
+												:
+											</strong>{ ' ' }
+											{ __(
+												'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+												'performance-optimisation'
+											) }
+											<br />
+											<strong>
+												{ __(
+													'Dominant Color',
+													'performance-optimisation'
+												) }
+												:
+											</strong>{ ' ' }
+											{ __(
+												'Extracted during image conversion. Smooth background-color fade transition.',
+												'performance-optimisation'
+											) }
+											<br />
+											<strong>
+												{ __(
+													'LQIP',
+													'performance-optimisation'
+												) }
+												:
+											</strong>{ ' ' }
+											{ __(
+												'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+												'performance-optimisation'
+											) }
+										</div>
+									</div>
+								</SettingRow>
 							</div>
 						) }
 
-						<SwitchField
-							label={ __(
-								'Wrap in Picture Tag',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work.',
-								'performance-optimisation'
-							) }
-							name="wrapInPicture"
-							checked={ settings.wrapInPicture }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'wrapInPicture', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Wrap in Picture Tag',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work.',
+									'performance-optimisation'
+								) }
+								name="wrapInPicture"
+								checked={ settings.wrapInPicture }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
-						<SwitchField
-							label={ __(
-								'Auto-fill Missing Alt Text',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Automatically generate alt text for images missing it, derived from the file name. Existing alt attributes are never changed. Improves accessibility and SEO with no extra requests.',
-								'performance-optimisation'
-							) }
-							name="autoAltText"
-							checked={ settings.autoAltText }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'autoAltText', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Auto-fill Missing Alt Text',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically generate alt text for images missing it, derived from the file name. Existing alt attributes are never changed. Improves accessibility and SEO with no extra requests.',
+									'performance-optimisation'
+								) }
+								name="autoAltText"
+								checked={ settings.autoAltText }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
-						<SwitchField
-							label={ __(
-								'Lazy-render Below-fold Sections',
-								'performance-optimisation'
+						<SettingRow
+							subject={ subjectFor(
+								'lazyRenderBelowFold',
+								settings
 							) }
-							description={ __(
-								'Defer rendering of below-fold sections, footer widgets, and comments with content-visibility:auto plus a size reserve. Pure CSS with no JavaScript; unsupported browsers ignore it.',
-								'performance-optimisation'
-							) }
-							name="lazyRenderBelowFold"
-							checked={ settings.lazyRenderBelowFold }
-							onChange={ onFieldChange }
-						/>
+						>
+							<SwitchField
+								label={ __(
+									'Lazy-render Below-fold Sections',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Defer rendering of below-fold sections, footer widgets, and comments with content-visibility:auto plus a size reserve. Pure CSS with no JavaScript; unsupported browsers ignore it.',
+									'performance-optimisation'
+								) }
+								name="lazyRenderBelowFold"
+								checked={ settings.lazyRenderBelowFold }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
 						{ settings.lazyRenderBelowFold && (
 							<div className="wppo-field-nest">
-								<SwitchField
-									label={ __(
-										'Exclude Page-builder Sections',
-										'performance-optimisation'
+								<SettingRow
+									subject={ subjectFor(
+										'lazyRenderExcludeBuilders',
+										settings
 									) }
-									description={ __(
-										'Skip Elementor and Divi sections whose internal structure may be unsafe to lazy-render. Gutenberg groups, footers, and comments are still optimized.',
-										'performance-optimisation'
-									) }
-									name="lazyRenderExcludeBuilders"
-									checked={
-										settings.lazyRenderExcludeBuilders
-									}
-									onChange={ onFieldChange }
-								/>
+								>
+									<SwitchField
+										label={ __(
+											'Exclude Page-builder Sections',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Skip Elementor and Divi sections whose internal structure may be unsafe to lazy-render. Gutenberg groups, footers, and comments are still optimized.',
+											'performance-optimisation'
+										) }
+										name="lazyRenderExcludeBuilders"
+										checked={
+											settings.lazyRenderExcludeBuilders
+										}
+										onChange={ onFieldChange }
+									/>
+								</SettingRow>
 							</div>
 						) }
 					</div>
@@ -894,70 +934,72 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
-						<SwitchField
-							label={ __(
-								'Video Lazy Loading',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media.',
-								'performance-optimisation'
-							) }
-							name="lazyLoadVideos"
-							checked={ settings.lazyLoadVideos }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'lazyLoadVideos', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Video Lazy Loading',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media.',
+									'performance-optimisation'
+								) }
+								name="lazyLoadVideos"
+								checked={ settings.lazyLoadVideos }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
 						{ settings.lazyLoadVideos && (
 							<div className="wppo-field-nest">
-								<SwitchField
-									label={ __(
-										'Video Placeholder',
-										'performance-optimisation'
+								<SettingRow
+									subject={ subjectFor(
+										'enableVideoPlaceholder',
+										settings
 									) }
-									description={ __(
-										'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
-										'performance-optimisation'
-									) }
-									name="enableVideoPlaceholder"
-									checked={ settings.enableVideoPlaceholder }
-									onChange={ onFieldChange }
-								/>
+								>
+									<SwitchField
+										label={ __(
+											'Video Placeholder',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
+											'performance-optimisation'
+										) }
+										name="enableVideoPlaceholder"
+										checked={
+											settings.enableVideoPlaceholder
+										}
+										onChange={ onFieldChange }
+									/>
+								</SettingRow>
 							</div>
 						) }
 
 						<div className="wppo-field">
-							<label
-								className="wppo-field-label"
-								htmlFor="excludeVideos"
-							>
-								{ __(
+							<SettingField
+								name="excludeVideos"
+								type="textarea"
+								label={ __(
 									'Exclude from Video Lazy Load',
 									'performance-optimisation'
 								) }
-							</label>
-							<textarea
-								className="wppo-textarea wppo-textarea--mono"
-								id="excludeVideos"
-								name="excludeVideos"
-								rows="3"
-								placeholder={ __(
-									'Class names or partial URLs (one per line)',
-									'performance-optimisation'
-								) }
-								value={ settings.excludeVideos }
-								onChange={ onFieldChange }
-								aria-describedby="excludeVideos-desc"
-							/>
-							<p
-								id="excludeVideos-desc"
-								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
+								description={ __(
 									'Enter CSS class names or partial URLs of embeds that should always load immediately.',
 									'performance-optimisation'
 								) }
-							</p>
+								rows={ 4 }
+								mono
+								subject={ subjectFor(
+									'excludeVideos',
+									settings
+								) }
+								value={ settings.excludeVideos }
+								onChange={ onFieldChange }
+							/>
 						</div>
 					</div>
 				</FeatureCard>
@@ -983,126 +1025,144 @@ const ImageOptimization = ( { options = {} } ) => {
 									className="wppo-mb-20"
 								/>
 							) }
-						<SwitchField
-							label={ __(
-								'Auto Convert Formats',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50 percent smaller than JPEG at the same quality, directly improving page speed scores.',
-								'performance-optimisation'
-							) }
-							name="convertImg"
-							checked={ settings.convertImg }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'convertImg', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Auto Convert Formats',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50 percent smaller than JPEG at the same quality, directly improving page speed scores.',
+									'performance-optimisation'
+								) }
+								name="convertImg"
+								checked={ settings.convertImg }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 
 						{ settings.convertImg && (
 							<div className="wppo-field-nest">
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="conversionFormat"
-									>
-										{ __(
-											'Target Format',
-											'performance-optimisation'
-										) }
-									</label>
-									<select
-										className="wppo-select"
-										id="conversionFormat"
-										name="conversionFormat"
-										value={ settings.conversionFormat }
-										onChange={ onFieldChange }
-									>
-										<option value="webp">
+								<SettingRow
+									subject={ subjectFor(
+										'conversionFormat',
+										settings
+									) }
+								>
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="conversionFormat"
+										>
 											{ __(
-												'WebP (Standard — 95%+ browser support)',
+												'Target Format',
 												'performance-optimisation'
 											) }
-										</option>
-										<option value="avif">
-											{ __(
-												'AVIF (Maximum Compression — newer browsers only)',
-												'performance-optimisation'
-											) }
-										</option>
-										<option value="both">
-											{ __(
-												'Both (Best Compatibility — serves AVIF where supported, WebP as fallback)',
-												'performance-optimisation'
-											) }
-										</option>
-									</select>
-								</div>
+										</label>
+										<select
+											className="wppo-select"
+											id="conversionFormat"
+											name="conversionFormat"
+											value={ settings.conversionFormat }
+											onChange={ onFieldChange }
+										>
+											<option value="webp">
+												{ __(
+													'WebP (Standard — 95%+ browser support)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="avif">
+												{ __(
+													'AVIF (Maximum Compression — newer browsers only)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="both">
+												{ __(
+													'Both (Best Compatibility — serves AVIF where supported, WebP as fallback)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+									</div>
+								</SettingRow>
 								<div className="wppo-field wppo-field--spaced">
-									<label
-										className="wppo-field-label"
-										htmlFor="excludeConvertImages"
-									>
-										{ __(
+									<SettingField
+										name="excludeConvertImages"
+										type="textarea"
+										label={ __(
 											'Exclude from Conversion',
 											'performance-optimisation'
 										) }
-									</label>
-									<textarea
-										className="wppo-textarea wppo-textarea--mono"
-										id="excludeConvertImages"
-										name="excludeConvertImages"
-										rows="2"
-										placeholder={ __(
-											'Partial URLs (one per line)',
-											'performance-optimisation'
-										) }
-										value={ settings.excludeConvertImages }
-										onChange={ onFieldChange }
-										aria-describedby="excludeConvertImages-desc"
-									/>
-									<p
-										id="excludeConvertImages-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
+										description={ __(
 											'Images matching these partial URLs will keep their original format. Useful for logos or images where exact color accuracy matters.',
 											'performance-optimisation'
 										) }
-									</p>
-								</div>
-								<div className="wppo-field wppo-field--spaced">
-									<SwitchField
-										label={ __(
-											'Discard Oversized Conversions',
-											'performance-optimisation'
+										rows={ 4 }
+										mono
+										subject={ subjectFor(
+											'excludeConvertImages',
+											settings
 										) }
-										description={ __(
-											'Compare each converted file against its source and keep the source when the conversion is larger. Guarantees image conversion never increases byte size.',
-											'performance-optimisation'
-										) }
-										name="discardOversizedSibling"
-										checked={
-											settings.discardOversizedSibling
-										}
+										value={ settings.excludeConvertImages }
 										onChange={ onFieldChange }
 									/>
+								</div>
+								<div className="wppo-field wppo-field--spaced">
+									<SettingRow
+										subject={ subjectFor(
+											'discardOversizedSibling',
+											settings
+										) }
+									>
+										<SwitchField
+											label={ __(
+												'Discard Oversized Conversions',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Compare each converted file against its source and keep the source when the conversion is larger. Guarantees image conversion never increases byte size.',
+												'performance-optimisation'
+											) }
+											name="discardOversizedSibling"
+											checked={
+												settings.discardOversizedSibling
+											}
+											onChange={ onFieldChange }
+										/>
+									</SettingRow>
 								</div>
 							</div>
 						) }
 
 						<div className="wppo-field wppo-field--spaced">
-							<SwitchField
-								label={ __(
-									'Override Client-Side MIME Types',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'clientSideMimeTypeOverride',
+									settings
 								) }
-								description={ __(
-									'Control which image formats WordPress 7.1+ client-side media processing handles in the browser. Disable AVIF to avoid duplicating this plugin’s AVIF output, or add HEIC/HEIF/HEIC Sequence/JPEG XL when the browser decoder is available (wasm-vips 7.1+ feature plugin). Only applies on WordPress 7.1+; older versions are unaffected and unsupported formats are ignored via intersection with core.',
-									'performance-optimisation'
-								) }
-								name="clientSideMimeTypeOverride"
-								checked={ settings.clientSideMimeTypeOverride }
-								onChange={ toggleClientSideMimeTypeOverride }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Override Client-Side MIME Types',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Control which image formats WordPress 7.1+ client-side media processing handles in the browser. Disable AVIF to avoid duplicating this plugin’s AVIF output, or add HEIC/HEIF/HEIC Sequence/JPEG XL when the browser decoder is available (wasm-vips 7.1+ feature plugin). Only applies on WordPress 7.1+; older versions are unaffected and unsupported formats are ignored via intersection with core.',
+										'performance-optimisation'
+									) }
+									name="clientSideMimeTypeOverride"
+									checked={
+										settings.clientSideMimeTypeOverride
+									}
+									onChange={
+										toggleClientSideMimeTypeOverride
+									}
+								/>
+							</SettingRow>
 							{ settings.clientSideMimeTypeOverride && (
 								<fieldset className="wppo-mt-12 wppo-fieldset-reset">
 									<legend className="wppo-field-label">
@@ -1154,19 +1214,28 @@ const ImageOptimization = ( { options = {} } ) => {
 						</div>
 
 						<div className="wppo-field wppo-field--spaced">
-							<SwitchField
-								label={ __(
-									'Force Server-Side Conversion',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'forceServerSideConversion',
+									settings
 								) }
-								description={ __(
-									"Disable WordPress 7.1+ client-side (in-browser) media processing and use this plugin's own server-side WebP/AVIF conversion instead. Only applies on WordPress 7.1+; older versions are unaffected.",
-									'performance-optimisation'
-								) }
-								name="forceServerSideConversion"
-								checked={ settings.forceServerSideConversion }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Force Server-Side Conversion',
+										'performance-optimisation'
+									) }
+									description={ __(
+										"Disable WordPress 7.1+ client-side (in-browser) media processing and use this plugin's own server-side WebP/AVIF conversion instead. Only applies on WordPress 7.1+; older versions are unaffected.",
+										'performance-optimisation'
+									) }
+									name="forceServerSideConversion"
+									checked={
+										settings.forceServerSideConversion
+									}
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 						</div>
 					</div>
 				</FeatureCard>
@@ -1180,109 +1249,65 @@ const ImageOptimization = ( { options = {} } ) => {
 				>
 					<div className="wppo-field-group">
 						<div className="wppo-field">
-							<label
-								className="wppo-field-label"
-								htmlFor="maxWidthImgSize"
-							>
-								{ __(
+							<SettingField
+								name="maxWidthImgSize"
+								type="number"
+								label={ __(
 									'Max Image Width (px)',
 									'performance-optimisation'
 								) }
-							</label>
-							<input
-								className="wppo-input"
-								id="maxWidthImgSize"
-								type="number"
-								inputMode="numeric"
-								name="maxWidthImgSize"
-								value={ settings.maxWidthImgSize }
-								onChange={ onFieldChange }
-								aria-describedby="maxWidthImgSize-desc"
-							/>
-							<p
-								id="maxWidthImgSize-desc"
-								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
+								description={ __(
 									'Images wider than this value will have a',
 									'performance-optimisation'
-								) }{ ' ' }
-								<code>max-width</code>{ ' ' }
-								{ __(
-									'style applied. Set to',
-									'performance-optimisation'
-								) }{ ' ' }
-								<code>0</code>{ ' ' }
-								{ __(
-									'to disable. Useful for preventing oversized images from breaking layouts on small screens.',
-									'performance-optimisation'
 								) }
-							</p>
+								subject={ subjectFor(
+									'maxWidthImgSize',
+									settings
+								) }
+								value={ settings.maxWidthImgSize }
+								onChange={ onFieldChange }
+							/>
 						</div>
 						<div className="wppo-field">
-							<label
-								className="wppo-field-label"
-								htmlFor="excludeSize"
-							>
-								{ __(
+							<SettingField
+								name="excludeSize"
+								type="text"
+								label={ __(
 									'Exclude Classes from Max Width',
 									'performance-optimisation'
 								) }
-							</label>
-							<input
-								className="wppo-input wppo-textarea--mono"
-								id="excludeSize"
-								type="text"
-								name="excludeSize"
-								placeholder={ __(
-									'e.g. 300, 600, 1200',
-									'performance-optimisation'
-								) }
-								value={ settings.excludeSize }
-								onChange={ onFieldChange }
-								aria-describedby="excludeSize-desc"
-							/>
-							<p
-								id="excludeSize-desc"
-								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
+								description={ __(
 									'Comma-separated image width values (pixels). Images with these widths in srcset will be skipped.',
 									'performance-optimisation'
 								) }
-							</p>
+								mono
+								subject={ subjectFor(
+									'excludeSize',
+									settings
+								) }
+								value={ settings.excludeSize }
+								onChange={ onFieldChange }
+							/>
 						</div>
 						<div className="wppo-field">
-							<label
-								className="wppo-field-label"
-								htmlFor="maxLongestEdgePx"
-							>
-								{ __(
+							<SettingField
+								name="maxLongestEdgePx"
+								type="number"
+								label={ __(
 									'Max Longest Edge (px)',
 									'performance-optimisation'
 								) }
-							</label>
-							<input
-								className="wppo-input"
-								id="maxLongestEdgePx"
-								type="number"
-								inputMode="numeric"
-								min="0"
-								step="1"
-								name="maxLongestEdgePx"
-								value={ settings.maxLongestEdgePx }
-								onChange={ onFieldChange }
-								aria-describedby="maxLongestEdgePx-desc"
-							/>
-							<p
-								id="maxLongestEdgePx-desc"
-								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
+								description={ __(
 									'Converted WebP/AVIF outputs are downscaled so the longest edge never exceeds this value. The original upload is kept untouched. Set to 0 to disable.',
 									'performance-optimisation'
 								) }
-							</p>
+								subject={ subjectFor(
+									'maxLongestEdgePx',
+									settings
+								) }
+								value={ settings.maxLongestEdgePx }
+								onChange={ onFieldChange }
+							/>
 						</div>
 					</div>
 				</FeatureCard>
@@ -1305,98 +1330,118 @@ const ImageOptimization = ( { options = {} } ) => {
 							{ lcpCandidateBody }
 						</div>
 						<div>
-							<SwitchField
-								label={ __(
-									'Auto-preload LCP Image',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'autoPreloadLCP',
+									settings
 								) }
-								description={ __(
-									'Automatically detect and preload the Largest Contentful Paint (LCP) image from PageSpeed scan data. Requires a configured PageSpeed API key. Falls back to featured image when no PageSpeed data is available.',
-									'performance-optimisation'
-								) }
-								name="autoPreloadLCP"
-								checked={ settings.autoPreloadLCP }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Auto-preload LCP Image',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Automatically detect and preload the Largest Contentful Paint (LCP) image from PageSpeed scan data. Requires a configured PageSpeed API key. Falls back to featured image when no PageSpeed data is available.',
+										'performance-optimisation'
+									) }
+									name="autoPreloadLCP"
+									checked={ settings.autoPreloadLCP }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 						</div>
 						<div>
-							<SwitchField
-								label={ __(
-									'Prioritize LCP Images in Final HTML',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'prioritizeLCPImages',
+									settings
 								) }
-								description={ __(
-									'Remove loading="lazy" from the first N images and set fetchpriority="high" on the detected LCP image in the finalized page HTML. Requires WordPress 6.9+ for full effect; falls back gracefully on older versions.',
-									'performance-optimisation'
-								) }
-								name="prioritizeLCPImages"
-								checked={ settings.prioritizeLCPImages }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Prioritize LCP Images in Final HTML',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove loading="lazy" from the first N images and set fetchpriority="high" on the detected LCP image in the finalized page HTML. Requires WordPress 6.9+ for full effect; falls back gracefully on older versions.',
+										'performance-optimisation'
+									) }
+									name="prioritizeLCPImages"
+									checked={ settings.prioritizeLCPImages }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 						</div>
 						<div>
-							<SwitchField
-								label={ __(
-									'Preload Front Page Images',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'preloadFrontPageImages',
+									settings
 								) }
-								description={ __(
-									'Inject <link rel="preload"> hints for critical images on your homepage. Tells the browser to fetch these images at the highest priority, improving LCP scores for your most visited page.',
-									'performance-optimisation'
-								) }
-								name="preloadFrontPageImages"
-								checked={ settings.preloadFrontPageImages }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Preload Front Page Images',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Inject <link rel="preload"> hints for critical images on your homepage. Tells the browser to fetch these images at the highest priority, improving LCP scores for your most visited page.',
+										'performance-optimisation'
+									) }
+									name="preloadFrontPageImages"
+									checked={ settings.preloadFrontPageImages }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 							{ settings.preloadFrontPageImages && (
 								<div className="wppo-field wppo-mt-12">
-									<label
-										className="wppo-field-label"
-										htmlFor="preloadFrontPageImagesUrls"
-									>
-										{ __(
+									<SettingField
+										name="preloadFrontPageImagesUrls"
+										type="textarea"
+										label={ __(
 											'Front Page Image URLs to Preload',
 											'performance-optimisation'
 										) }
-									</label>
-									<textarea
-										className="wppo-textarea wppo-textarea--mono"
-										id="preloadFrontPageImagesUrls"
-										name="preloadFrontPageImagesUrls"
-										rows="3"
-										placeholder="/wp-content/uploads/hero.jpg"
+										description={ __(
+											'One URL per line. Only add above-the-fold images — preloading too many images can hurt performance.',
+											'performance-optimisation'
+										) }
+										rows={ 4 }
+										mono
+										subject={ subjectFor(
+											'preloadFrontPageImagesUrls',
+											settings
+										) }
 										value={
 											settings.preloadFrontPageImagesUrls
 										}
 										onChange={ onFieldChange }
-										aria-describedby="preloadFrontPageImagesUrls-desc"
 									/>
-									<p
-										id="preloadFrontPageImagesUrls-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'One URL per line. Only add above-the-fold images — preloading too many images can hurt performance.',
-											'performance-optimisation'
-										) }
-									</p>
 								</div>
 							) }
 						</div>
 						<div>
-							<SwitchField
-								label={ __(
-									'Preload Featured Images',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'preloadPostTypeImage',
+									settings
 								) }
-								description={ __(
-									'Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages.',
-									'performance-optimisation'
-								) }
-								name="preloadPostTypeImage"
-								checked={ settings.preloadPostTypeImage }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Preload Featured Images',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages.',
+										'performance-optimisation'
+									) }
+									name="preloadPostTypeImage"
+									checked={ settings.preloadPostTypeImage }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 							{ settings.preloadPostTypeImage && (
 								<>
 									<div className="wppo-post-types-grid--chips">
@@ -1432,41 +1477,28 @@ const ImageOptimization = ( { options = {} } ) => {
 										) }
 									</div>
 									<div className="wppo-field wppo-field--spaced">
-										<label
-											className="wppo-field-label"
-											htmlFor="excludePostTypeImgUrl"
-										>
-											{ __(
+										<SettingField
+											name="excludePostTypeImgUrl"
+											type="textarea"
+											label={ __(
 												'Exclude URLs from Preload',
 												'performance-optimisation'
 											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="excludePostTypeImgUrl"
-											name="excludePostTypeImgUrl"
-											rows="2"
-											placeholder={ __(
-												'Partial URLs (one per line)',
+											description={ __(
+												'Partial URLs, one per line. Matching images will not be preloaded.',
 												'performance-optimisation'
+											) }
+											rows={ 4 }
+											mono
+											subject={ subjectFor(
+												'excludePostTypeImgUrl',
+												settings
 											) }
 											value={
 												settings.excludePostTypeImgUrl
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
-											aria-describedby="excludePostTypeImgUrl-desc"
+											onChange={ onFieldChange }
 										/>
-										<p
-											id="excludePostTypeImgUrl-desc"
-											className="wppo-text-muted wppo-mt-10 wppo-text-small"
-										>
-											{ __(
-												'Partial URLs, one per line. Matching images will not be preloaded.',
-												'performance-optimisation'
-											) }
-										</p>
 									</div>
 								</>
 							) }
