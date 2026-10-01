@@ -3599,7 +3599,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 
 				return '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full );
 			} catch ( \Throwable $e ) {
-				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed.', array( 'exception' => $e ) );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					try {
+						do_action( 'wppo_debug_log', 'WPPO fetchpriority filter failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					} catch ( \Throwable $ignore ) {
+						unset( $ignore );
+					}
+				} else {
+					unset( $e );
+				}
 				return false;
 			}
 		}
