@@ -40,13 +40,28 @@ const SwitchField = ( {
 			show( subject, 'hover' );
 		}
 	}, [ show, subject ] );
-	const leave = useCallback( () => hide( 'hover' ), [ hide ] );
+	// Guarded, unlike SettingRow's copy of these two. A SwitchField is often
+	// nested inside a subject-bearing SettingRow (FileOptimization:3071 wraps
+	// the Minify CSS switch). With an unguarded `leave`, drifting the pointer
+	// from the switch onto its parent row's own label fires hide('hover') and
+	// blanks the panel while the pointer is still inside the row - and the row's
+	// onMouseLeave never runs, because the pointer never left it. SettingRow is
+	// never nested that way, so leaving it unguarded there is safe; here it is not.
+	const leave = useCallback( () => {
+		if ( subject ) {
+			hide( 'hover' );
+		}
+	}, [ hide, subject ] );
 	const focus = useCallback( () => {
 		if ( subject ) {
 			show( subject, 'focus' );
 		}
 	}, [ show, subject ] );
-	const blur = useCallback( () => hide( 'focus' ), [ hide ] );
+	const blur = useCallback( () => {
+		if ( subject ) {
+			hide( 'focus' );
+		}
+	}, [ hide, subject ] );
 	const pin = useCallback( () => {
 		if ( subject ) {
 			show( subject, 'pinned' );
