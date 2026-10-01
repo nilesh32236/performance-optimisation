@@ -67,11 +67,44 @@ const PLUGIN_SETTINGS_SUBJECTS = {
 		),
 		costTone: 'warn',
 	} ),
+	serverTimingHeader: subject( 'serverTimingHeader', {
+		title: __( 'Server-Timing Header', 'performance-optimisation' ),
+		does: __(
+			'Adds a Server-Timing response header so the browser devtools network panel shows where each request spent its time.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'A developer tool. It changes nothing a visitor sees, and makes slow requests visible while you are profiling.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'No effect on page speed or caching. It only adds a small header to each response, and it exposes your server timing to anyone who requests a page.',
+			'performance-optimisation'
+		),
+	} ),
+
+	rumEnabled: subject( 'rumEnabled', {
+		title: __( 'Collect Real-user Web Vitals', 'performance-optimisation' ),
+		does: __(
+			'Records LCP, CLS, INP, FCP and TTIB from real visitors and charts them here, instead of showing only the lab figures a single PageSpeed run produces.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Lab scores are one synthetic visit on one device. Field data is what your actual visitors experienced, averaged over thousands of page views.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Adds a small script to every page view, so it costs a little speed to get a truer picture. Numbers stay anonymous and are kept on your own site. If you are chasing a Core Web Vitals problem, the field data is usually the one that tells you whether a fix worked.',
+			'performance-optimisation'
+		),
+	} ),
 };
 
 const LABELS = {
 	autoRescan: __( 'Re-scan frequency', 'performance-optimisation' ),
 	highValueUrls: __( 'Tracked URLs', 'performance-optimisation' ),
+	serverTimingHeader: __( 'Header', 'performance-optimisation' ),
+	rumEnabled: __( 'Collection', 'performance-optimisation' ),
 };
 
 /**

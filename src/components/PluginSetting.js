@@ -1387,6 +1387,7 @@ const PluginSetting = ( { options } ) => {
 							'performance-optimisation'
 						) }
 						className="wppo-checkbox-option--spaced"
+						subject={ subjectFor( 'serverTimingHeader' ) }
 					/>
 					<CheckboxOption
 						checked={ rumEnabled }
@@ -1400,6 +1401,7 @@ const PluginSetting = ( { options } ) => {
 							'performance-optimisation'
 						) }
 						className="wppo-checkbox-option--spaced"
+						subject={ subjectFor( 'rumEnabled' ) }
 					/>
 					<SettingRow
 						subject={ subjectFor( 'highValueUrls', {
