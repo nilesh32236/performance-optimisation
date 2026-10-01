@@ -15,6 +15,9 @@ import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
+import SettingField from './common/SettingField';
+import SettingRow from './common/SettingRow';
+import { subjectFor } from './preload/subjects';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faHourglassStart,
@@ -357,53 +360,48 @@ const PreloadSettings = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }
 				>
 					<div className="wppo-field-group">
-						<SwitchField
-							label={ __(
-								'Enable Preload Cache',
-								'performance-optimisation'
+						<SettingRow
+							subject={ subjectFor(
+								'enablePreloadCache',
+								settings
 							) }
-							description={ __(
-								'Automatically visit all pages to pre-generate the cache. The first real visitor gets a fast cached response instead of waiting for a cold page build.',
-								'performance-optimisation'
-							) }
-							name="enablePreloadCache"
-							checked={ settings.enablePreloadCache }
-							onChange={ onFieldChange }
-						/>
+						>
+							<SwitchField
+								label={ __(
+									'Enable Preload Cache',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically visit all pages to pre-generate the cache. The first real visitor gets a fast cached response instead of waiting for a cold page build.',
+									'performance-optimisation'
+								) }
+								name="enablePreloadCache"
+								checked={ settings.enablePreloadCache }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 						{ settings.enablePreloadCache && (
-							<div className="wppo-field wppo-mt-20">
-								<label
-									className="wppo-field-label"
-									htmlFor="excludePreloadCache"
-								>
-									{ __(
-										'Exclude URLs from Cache Warm-up',
-										'performance-optimisation'
-									) }
-								</label>
-								<textarea
-									className="wppo-textarea wppo-textarea--mono"
-									id="excludePreloadCache"
-									name="excludePreloadCache"
-									rows="3"
-									placeholder={ __(
-										'Regex patterns, one per line',
-										'performance-optimisation'
-									) }
-									value={ settings.excludePreloadCache }
-									onChange={ onFieldChange }
-									aria-describedby="excludePreloadCache-desc"
-								/>
-								<p
-									id="excludePreloadCache-desc"
-									className="wppo-text-muted wppo-mt-10 wppo-text-small"
-								>
-									{ __(
-										'Skip dynamic pages like cart, checkout, and account pages that should never be cached. Supports regex patterns.',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
+							<SettingField
+								name="excludePreloadCache"
+								type="textarea"
+								label={ __(
+									'Exclude URLs from Cache Warm-up',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'One URL or path per line. Use this for a search page, a cart, or anything that shows one person one thing.',
+									'performance-optimisation'
+								) }
+								rows={ 3 }
+								mono
+								nested
+								subject={ subjectFor(
+									'excludePreloadCache',
+									settings
+								) }
+								value={ settings.excludePreloadCache }
+								onChange={ onFieldChange }
+							/>
 						) }
 						<SwitchField
 							label={ __(
@@ -496,104 +494,86 @@ const PreloadSettings = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faLink } /> }
 				>
 					<div className="wppo-field-group">
-						<SwitchField
-							label={ __(
-								'Preconnect',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Open a TCP/TLS connection to third-party origins before the browser needs them. Eliminates connection setup latency for fonts, analytics, and CDN resources.',
-								'performance-optimisation'
-							) }
-							name="preconnect"
-							checked={ settings.preconnect }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'preconnect', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Preconnect',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Open a TCP/TLS connection to third-party origins before the browser needs them. Eliminates connection setup latency for fonts, analytics, and CDN resources.',
+									'performance-optimisation'
+								) }
+								name="preconnect"
+								checked={ settings.preconnect }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 						{ settings.preconnect && (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="preconnectOrigins"
-								>
-									{ __(
-										'Preconnect Origins',
-										'performance-optimisation'
-									) }
-								</label>
-								<textarea
-									className="wppo-textarea wppo-textarea--mono"
-									id="preconnectOrigins"
-									name="preconnectOrigins"
-									rows="2"
-									// Audit #1420: example URLs are not translatable.
-									placeholder="https://fonts.googleapis.com"
-									value={ settings.preconnectOrigins }
-									onChange={ onFieldChange }
-									aria-describedby="preconnectOrigins-desc"
-								/>
-								<p
-									id="preconnectOrigins-desc"
-									className="wppo-text-muted wppo-mt-10 wppo-text-small"
-								>
-									{ __(
-										'One origin per line. Use full URLs including protocol.',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
+							<SettingField
+								name="preconnectOrigins"
+								type="textarea"
+								label={ __(
+									'Preconnect Origins',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'One full origin per line, including the scheme. List only hosts that are genuinely on the critical path.',
+									'performance-optimisation'
+								) }
+								rows={ 3 }
+								mono
+								nested
+								subject={ subjectFor(
+									'preconnectOrigins',
+									settings
+								) }
+								value={ settings.preconnectOrigins }
+								onChange={ onFieldChange }
+							/>
 						) }
 
-						<SwitchField
-							label={ __(
-								'DNS Prefetch',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Resolve domain names in the background before the browser requests resources from them. Faster than preconnect but only handles DNS — useful for domains you do not need a full connection to immediately.',
-								'performance-optimisation'
-							) }
-							name="prefetchDNS"
-							checked={ settings.prefetchDNS }
-							onChange={ onFieldChange }
-						/>
+						<SettingRow
+							subject={ subjectFor( 'prefetchDNS', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'DNS Prefetch',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Resolve domain names in the background before the browser requests resources from them. Faster than preconnect but only handles DNS — useful for domains you do not need a full connection to immediately.',
+									'performance-optimisation'
+								) }
+								name="prefetchDNS"
+								checked={ settings.prefetchDNS }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 						{ settings.prefetchDNS && (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="dnsPrefetchOrigins"
-								>
-									{ __(
-										'DNS Prefetch Origins',
-										'performance-optimisation'
-									) }
-								</label>
-								<textarea
-									className="wppo-textarea wppo-textarea--mono"
-									id="dnsPrefetchOrigins"
-									name="dnsPrefetchOrigins"
-									rows="2"
-									placeholder={ __(
-										'example.com',
-										'performance-optimisation'
-									) }
-									value={ settings.dnsPrefetchOrigins }
-									onChange={ onFieldChange }
-									aria-describedby="dnsPrefetchOrigins-desc"
-								/>
-								<p
-									id="dnsPrefetchOrigins-desc"
-									className="wppo-text-muted wppo-mt-10 wppo-text-small"
-								>
-									{ sprintf(
-										/* translators: %s: example hostname. */
-										__(
-											'One hostname per line, without protocol (e.g. %s).',
-											'performance-optimisation'
-										),
-										'cdn.example.com'
-									) }
-								</p>
-							</div>
+							<SettingField
+								name="dnsPrefetchOrigins"
+								type="textarea"
+								label={ __(
+									'DNS Prefetch Origins',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'One origin per line, including the scheme.',
+									'performance-optimisation'
+								) }
+								rows={ 3 }
+								mono
+								nested
+								subject={ subjectFor(
+									'dnsPrefetchOrigins',
+									settings
+								) }
+								value={ settings.dnsPrefetchOrigins }
+								onChange={ onFieldChange }
+							/>
 						) }
 					</div>
 				</FeatureCard>
@@ -607,131 +587,132 @@ const PreloadSettings = ( { options = {} } ) => {
 				>
 					<div className="wppo-stacked-cards">
 						<div className="wppo-field-group">
-							<SwitchField
-								label={ __(
-									'Preload Fonts',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'preloadFonts',
+									settings
 								) }
-								description={ __(
-									'Inject preload hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.',
-									'performance-optimisation'
-								) }
-								name="preloadFonts"
-								checked={ settings.preloadFonts }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Preload Fonts',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Inject preload hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.',
+										'performance-optimisation'
+									) }
+									name="preloadFonts"
+									checked={ settings.preloadFonts }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 							{ settings.preloadFonts && (
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="preloadFontsUrls"
-									>
-										{ __(
-											'Font URLs to Preload',
-											'performance-optimisation'
-										) }
-									</label>
-									<textarea
-										className="wppo-textarea wppo-textarea--mono"
-										id="preloadFontsUrls"
-										name="preloadFontsUrls"
-										rows="3"
-										placeholder={ __(
-											'/wp-content/themes/my-theme/fonts/myfont.woff2',
-											'performance-optimisation'
-										) }
-										value={ settings.preloadFontsUrls }
-										onChange={ onFieldChange }
-										aria-describedby="preloadFontsUrls-desc"
-									/>
-									<p
-										id="preloadFontsUrls-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'One URL per line. Prefer .woff2 format for best browser support.',
-											'performance-optimisation'
-										) }
-									</p>
-								</div>
+								<SettingField
+									name="preloadFontsUrls"
+									type="textarea"
+									label={ __(
+										'Font URLs to Preload',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'One URL per line, and prefer the .woff2 format — it is the one every current browser understands.',
+										'performance-optimisation'
+									) }
+									rows={ 3 }
+									mono
+									nested
+									subject={ subjectFor(
+										'preloadFontsUrls',
+										settings
+									) }
+									value={ settings.preloadFontsUrls }
+									onChange={ onFieldChange }
+								/>
 							) }
 						</div>
 						<div className="wppo-field-group">
-							<SwitchField
-								label={ __(
-									'Automatically Discover Fonts',
-									'performance-optimisation'
+							<SettingRow
+								subject={ subjectFor(
+									'autoDiscoverFonts',
+									settings
 								) }
-								description={ __(
-									'Scan enqueued stylesheets for @font-face files and preload up to 2 same-origin fonts with crossorigin. Manual font URLs always win on conflict.',
-									'performance-optimisation'
+							>
+								<SwitchField
+									label={ __(
+										'Automatically Discover Fonts',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Scan enqueued stylesheets for @font-face files and preload up to 2 same-origin fonts with crossorigin. Manual font URLs always win on conflict.',
+										'performance-optimisation'
+									) }
+									name="autoDiscoverFonts"
+									checked={ settings.autoDiscoverFonts }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
+							<SettingRow
+								subject={ subjectFor(
+									'autoLcpPreload',
+									settings
 								) }
-								name="autoDiscoverFonts"
-								checked={ settings.autoDiscoverFonts }
-								onChange={ onFieldChange }
-							/>
-							<SwitchField
-								label={ __(
-									'Automatically Preload LCP Hero',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Resolve the template hero from real-visit data, then stored PageSpeed data, then the in-viewport heuristic, and emit one fetchpriority-high eager preload. Requires Real-User Measurement; manual preload lists win and the hero is never lazy-loaded.',
-									'performance-optimisation'
-								) }
-								name="autoLcpPreload"
-								checked={ settings.autoLcpPreload }
-								onChange={ onFieldChange }
-							/>
+							>
+								<SwitchField
+									label={ __(
+										'Automatically Preload LCP Hero',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Resolve the template hero from real-visit data, then stored PageSpeed data, then the in-viewport heuristic, and emit one fetchpriority-high eager preload. Requires Real-User Measurement; manual preload lists win and the hero is never lazy-loaded.',
+										'performance-optimisation'
+									) }
+									name="autoLcpPreload"
+									checked={ settings.autoLcpPreload }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 						</div>
 						<div className="wppo-field-group">
-							<SwitchField
-								label={ __(
-									'Preload Critical CSS',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Inject preload hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.',
-									'performance-optimisation'
-								) }
-								name="preloadCSS"
-								checked={ settings.preloadCSS }
-								onChange={ onFieldChange }
-							/>
+							<SettingRow
+								subject={ subjectFor( 'preloadCSS', settings ) }
+							>
+								<SwitchField
+									label={ __(
+										'Preload Critical CSS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Inject preload hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.',
+										'performance-optimisation'
+									) }
+									name="preloadCSS"
+									checked={ settings.preloadCSS }
+									onChange={ onFieldChange }
+								/>
+							</SettingRow>
 							{ settings.preloadCSS && (
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="preloadCSSUrls"
-									>
-										{ __(
-											'CSS URLs to Preload',
-											'performance-optimisation'
-										) }
-									</label>
-									<textarea
-										className="wppo-textarea wppo-textarea--mono"
-										id="preloadCSSUrls"
-										name="preloadCSSUrls"
-										rows="3"
-										placeholder={ __(
-											'/wp-content/themes/my-theme/style.css',
-											'performance-optimisation'
-										) }
-										value={ settings.preloadCSSUrls }
-										onChange={ onFieldChange }
-										aria-describedby="preloadCSSUrls-desc"
-									/>
-									<p
-										id="preloadCSSUrls-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'One URL per line. Only add stylesheets needed for above-the-fold content.',
-											'performance-optimisation'
-										) }
-									</p>
-								</div>
+								<SettingField
+									name="preloadCSSUrls"
+									type="textarea"
+									label={ __(
+										'CSS URLs to Preload',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'One URL per line, as they appear in your page markup.',
+										'performance-optimisation'
+									) }
+									rows={ 3 }
+									mono
+									nested
+									subject={ subjectFor(
+										'preloadCSSUrls',
+										settings
+									) }
+									value={ settings.preloadCSSUrls }
+									onChange={ onFieldChange }
+								/>
 							) }
 						</div>
 					</div>
@@ -751,19 +732,26 @@ const PreloadSettings = ( { options = {} } ) => {
 								'performance-optimisation'
 							) }
 						</p>
-						<SwitchField
-							label={ __(
-								'Enable Speculative Loading',
-								'performance-optimisation'
+						<SettingRow
+							subject={ subjectFor(
+								'enableSpeculationRules',
+								settings
 							) }
-							description={ __(
-								'When enabled, browsers may prerender or prefetch linked pages before navigation for near-instant load times.',
-								'performance-optimisation'
-							) }
-							name="enableSpeculationRules"
-							checked={ settings.enableSpeculationRules }
-							onChange={ onFieldChange }
-						/>
+						>
+							<SwitchField
+								label={ __(
+									'Enable Speculative Loading',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'When enabled, browsers may prerender or prefetch linked pages before navigation for near-instant load times.',
+									'performance-optimisation'
+								) }
+								name="enableSpeculationRules"
+								checked={ settings.enableSpeculationRules }
+								onChange={ onFieldChange }
+							/>
+						</SettingRow>
 						{ ! settings.enableSpeculationRules &&
 							( eagernessOverride || modeOverride ) && (
 								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
@@ -797,152 +785,155 @@ const PreloadSettings = ( { options = {} } ) => {
 							) }
 						{ settings.enableSpeculationRules && (
 							<>
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="speculationMode"
-									>
-										{ __(
-											'Speculation Mode',
-											'performance-optimisation'
-										) }
-									</label>
-									<select
-										className="wppo-select"
-										id="speculationMode"
-										name="speculationMode"
-										value={ settings.speculationMode }
-										onChange={ onFieldChange }
-										aria-describedby="speculationMode-desc"
-									>
-										<option value="prefetch">
+								<SettingRow
+									subject={ subjectFor(
+										'speculationMode',
+										settings
+									) }
+								>
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="speculationMode"
+										>
 											{ __(
-												'Prefetch (faster navigation, lower resource usage)',
+												'Speculation Mode',
 												'performance-optimisation'
 											) }
-										</option>
-										<option value="prerender">
+										</label>
+										<select
+											className="wppo-select"
+											id="speculationMode"
+											name="speculationMode"
+											value={ settings.speculationMode }
+											onChange={ onFieldChange }
+											aria-describedby="speculationMode-desc"
+										>
+											<option value="prefetch">
+												{ __(
+													'Prefetch (faster navigation, lower resource usage)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="prerender">
+												{ __(
+													'Prerender (instant navigation, higher resource usage)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="speculationMode-desc"
+											className="wppo-text-muted wppo-mt-10 wppo-text-small"
+										>
 											{ __(
-												'Prerender (instant navigation, higher resource usage)',
+												'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified.',
 												'performance-optimisation'
 											) }
-										</option>
-									</select>
-									<p
-										id="speculationMode-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified.',
-											'performance-optimisation'
-										) }
-									</p>
-								</div>
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="speculationEagerness"
-									>
-										{ __(
-											'Eagerness',
-											'performance-optimisation'
-										) }
-									</label>
-									<select
-										className="wppo-select"
-										id="speculationEagerness"
-										name="speculationEagerness"
-										value={ settings.speculationEagerness }
-										onChange={ onFieldChange }
-										aria-describedby="speculationEagerness-desc"
-									>
-										<option value="conservative">
+										</p>
+									</div>
+								</SettingRow>
+								<SettingRow
+									subject={ subjectFor(
+										'speculationEagerness',
+										settings
+									) }
+								>
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="speculationEagerness"
+										>
 											{ __(
-												'Conservative (only on hover/touch)',
+												'Eagerness',
 												'performance-optimisation'
 											) }
-										</option>
-										<option value="moderate">
+										</label>
+										<select
+											className="wppo-select"
+											id="speculationEagerness"
+											name="speculationEagerness"
+											value={
+												settings.speculationEagerness
+											}
+											onChange={ onFieldChange }
+											aria-describedby="speculationEagerness-desc"
+										>
+											<option value="conservative">
+												{ __(
+													'Conservative (only on hover/touch)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="moderate">
+												{ __(
+													'Moderate (on hover + nearby links)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="eager">
+												{ __(
+													'Eager (immediately on page load)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="speculationEagerness-desc"
+											className="wppo-text-muted wppo-mt-10 wppo-text-small"
+										>
 											{ __(
-												'Moderate (on hover + nearby links)',
+												'Conservative waits for hover, Moderate prefetches nearby links, Eager loads immediately on page load.',
 												'performance-optimisation'
 											) }
-										</option>
-										<option value="eager">
-											{ __(
-												'Eager (immediately on page load)',
-												'performance-optimisation'
-											) }
-										</option>
-									</select>
-									<p
-										id="speculationEagerness-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'Conservative waits for hover, Moderate prefetches nearby links, Eager loads immediately on page load.',
-											'performance-optimisation'
-										) }
-									</p>
-								</div>
+										</p>
+									</div>
+								</SettingRow>
 								<div className="wppo-field-group">
-									<SwitchField
-										label={ __(
-											'Prerender High-Value URLs',
-											'performance-optimisation'
+									<SettingRow
+										subject={ subjectFor(
+											'speculationPrerenderList',
+											settings
 										) }
-										description={ __(
-											'Prerender the home page plus top visited URLs for near-instant navigation. Only safe same-origin pages are prerendered; cart, checkout, account, and logged-in views stay on prefetch or nothing.',
-											'performance-optimisation'
-										) }
-										name="speculationPrerenderList"
-										checked={ Boolean(
-											settings.speculationPrerenderList
-										) }
-										onChange={ onFieldChange }
-									/>
-								</div>
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="speculationExcludeUrls"
 									>
-										{ __(
-											'Exclude URLs from Speculation',
-											'performance-optimisation'
-										) }
-									</label>
-									<textarea
-										className="wppo-textarea wppo-textarea--mono"
-										id="speculationExcludeUrls"
-										name="speculationExcludeUrls"
-										rows="3"
-										placeholder={ [
-											__(
-												'/my-plugin/*',
+										<SwitchField
+											label={ __(
+												'Prerender High-Value URLs',
 												'performance-optimisation'
-											),
-											__(
-												'/excluded-path/*',
+											) }
+											description={ __(
+												'Prerender the home page plus top visited URLs for near-instant navigation. Only safe same-origin pages are prerendered; cart, checkout, account, and logged-in views stay on prefetch or nothing.',
 												'performance-optimisation'
-											),
-										].join( '\n' ) }
-										value={
-											settings.speculationExcludeUrls
-										}
-										onChange={ onFieldChange }
-										aria-describedby="speculationExcludeUrls-desc"
-									/>
-									<p
-										id="speculationExcludeUrls-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										{ __(
-											'Add URL patterns to exclude from speculative loading. Supports wildcard (*) patterns. WooCommerce cart, checkout, and account pages are excluded automatically.',
-											'performance-optimisation'
-										) }
-									</p>
+											) }
+											name="speculationPrerenderList"
+											checked={ Boolean(
+												settings.speculationPrerenderList
+											) }
+											onChange={ onFieldChange }
+										/>
+									</SettingRow>
 								</div>
+								<SettingField
+									name="speculationExcludeUrls"
+									type="textarea"
+									label={ __(
+										'Exclude URLs from Speculation',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'One URL or path per line. A plain substring matches anything containing it; #regex# matches exactly that pattern.',
+										'performance-optimisation'
+									) }
+									rows={ 3 }
+									mono
+									nested
+									subject={ subjectFor(
+										'speculationExcludeUrls',
+										settings
+									) }
+									value={ settings.speculationExcludeUrls }
+									onChange={ onFieldChange }
+								/>
 							</>
 						) }
 					</div>
