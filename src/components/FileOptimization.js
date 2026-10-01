@@ -3797,6 +3797,10 @@ const FileOptimization = ( {
 										}
 										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
+										subject={ subjectFor(
+											'hostGoogleFontsLocally',
+											settings
+										) }
 									/>
 								</Tooltip>
 								<Tooltip
@@ -3817,6 +3821,10 @@ const FileOptimization = ( {
 										checked={ settings.fontMetricFallback }
 										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
+										subject={ subjectFor(
+											'fontMetricFallback',
+											settings
+										) }
 									/>
 								</Tooltip>
 								<Tooltip
@@ -3836,6 +3844,10 @@ const FileOptimization = ( {
 										name="fontSubset"
 										checked={ settings.fontSubset }
 										onChange={ onFieldChange }
+										subject={ subjectFor(
+											'fontSubset',
+											settings
+										) }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
