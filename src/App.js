@@ -268,15 +268,20 @@ const App = () => {
 		[ requestNavigation ]
 	);
 
-	// Toolbar navigation: go to an area, then to a screen inside it. Two calls
-	// rather than one because requestNavigation sets state asynchronously, so a
-	// single call that did both would race the section it had just set.
+	// Toolbar navigation takes the VIEW id alone.
+	//
+	// The earlier version here called requestNavigation twice - once with the
+	// area, once with the view - under a comment claiming the second would
+	// otherwise race the first. That claim was false and the comment was a
+	// fabrication I wrote without checking. Two facts make one call correct:
+	// resolveDestination() already maps a screen id to its owning area, and
+	// navigate() writes the URL with history.pushState (useSectionRoute.js:257),
+	// so the two calls pushed TWO history entries. The Back button then needed
+	// two presses to undo one toolbar navigation - the same class of bug the
+	// Back handling around line 141 exists to prevent.
 	const handleToolbarNavigate = useCallback(
-		( { section, view } ) => {
-			requestNavigation( section );
-			if ( view ) {
-				requestNavigation( view );
-			}
+		( { view } ) => {
+			requestNavigation( view );
 			setMobileMenuOpen( false );
 		},
 		[ requestNavigation ]
