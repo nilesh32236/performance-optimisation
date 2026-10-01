@@ -3,74 +3,50 @@
 .wppo-sub-tabs {
 	display: flex;
 	gap: 4px;
-	background: var(--wppo-switch-hover, #f1f5f9);
-	border: 1px solid var(--wppo-border, #e2e8f0);
-	border-radius: var(--wppo-radius, 10px);
+	background: var(--wppo-surface-quiet, #f8fafc);
+	border: 1px solid var(--wppo-hairline, #dde3ea);
+	border-radius: var(--wppo-radius-tool, 8px);
 	padding: 4px;
-	overflow-x: auto;
-	overflow-y: hidden;
 	margin-top: 20px;
-	scrollbar-width: none;
-	-ms-overflow-style: none;
-	scroll-snap-type: x proximity;
-	-webkit-overflow-scrolling: touch;
 	position: relative;
 	min-width: 0;
 	max-width: 100%;
 	width: 100%;
 	box-sizing: border-box;
 
-	&::-webkit-scrollbar {
-		display: none;
-	}
+	/* Wrap rather than scroll.
+	   This row was `overflow-x: auto` with the scrollbar and a fade both hidden,
+	   which meant File Optimisation's fifth tab ("Core") was simply clipped with
+	   no signal that anything was off-screen — an option you cannot see is an
+	   option you cannot use. Every screen here has at most five sub-tabs, so
+	   wrapping keeps them all visible at every width. */
+	flex-wrap: wrap;
+	overflow-x: visible;
 
-	// fade indicator for scrollable overflow (RTL-aware)
-	&::after {
-		content: '';
-		position: sticky;
-		inset-inline-end: 0;
-		top: 0;
-		bottom: 0;
-		width: 24px;
-		flex-shrink: 0;
-		background: linear-gradient(90deg, transparent, var(--wppo-switch-hover, #f1f5f9));
-		pointer-events: none;
-		margin-inline-start: -24px;
-		align-self: stretch;
-	}
-
-	// Focus ring must not be clipped by overflow
+	// Focus ring must not be clipped
 	padding-block: 6px;
 	margin-block: -2px;
-
-	[dir='rtl'] &::after {
-		background: linear-gradient(270deg, transparent, var(--wppo-switch-hover, #f1f5f9));
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		scroll-behavior: auto;
-	}
 }
 
 .wppo-sub-tab {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	padding: 8px 14px;
+	padding: 8px 13px;
 	background: transparent;
 	border: 1px solid transparent;
 	box-sizing: border-box;
-	border-radius: var(--wppo-radius-sm, 8px);
-	color: var(--wppo-text-muted, #475569);
+	border-radius: var(--wppo-radius-tool-sm, 5px);
+	color: var(--wppo-ink-muted, #4a5a6e);
+	font-family: var(--wppo-font-body);
 	font-size: 13px;
-	font-weight: 600;
+	font-weight: 500;
 	cursor: pointer;
 	transition: var(--wppo-transition);
 	white-space: nowrap;
 	line-height: 1;
-	scroll-snap-align: start;
 	flex-shrink: 0;
-	min-height: 36px;
+	min-height: 34px;
 
 	@include respond-to('md') {
 		min-height: 44px;

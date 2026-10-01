@@ -231,9 +231,7 @@ export default function SiteStatusCard( {
 												good: row.good,
 												poor: row.poor,
 											} }
-											display={
-												row.detailArgs?.value
-											}
+											display={ row.detailArgs?.value }
 										/>
 									) : null }
 									<span className="wppo-overview__status-detail">

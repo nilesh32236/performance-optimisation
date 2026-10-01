@@ -43,11 +43,14 @@
 	list-style: none;
 }
 
+/* Badge beside the name, with the rail and the explanation underneath.
+   `wrap` here pushed the badge onto its own line above every row, which cost
+   three extra lines per row on the screen people read first. */
 .wppo-overview__status {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 8px;
+	flex-wrap: nowrap;
+	align-items: flex-start;
+	gap: 10px;
 }
 
 .wppo-overview__status--attention {
@@ -61,7 +64,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	flex: 1 1 16rem;
+	flex: 1 1 auto;
 	min-width: 0;
 }
 
@@ -170,8 +173,13 @@
 	color: var(--wppo-text-muted, #475569);
 }
 
-/* Two columns only when there is genuinely room for them. */
-@media ( min-width: 1100px ) {
+/* Two columns only when the **work area** is genuinely roomy.
+   This was a viewport media query at 1100px, which is wrong the moment the
+   inspector opens: at a 1440px viewport the work area is 658px, the query
+   still said "plenty of room", and both columns collapsed to ~330px so every
+   sentence in Site status wrapped mid-phrase. A container query asks the only
+   question that matters — how wide is the space this grid actually has. */
+@container work ( min-width: 760px ) {
 	.wppo-overview {
 		grid-template-columns: minmax( 0, 2fr ) minmax( 0, 1fr );
 	}
@@ -185,6 +193,26 @@
 	.wppo-overview__card:nth-of-type( 2 ) {
 		grid-column: 2;
 		grid-row: 1;
+	}
+}
+
+/* Fallback for browsers without container queries: split on the viewport, which
+   is at least correct when the inspector is a bottom sheet. */
+@supports not ( container-type: inline-size ) {
+	@media ( min-width: 1280px ) {
+		.wppo-overview {
+			grid-template-columns: minmax( 0, 2fr ) minmax( 0, 1fr );
+		}
+
+		.wppo-overview__card:nth-of-type( 1 ),
+		.wppo-overview__card:nth-of-type( 3 ) {
+			grid-column: 1;
+		}
+
+		.wppo-overview__card:nth-of-type( 2 ) {
+			grid-column: 2;
+			grid-row: 1;
+		}
 	}
 }
 

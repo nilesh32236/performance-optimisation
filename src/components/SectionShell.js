@@ -85,6 +85,11 @@ export default function SectionShell( {
 
 	const single = items.length < 2;
 
+	// The eyebrow names the screen you are on, not the area you are in, so it
+	// carries information instead of repeating the heading beneath it — and it
+	// appears only where a sub-nav actually exists to change it.
+	const activeItem = items.find( ( item ) => item.id === activeId );
+
 	return (
 		<section
 			className="wppo-section"
@@ -92,6 +97,11 @@ export default function SectionShell( {
 			aria-labelledby={ `wppo-section-${ id }-title` }
 		>
 			<header className="wppo-section__header">
+				{ ! single && activeItem ? (
+					<p className="wppo-section__eyebrow">
+						{ activeItem.label }
+					</p>
+				) : null }
 				<h1
 					className="wppo-section__title"
 					id={ `wppo-section-${ id }-title` }

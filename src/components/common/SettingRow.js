@@ -22,7 +22,7 @@
  */
 
 import { useCallback } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __ } from '@wordpress/i18n';
 
 import { useInspector } from '../../lib/InspectorContext';
 
@@ -78,14 +78,24 @@ export default function SettingRow( { subject, children, className = '' } ) {
 			onBlurCapture={ blur }
 		>
 			<div className="wppo-setting-row__field">{ children }</div>
+			{ /* Mouse-only affordance, deliberately.
+			     The row already loads its subject when any control inside it
+			     receives focus, so a keyboard user gets the panel without
+			     this. Giving it an accessible name would duplicate the
+			     field's own name ("Minify CSS" and "Explain Minify CSS" both
+			     match a substring query) and add a tab stop to every one of
+                 246 settings for no gain. `aria-hidden` plus `tabIndex={-1}`
+			     keeps it clickable while removing it from the accessibility
+			     tree and the tab order. */ }
 			<button
 				type="button"
 				className="wppo-setting-row__explain"
 				onClick={ pin }
-				aria-label={ sprintf(
-					/* translators: %s: the setting's name. */
-					__( 'Explain %s', 'performance-optimisation' ),
-					subject.title
+				aria-hidden="true"
+				tabIndex={ -1 }
+				title={ __(
+					'Pin this explanation',
+					'performance-optimisation'
 				) }
 			>
 				<span aria-hidden="true">?</span>

@@ -41,6 +41,8 @@ import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
+import SettingRow from './common/SettingRow';
+import { subjectFor } from './file-optimization/subjects';
 import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
@@ -3056,46 +3058,64 @@ const FileOptimization = ( {
 								</div>
 							) }
 							<div className="wppo-field-group">
-								<Tooltip
-									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
+								<SettingRow
+									subject={ subjectFor(
+										'minifyCSS',
+										settings
+									) }
 								>
-									<SwitchField
-										label={ __(
-											'Minify CSS',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Remove whitespace and comments from stylesheets to reduce file size.',
-											'performance-optimisation'
-										) }
-										name="minifyCSS"
-										checked={ settings.minifyCSS }
-										onChange={ onFieldChange }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
-								<Tooltip
-									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
+									<Tooltip
+										content={
+											optimizerDisabled
+												? pausedTooltip
+												: ''
+										}
+									>
+										<SwitchField
+											label={ __(
+												'Minify CSS',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Remove whitespace and comments from stylesheets to reduce file size.',
+												'performance-optimisation'
+											) }
+											name="minifyCSS"
+											checked={ settings.minifyCSS }
+											onChange={ onFieldChange }
+											disabled={ optimizerDisabled }
+										/>
+									</Tooltip>
+								</SettingRow>
+								<SettingRow
+									subject={ subjectFor(
+										'combineCSS',
+										settings
+									) }
 								>
-									<SwitchField
-										label={ __(
-											'Combine CSS',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Merge all CSS files into a single file to reduce the number of HTTP requests.',
-											'performance-optimisation'
-										) }
-										name="combineCSS"
-										checked={ settings.combineCSS }
-										onChange={ onFieldChange }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
+									<Tooltip
+										content={
+											optimizerDisabled
+												? pausedTooltip
+												: ''
+										}
+									>
+										<SwitchField
+											label={ __(
+												'Combine CSS',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Merge all CSS files into a single file to reduce the number of HTTP requests.',
+												'performance-optimisation'
+											) }
+											name="combineCSS"
+											checked={ settings.combineCSS }
+											onChange={ onFieldChange }
+											disabled={ optimizerDisabled }
+										/>
+									</Tooltip>
+								</SettingRow>
 								{ settings.combineCSS && (
 									<div className="wppo-notice wppo-notice--warning wppo-mt-12">
 										<FontAwesomeIcon
@@ -3142,31 +3162,40 @@ const FileOptimization = ( {
 										</p>
 									</div>
 								) }
-								<Tooltip
-									content={
-										optimizerDisabled
-											? pausedTooltip
-											: __(
-													'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
-													'performance-optimisation'
-											  )
-									}
+								<SettingRow
+									subject={ subjectFor(
+										'removeUnusedCSS',
+										settings
+									) }
 								>
-									<SwitchField
-										label={ __(
-											'Remove Unused CSS',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits.',
-											'performance-optimisation'
-										) }
-										name="removeUnusedCSS"
-										checked={ settings.removeUnusedCSS }
-										onChange={ onFieldChange }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
+									{ /* Empty unless LiteSpeed owns optimisation. This
+									     setting is now explained by the inspector;
+									     the tooltip said the same thing in a heavy
+									     dark box that overlapped the row and
+									     fought it. */ }
+									<Tooltip
+										content={
+											optimizerDisabled
+												? pausedTooltip
+												: ''
+										}
+									>
+										<SwitchField
+											label={ __(
+												'Remove Unused CSS',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits.',
+												'performance-optimisation'
+											) }
+											name="removeUnusedCSS"
+											checked={ settings.removeUnusedCSS }
+											onChange={ onFieldChange }
+											disabled={ optimizerDisabled }
+										/>
+									</Tooltip>
+								</SettingRow>
 								{ settings.removeUnusedCSS && (
 									<div className="wppo-field">
 										<label
@@ -3579,26 +3608,35 @@ const FileOptimization = ( {
 										</p>
 									</div>
 								) }
-								<Tooltip
-									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
+								<SettingRow
+									subject={ subjectFor(
+										'criticalCSS',
+										settings
+									) }
 								>
-									<SwitchField
-										label={ __(
-											'Critical CSS',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.',
-											'performance-optimisation'
-										) }
-										name="criticalCSS"
-										checked={ settings.criticalCSS }
-										onChange={ onFieldChange }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
+									<Tooltip
+										content={
+											optimizerDisabled
+												? pausedTooltip
+												: ''
+										}
+									>
+										<SwitchField
+											label={ __(
+												'Critical CSS',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.',
+												'performance-optimisation'
+											) }
+											name="criticalCSS"
+											checked={ settings.criticalCSS }
+											onChange={ onFieldChange }
+											disabled={ optimizerDisabled }
+										/>
+									</Tooltip>
+								</SettingRow>
 								{ settings.criticalCSS && (
 									<>
 										<div className="wppo-field wppo-mt-16">

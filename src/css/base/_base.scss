@@ -14,12 +14,17 @@
 	}
 
 	code {
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-family: var(--wppo-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 		font-size: 12px;
 		background: var(--wppo-primary-soft);
 		color: var(--wppo-primary);
 		padding: 1px 5px;
 		border-radius: 4px;
+		/* A path like `wp-content/wppo-redis-config.php` is one unbroken token.
+		   Without this it sets its own width and pushed the page 116px past the
+		   viewport on Object Cache at 390px. */
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 }
 

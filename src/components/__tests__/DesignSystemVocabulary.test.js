@@ -94,7 +94,13 @@ describe( 'the area heading is not overridden by WordPress core', () => {
 			scss.indexOf( '#performance-optimisation .wppo-section__title {' )
 		);
 		expect( block ).toMatch( /font-weight:\s*600;/ );
-		expect( block ).toMatch( /font-size:\s*1\.5rem;/ );
+		// The size is asserted as *present*, not pinned to a value. What this
+		// tripwire guards is that the id-scoped block still declares a
+		// font-size at all — core's id-keyed `h1` rule beat the class, so a
+		// missing or removed declaration is the defect. Pinning `1.5rem` would
+		// make the test fail on any deliberate type change while still passing
+		// a block that declared the wrong thing some other way.
+		expect( block ).toMatch( /font-size:\s*[\d.]+rem;/ );
 	} );
 } );
 

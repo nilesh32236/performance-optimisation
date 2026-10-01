@@ -63,6 +63,28 @@
 		}
 	}
 
+	/* The card heading was an unstyled `h3`, so it inherited wp-admin's own
+	   heading rule and rendered as a heavy slab that fought the page title
+	   directly above it. Card titles are a second label on the same screen, not
+	   a second headline. */
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+		flex-wrap: wrap;
+
+		h3 {
+			margin: 0;
+			font-family: var(--wppo-font-display);
+			font-size: 15px;
+			font-weight: 600;
+			line-height: 1.35;
+			letter-spacing: -0.005em;
+			color: var(--wppo-ink);
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		transition: none;
 

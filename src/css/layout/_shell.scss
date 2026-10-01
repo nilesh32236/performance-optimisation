@@ -187,4 +187,9 @@
 	width: 100%;
 	max-width: var(--wppo-work-max);
 	margin: 0;
+	/* A query container, so layouts inside respond to the width of the work
+	   area rather than the width of the window. The two are not the same thing
+	   once the inspector is taking 344px of a 1440px viewport. */
+	container-type: inline-size;
+	container-name: work;
 }

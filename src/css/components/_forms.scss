@@ -186,6 +186,32 @@
 
 /* Toggle Switch — removed in P5 (A07 D-04). All toggles use @wordpress/components ToggleControl via .wppo-switch-field. */
 
+/* ToggleControl renders its own `<label>` for the input it generates an id for,
+   and in @wordpress/components 29 there is no `hideLabelFromVision` prop to
+   suppress it. SwitchField already prints the setting name as its own label, so
+   leaving that in place printed the name twice in every settings row.
+
+   The label stays in the DOM and stays the toggle's accessible name — it is
+   bound to the input with `htmlFor`, and that id is generated internally so it
+   cannot be referenced from the component — and is hidden from view instead. */
+.wppo-switch-field .components-toggle-control__label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* The toggle track sits on the right of the row; give it the same alignment
+   the removed legacy switch had, now that its label no longer occupies space. */
+.wppo-switch-field .components-toggle-control {
+	justify-content: flex-end;
+}
 
 @media (hover: none) {
 	.wppo-button--primary:hover:not(:disabled),

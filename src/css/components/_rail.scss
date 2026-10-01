@@ -41,7 +41,10 @@
 
 .wppo-rail__zone {
 	height: 100%;
-	opacity: 0.38;
+	/* At 4px tall and 38% opacity the "needs work" band was effectively
+	   invisible against the light track, so a rail read as green-then-red and
+	   the middle of the scale — the part people are usually in — vanished. */
+	opacity: 0.62;
 
 	&:first-child {
 		border-top-left-radius: 999px;

@@ -32,6 +32,21 @@
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	margin-block-end: 18px;
+}
+
+/* The screen you are on, above the area you are in. Uppercase micro-label, so
+   it reads as a category marker rather than a second heading. Rendered only
+   where a sub-nav exists to change it (see SectionShell). */
+.wppo-section__eyebrow {
+	margin: 0 0 2px;
+	font-family: var(--wppo-font-body);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.4;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--wppo-ink-faint, #7c8ca0);
 }
 
 // Scoped by the mount id, not just the class.
@@ -46,18 +61,22 @@
 // specificity without `!important`.
 #performance-optimisation .wppo-section__title {
 	margin: 0;
-	font-size: 1.5rem;
+	// Space Grotesk carries headings and nothing else on this screen.
+	font-family: var(--wppo-font-display);
+	font-size: 1.75rem;
 	font-weight: 600;
-	line-height: 1.25;
-	color: var(--wppo-text-main, #0f172a);
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+	color: var(--wppo-ink, #0c1420);
 }
 
 .wppo-section__purpose {
-	margin: 0;
+	margin: 6px 0 0;
 	max-width: 68ch;
+	font-family: var(--wppo-font-body);
 	font-size: 14px;
-	line-height: 1.5;
-	color: var(--wppo-text-muted, #475569);
+	line-height: 1.55;
+	color: var(--wppo-ink-muted, #4a5a6e);
 }
 
 /* In-area sub-navigation. */
@@ -68,9 +87,9 @@
 	scrollbar-width: thin;
 	// Keep the row from being squeezed into two lines by a long label.
 	flex-wrap: nowrap;
-	padding-block-end: 4px;
+	padding-block-end: 0;
 	// A visible, consistent focus surface for keyboard users.
-	border-block-end: 1px solid var(--wppo-border, #e2e8f0);
+	border-block-end: 1px solid var(--wppo-hairline, #dde3ea);
 }
 
 .wppo-subnav__tab {
@@ -79,13 +98,14 @@
 	gap: 8px;
 	flex: 0 0 auto;
 	margin-block-end: -1px;
-	padding: 8px 12px;
+	padding: 9px 12px;
 	border: 1px solid transparent;
 	border-block-end: 2px solid transparent;
-	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
+	border-radius: var(--wppo-radius-tool-sm, 5px) var(--wppo-radius-tool-sm, 5px) 0 0;
 	background: transparent;
-	color: var(--wppo-text-muted, #475569);
-	font-size: 14px;
+	color: var(--wppo-ink-muted, #4a5a6e);
+	font-family: var(--wppo-font-body);
+	font-size: 13px;
 	font-weight: 500;
 	line-height: 1.4;
 	white-space: nowrap;
@@ -95,17 +115,17 @@
 }
 
 .wppo-subnav__tab:hover:not( .wppo-is-active ) {
-	background: var(--wppo-switch-hover, #f1f5f9);
-	color: var(--wppo-text-main, #0f172a);
+	background: var(--wppo-surface-quiet, #f8fafc);
+	color: var(--wppo-ink, #0c1420);
 }
 
 .wppo-subnav__tab.wppo-is-active {
-	color: var(--wppo-primary);
-	background: var(--wppo-bg-card, #fff);
-	border-color: var(--wppo-border, #e2e8f0);
+	color: var(--wppo-focus, #1b5fd9);
+	background: transparent;
+	border-color: transparent;
 	// The active marker sits on the row's own border line, so it reads as
 	// "you are here" rather than another box.
-	border-block-end-color: var(--wppo-primary);
+	border-block-end-color: var(--wppo-focus, #1b5fd9);
 	font-weight: 600;
 }
 

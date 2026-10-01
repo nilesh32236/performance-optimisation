@@ -70,23 +70,36 @@ describe( 'SettingRow', () => {
 		expect( inspector.hide ).toHaveBeenCalledWith( 'focus' );
 	} );
 
-	it( 'pins the subject on an explicit click and opens the panel', () => {
+	it( 'pins the subject when the affordance is clicked', () => {
 		const inspector = makeInspector();
-		renderRow( inspector );
+		const { container } = renderRow( inspector );
 
 		fireEvent.click(
-			screen.getByRole( 'button', { name: 'Explain Minify CSS' } )
+			container.querySelector( '.wppo-setting-row__explain' )
 		);
 
 		expect( inspector.show ).toHaveBeenCalledWith( SUBJECT, 'pinned' );
 		expect( inspector.setOpen ).toHaveBeenCalledWith( true );
 	} );
 
-	it( 'gives the explain affordance a name that includes the setting', () => {
+	it( 'keeps the pin affordance out of the tab order and the a11y tree', () => {
+		// Focus already loads the subject, so this is a mouse-only extra. An
+		// accessible name here would duplicate the field's own name and add a
+		// tab stop to every setting on the screen.
+		const { container } = renderRow( makeInspector() );
+		const pin = container.querySelector( '.wppo-setting-row__explain' );
+
+		expect( pin ).toHaveAttribute( 'aria-hidden', 'true' );
+		expect( pin ).toHaveAttribute( 'tabindex', '-1' );
+	} );
+
+	it( 'keeps the pin affordance out of the accessibility tree', () => {
+		// Regression guard: an `aria-label` of "Explain Minify CSS" made every
+		// substring query for "Minify CSS" ambiguous — the same duplicate name
+		// a screen reader user would have heard, on every one of 246 settings.
+		// The row is now the only thing exposed; the pin is mouse-only.
 		renderRow( makeInspector() );
-		expect(
-			screen.getByRole( 'button', { name: 'Explain Minify CSS' } )
-		).toBeInTheDocument();
+		expect( screen.queryByRole( 'button' ) ).toBeNull();
 	} );
 
 	it( 'marks the row active when its subject is the one on screen', () => {
@@ -128,14 +141,14 @@ describe( 'SettingRow', () => {
 
 	it( 'works outside a provider without throwing', () => {
 		// The panel is an enhancement; a settings row must never depend on it.
-		render(
+		const { container } = render(
 			<SettingRow subject={ SUBJECT }>
 				<span>Standalone</span>
 			</SettingRow>
 		);
 		expect( screen.getByText( 'Standalone' ) ).toBeInTheDocument();
 		expect(
-			screen.getByRole( 'button', { name: 'Explain Minify CSS' } )
-		).toBeInTheDocument();
+			container.querySelector( '.wppo-setting-row__explain' )
+		).not.toBeNull();
 	} );
 } );

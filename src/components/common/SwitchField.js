@@ -57,19 +57,24 @@ const SwitchField = ( {
 					) }
 				</div>
 			) }
+			{ /* The visible label above is this component's own. ToggleControl also
+			     renders one, because in @wordpress/components 29 it has **no**
+			     `hideLabelFromVision` prop and always emits a visible `<label>`
+			     for the input it generates an id for. Left alone that printed
+			     the setting name twice in every row.
+
+			     Its label is kept — it is the toggle's accessible name, bound to
+			     the input via `htmlFor`, and that id is generated internally so
+			     it cannot be referenced from here — and hidden visually instead
+			     (see `_forms.scss`). Passing `label={ null }` would leave the
+			     checkbox with an empty accessible name, which is the worse of
+			     the two defects. */ }
 			<ToggleControl
 				__nextHasNoMarginBottom
 				checked={ checked }
 				onChange={ handleToggle }
 				label={ label }
-				hideLabelFromVision={ true }
 				disabled={ disabled }
-				{ ...( showLabel
-					? { 'aria-labelledby': labelId }
-					: { 'aria-label': label } ) }
-				{ ...( descriptionId
-					? { 'aria-describedby': descriptionId }
-					: {} ) }
 			/>
 		</div>
 	);
