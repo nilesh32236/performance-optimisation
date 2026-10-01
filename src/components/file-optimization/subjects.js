@@ -399,6 +399,62 @@ const CSS_SUBJECTS = {
 			'performance-optimisation'
 		),
 	} ),
+	// An action input rather than a stored setting: filling this in runs a
+	// one-off regeneration for the template named. It still gets a subject,
+	// because the criterion is about what a focused control explains, and a
+	// field that explains nothing reads as a broken field.
+	ccssRegenerateTemplate: subject( 'ccssRegenerateTemplate', {
+		kicker: __( 'CSS · Critical CSS', 'performance-optimisation' ),
+		title: __(
+			'Regenerate Critical CSS for Template',
+			'performance-optimisation'
+		),
+		does: __(
+			'Rebuilds the critical CSS for one page template on its own, rather than waiting for the background job or for someone to visit a page of that type.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Useful after you change something that invalidates the captured styles — a new component, a colour change, a font swap — and you want that template correct now.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Regenerating discards the critical CSS already stored for that template and rebuilds it, so a page served from cache in the meantime may briefly serve the old inline styles. Nothing is lost, and the previous version can be rolled back.',
+			'performance-optimisation'
+		),
+	} ),
+	fontSubsetSubsets: subject( 'fontSubsetSubsets', {
+		kicker: __( 'Fonts · Delivery', 'performance-optimisation' ),
+		title: __( 'Font Subsets', 'performance-optimisation' ),
+		does: __(
+			'Chooses which character sets the subsetted font files are built for, so a visitor downloads Latin only rather than Latin, Cyrillic and Greek together.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'A character set you leave out shows as missing glyphs to any visitor whose text needs it - boxes instead of letters. Add it here rather than turning subsetting off, unless your site genuinely needs every alphabet at once.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	usedCssRegeneratePost: subject( 'usedCssRegeneratePost', {
+		kicker: __( 'CSS · Remove Unused CSS', 'performance-optimisation' ),
+		title: __(
+			'Regenerate Used CSS for Post ID',
+			'performance-optimisation'
+		),
+		does: __(
+			'Rebuilds the captured CSS for a single post by its ID, rather than waiting for the background job or for someone to visit that page.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Useful after a change that invalidates what a page actually uses - a new component, a different colour, a removed plugin - and you need that one page correct now rather than on the next crawl.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Discards the captured CSS stored for that post and rebuilds it, so a visit during the rebuild may see the previous version. Nothing is lost and the old capture can be restored.',
+			'performance-optimisation'
+		),
+	} ),
 };
 
 export default CSS_SUBJECTS;

@@ -34,6 +34,9 @@ describe( 'CSS optimisation subjects', () => {
 				'removeHTMLComments',
 				'minifyInlineCSS',
 				'minifyInlineJS',
+				'ccssRegenerateTemplate',
+				'fontSubsetSubsets',
+				'usedCssRegeneratePost',
 				'excludeCombineCSS',
 				// Sub-fields of Remove Unused CSS. These are the escape
 				// hatches for the specific ways aggressive trimming goes

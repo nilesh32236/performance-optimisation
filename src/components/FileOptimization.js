@@ -3449,7 +3449,12 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</button>
-										<div className="wppo-field wppo-mt-16">
+										<SettingRow
+											subject={ subjectFor(
+												'usedCssRegeneratePost',
+												settings
+											) }
+										>
 											<label
 												className="wppo-field-label"
 												htmlFor="wppoSinglePostId"
@@ -3556,7 +3561,7 @@ const FileOptimization = ( {
 													'performance-optimisation'
 												) }
 											</p>
-										</div>
+										</SettingRow>
 									</div>
 								) }
 								{ settings.minifyCSS && (
@@ -3707,7 +3712,12 @@ const FileOptimization = ( {
 											) }
 											onChange={ onFieldChange }
 										/>
-										<div className="wppo-field wppo-mt-16">
+										<SettingRow
+											subject={ subjectFor(
+												'ccssRegenerateTemplate',
+												settings
+											) }
+										>
 											<label
 												className="wppo-field-label"
 												htmlFor="wppoSingleTemplate"
@@ -3744,7 +3754,7 @@ const FileOptimization = ( {
 													) }
 												</button>
 											</div>
-										</div>
+										</SettingRow>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>
@@ -3859,7 +3869,12 @@ const FileOptimization = ( {
 									/>
 								</Tooltip>
 								{ settings.fontSubset && (
-									<div className="wppo-field wppo-mt-16">
+									<SettingRow
+										subject={ subjectFor(
+											'fontSubsetSubsets',
+											settings
+										) }
+									>
 										<label
 											className="wppo-field-label"
 											htmlFor="fontSubsetSubsets"
@@ -3893,7 +3908,7 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</p>
-									</div>
+									</SettingRow>
 								) }
 							</div>
 						</FeatureCard>
