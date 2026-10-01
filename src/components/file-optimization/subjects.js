@@ -219,6 +219,114 @@ const CSS_SUBJECTS = {
 		),
 	} ),
 
+	// --- Sub-fields of Remove Unused CSS -------------------------------------
+	// These only appear once that switch is on, so they are written as part of
+	// the same decision rather than as standalone settings: each one is the
+	// escape hatch for a specific way that aggressive trimming goes wrong.
+
+	excludeUnusedCSS: subject( 'excludeUnusedCSS', {
+		title: __( 'Safelist Selectors', 'performance-optimisation' ),
+		does: __(
+			'Keeps the listed CSS selectors even on pages that do not appear to use them.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'This is where you put anything the scanner cannot see: a dropdown, a modal, a tab, a hover state.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Each selector you keep is CSS that will never be removed, so a long safelist gives back the savings it was meant to protect. Add selectors when something visibly breaks, not in advance.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	unusedCSSSafelistExtra: subject( 'unusedCSSSafelistExtra', {
+		title: __(
+			'Extra Safelist (builders / dynamic)',
+			'performance-optimisation'
+		),
+		does: __(
+			'A second list of selectors to keep, for styles your page builder generates on the fly.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Builder output often changes with the page content, so selectors that worked on one layout can be stripped on another. This list is for those.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Builder-generated classes are renamed on some themes, so entries here can go stale and quietly do nothing. Clear this list when a builder upgrade changes your class names.',
+			'performance-optimisation'
+		),
+	} ),
+
+	unusedCSSRegressionGuard: subject( 'unusedCSSRegressionGuard', {
+		title: __( 'Visual regression guard', 'performance-optimisation' ),
+		does: __(
+			'Serves the full stylesheet instead of the trimmed one whenever trimming would leave too little CSS behind.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Trimming works by comparing a page against its own CSS. A page with almost nothing on it can come back looking like the selector is unused when it is really just late.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Some pages will then load untrimmed CSS, so the saving varies page to page. That is the trade: a slower page rather than a broken one.',
+			'performance-optimisation'
+		),
+	} ),
+
+	unusedCSSRegressionThreshold: subject( 'unusedCSSRegressionThreshold', {
+		title: __( 'Minimum Retained CSS (%)', 'performance-optimisation' ),
+		does: __(
+			"Sets the point below which the guard gives up trimming. If more than this percentage of a page's CSS would be removed, the full stylesheet is served instead.",
+			'performance-optimisation'
+		),
+		cost: __(
+			'A higher value is safer but trims less often, so the savings on unusual pages disappear. The range is 5 to 50, and 20 suits most sites.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	usedCSSExcludeUrls: subject( 'usedCSSExcludeUrls', {
+		title: __(
+			'Disable Used CSS on these URLs',
+			'performance-optimisation'
+		),
+		does: __(
+			'Skips used-CSS delivery entirely on URLs that match, and serves those pages the full stylesheet as normal.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'Use this for the few pages a scanner cannot handle: a builder editor, a checkout flow, a page that changes completely by query string.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Each match is a page with no CSS saving at all. A broad pattern such as every product page will quietly remove the benefit from a large part of the site.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	usedCSSDeliveryMode: subject( 'usedCSSDeliveryMode', {
+		title: __( 'Used CSS Delivery Mode', 'performance-optimisation' ),
+		kicker: __( 'CSS · Delivery', 'performance-optimisation' ),
+		does: __(
+			'Chooses how the CSS a page actually uses reaches the browser.',
+			'performance-optimisation'
+		),
+		detail: __(
+			'File and Delay both fall back to the complete stylesheet when the page is not cached. Remove does not: it trusts the trim, and steps itself back to Delay on builder pages.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'File and Delay will occasionally serve a heavier page. Remove gives up that safety net in exchange for the smallest CSS, so it is the one to try last and revert first if a page looks wrong.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
 	ccssMaxRetries: subject( 'ccssMaxRetries', {
 		title: __( 'Critical CSS Max Retries', 'performance-optimisation' ),
 		does: __(
@@ -264,6 +372,16 @@ export const subjectFor = ( key, settings = {} ) => {
 			// "Off" is idle, not poor. A setting nobody has turned on yet is
 			// exactly what this screen is for.
 			tone: value ? 'good' : 'idle',
+		} );
+	} else if ( typeof value === 'string' && value.trim() === '' ) {
+		// An empty list is the normal state of a safelist or an exclusion box,
+		// and it is the state right after someone clears one. Rendering the raw
+		// value left this row blank, which reads as a broken panel rather than
+		// as "you have not filled this in".
+		now.push( {
+			label: __( 'Currently', 'performance-optimisation' ),
+			value: __( 'Empty', 'performance-optimisation' ),
+			tone: 'idle',
 		} );
 	} else if ( typeof value === 'number' || typeof value === 'string' ) {
 		now.push( {

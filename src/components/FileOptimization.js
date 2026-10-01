@@ -42,6 +42,7 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import SettingRow from './common/SettingRow';
+import SettingField from './common/SettingField';
 import { subjectFor } from './file-optimization/subjects';
 import NoticeBanner from './common/NoticeBanner';
 
@@ -3122,45 +3123,37 @@ const FileOptimization = ( {
 											icon={ faExclamationTriangle }
 										/>{ ' ' }
 										{ __(
-											'May cause FOUC — test in incognito and exclude problematic files above.',
+											'May cause FOUC — test in incognito and exclude problematic files below.',
 											'performance-optimisation'
 										) }
 									</div>
 								) }
 								{ settings.combineCSS && (
-									<div className="wppo-field">
-										<label
-											className="wppo-field-label"
-											htmlFor="excludeCombineCSS"
-										>
-											{ __(
-												'Exclude from Combining',
-												'performance-optimisation'
-											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="excludeCombineCSS"
-											name="excludeCombineCSS"
-											rows="3"
-											placeholder={ __(
-												'e.g. handle-name or /wp-content/…/style.css',
-												'performance-optimisation'
-											) }
-											value={ settings.excludeCombineCSS }
-											onChange={ onFieldChange }
-											aria-describedby="excludeCombineCSS-desc"
-										/>
-										<p
-											id="excludeCombineCSS-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'One handle or partial URL per line. Fix FOUC by excluding problematic files.',
-												'performance-optimisation'
-											) }
-										</p>
-									</div>
+									<SettingField
+										name="excludeCombineCSS"
+										type="textarea"
+										label={ __(
+											'Exclude from Combining',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'One handle or partial URL per line. Fix FOUC by excluding problematic files.',
+											'performance-optimisation'
+										) }
+										placeholder={ __(
+											'e.g. handle-name or /wp-content/…/style.css',
+											'performance-optimisation'
+										) }
+										rows={ 3 }
+										mono
+										nested
+										subject={ subjectFor(
+											'excludeCombineCSS',
+											settings
+										) }
+										value={ settings.excludeCombineCSS }
+										onChange={ onFieldChange }
+									/>
 								) }
 								<SettingRow
 									subject={ subjectFor(
@@ -3198,104 +3191,92 @@ const FileOptimization = ( {
 								</SettingRow>
 								{ settings.removeUnusedCSS && (
 									<div className="wppo-field">
-										<label
-											className="wppo-field-label"
-											htmlFor="excludeUnusedCSS"
-										>
-											{ __(
+										<SettingField
+											name="excludeUnusedCSS"
+											type="textarea"
+											label={ __(
 												'Safelist Selectors',
 												'performance-optimisation'
 											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="excludeUnusedCSS"
-											name="excludeUnusedCSS"
-											rows="4"
+											description={ __(
+												'One selector per line. Anything the scanner cannot see on first load — a dropdown, a modal, a tab — belongs here.',
+												'performance-optimisation'
+											) }
 											placeholder={ __(
 												'e.g. .my-dynamic-class',
 												'performance-optimisation'
 											) }
+											rows={ 4 }
+											mono
+											nested
+											subject={ subjectFor(
+												'excludeUnusedCSS',
+												settings
+											) }
 											value={ settings.excludeUnusedCSS }
 											onChange={ onFieldChange }
-											aria-describedby="excludeUnusedCSS-desc"
 										/>
-										<p
-											id="excludeUnusedCSS-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'One selector per line — kept even if unused. Use to fix missing styles.',
-												'performance-optimisation'
-											) }
-										</p>
-										<label
-											className="wppo-field-label wppo-mt-16"
-											htmlFor="unusedCSSSafelistExtra"
-										>
-											{ __(
+										<SettingField
+											name="unusedCSSSafelistExtra"
+											type="textarea"
+											label={ __(
 												'Extra Safelist (builders / dynamic)',
 												'performance-optimisation'
 											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="unusedCSSSafelistExtra"
-											name="unusedCSSSafelistExtra"
-											rows="3"
-											placeholder={ __(
-												'e.g. .elementor-widget-container',
+											description={ __(
+												'For selectors your page builder generates on the fly, where the class names change with the layout.',
 												'performance-optimisation'
+											) }
+											placeholder={ __(
+												'e.g. .elementor-123 .wp-block-quote',
+												'performance-optimisation'
+											) }
+											rows={ 4 }
+											mono
+											nested
+											subject={ subjectFor(
+												'unusedCSSSafelistExtra',
+												settings
 											) }
 											value={
 												settings.unusedCSSSafelistExtra
 											}
 											onChange={ onFieldChange }
-											aria-describedby="unusedCSSSafelistExtra-desc"
 										/>
-										<p
-											id="unusedCSSSafelistExtra-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'Additional selectors always preserved — use for builder or JS-injected classes.',
-												'performance-optimisation'
-											) }
-										</p>
-										<label
-											className="wppo-field-label wppo-mt-16"
-											htmlFor="usedCSSExcludeUrls"
-										>
-											{ __(
+										<SettingField
+											name="usedCSSExcludeUrls"
+											type="textarea"
+											label={ __(
 												'Disable Used CSS on these URLs',
 												'performance-optimisation'
 											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="usedCSSExcludeUrls"
-											name="usedCSSExcludeUrls"
-											rows="3"
-											placeholder={ __(
-												'e.g. /checkout/',
+											description={ __(
+												'One URL substring or #regex# per line. Used CSS is skipped on matching URLs and those pages get the full stylesheet.',
 												'performance-optimisation'
+											) }
+											placeholder={ __(
+												'e.g. /checkout/ #/cart/ ?preview=true',
+												'performance-optimisation'
+											) }
+											rows={ 3 }
+											mono
+											nested
+											subject={ subjectFor(
+												'usedCSSExcludeUrls',
+												settings
 											) }
 											value={
 												settings.usedCSSExcludeUrls
 											}
 											onChange={ onFieldChange }
-											aria-describedby="usedCSSExcludeUrls-desc"
 										/>
-										<p
-											id="usedCSSExcludeUrls-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'One per line — URL substring or #regex#. Used CSS is skipped on matching URLs only.',
-												'performance-optimisation'
+										<SettingRow
+											className="wppo-mt-16"
+											subject={ subjectFor(
+												'unusedCSSRegressionGuard',
+												settings
 											) }
-										</p>
-										<div className="wppo-mt-16">
+										>
 											<SwitchField
 												label={ __(
 													'Visual regression guard',
@@ -3312,98 +3293,84 @@ const FileOptimization = ( {
 												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
-										</div>
+										</SettingRow>
 										{ settings.unusedCSSRegressionGuard && (
 											<>
-												<label
-													className="wppo-field-label wppo-mt-16"
-													htmlFor="unusedCSSRegressionThreshold"
-												>
-													{ __(
+												<SettingField
+													name="unusedCSSRegressionThreshold"
+													type="number"
+													label={ __(
 														'Minimum Retained CSS (%)',
 														'performance-optimisation'
 													) }
-												</label>
-												<input
-													className="wppo-input"
-													type="number"
-													inputMode="numeric"
-													id="unusedCSSRegressionThreshold"
-													name="unusedCSSRegressionThreshold"
-													min="5"
-													max="50"
-													step="1"
+													description={ __(
+														'If more than this share of a page’s CSS would be removed, the full stylesheet is served instead. 5 to 50, default 20.',
+														'performance-optimisation'
+													) }
+													nested
+													subject={ subjectFor(
+														'unusedCSSRegressionThreshold',
+														settings
+													) }
 													value={
 														settings.unusedCSSRegressionThreshold
 													}
 													onChange={ onFieldChange }
-													aria-describedby="unusedCSSRegressionThreshold-desc"
 												/>
-												<p
-													id="unusedCSSRegressionThreshold-desc"
-													className="wppo-text-muted wppo-text-small wppo-mt-8"
-												>
-													{ __(
-														'Below this retained percentage the full stylesheet is served instead (5–50, default: 20).',
-														'performance-optimisation'
-													) }
-												</p>
 											</>
 										) }
-										<label
-											className="wppo-field-label wppo-mt-16"
-											htmlFor="usedCSSDeliveryMode"
-										>
-											{ __(
+										<SettingField
+											name="usedCSSDeliveryMode"
+											type="select"
+											label={ __(
 												'Used CSS Delivery Mode',
 												'performance-optimisation'
 											) }
-										</label>
-										<select
-											className="wppo-select"
-											id="usedCSSDeliveryMode"
-											name="usedCSSDeliveryMode"
+											description={ __(
+												'File and Delay never serve unstyled pages on a cache miss \u2014 the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
+												'performance-optimisation'
+											) }
+											options={ [
+												{
+													value: 'file',
+													label: __(
+														'File (render-blocking used CSS)',
+														'performance-optimisation'
+													),
+												},
+												{
+													value: 'delay',
+													label: __(
+														'Delay (full CSS on interaction)',
+														'performance-optimisation'
+													),
+												},
+												{
+													value: 'async',
+													label: __(
+														'Async (preload + swap)',
+														'performance-optimisation'
+													),
+												},
+												{
+													value: 'remove',
+													label: __(
+														'Remove (strip full CSS, auto-downgrades on builders)',
+														'performance-optimisation'
+													),
+												},
+											] }
+											nested
+											subject={ subjectFor(
+												'usedCSSDeliveryMode',
+												settings
+											) }
 											value={
 												settings.usedCSSDeliveryMode ||
 												'file'
 											}
 											onChange={ onFieldChange }
-											aria-describedby="usedCSSDeliveryMode-desc"
-										>
-											<option value="file">
-												{ __(
-													'File (render-blocking used CSS)',
-													'performance-optimisation'
-												) }
-											</option>
-											<option value="delay">
-												{ __(
-													'Delay (full CSS on interaction)',
-													'performance-optimisation'
-												) }
-											</option>
-											<option value="async">
-												{ __(
-													'Async (preload + swap)',
-													'performance-optimisation'
-												) }
-											</option>
-											<option value="remove">
-												{ __(
-													'Remove (strip full CSS, auto-downgrades on builders)',
-													'performance-optimisation'
-												) }
-											</option>
-										</select>
-										<p
-											id="usedCSSDeliveryMode-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
-												'performance-optimisation'
-											) }
-										</p>
+										/>
 										{ usedCssStatus &&
 											usedCssStatus.is_stale && (
 												<NoticeBanner
@@ -3574,39 +3541,31 @@ const FileOptimization = ( {
 									</div>
 								) }
 								{ settings.minifyCSS && (
-									<div className="wppo-field">
-										<label
-											className="wppo-field-label"
-											htmlFor="excludeCSS"
-										>
-											{ __(
-												'Exclude CSS from Minification',
-												'performance-optimisation'
-											) }
-										</label>
-										<textarea
-											className="wppo-textarea wppo-textarea--mono"
-											id="excludeCSS"
-											name="excludeCSS"
-											rows="3"
-											placeholder={ __(
-												'e.g. handle-name or /wp-content/…/critical.css',
-												'performance-optimisation'
-											) }
-											value={ settings.excludeCSS }
-											onChange={ onFieldChange }
-											aria-describedby="excludeCSS-desc"
-										/>
-										<p
-											id="excludeCSS-desc"
-											className="wppo-text-muted wppo-text-small wppo-mt-8"
-										>
-											{ __(
-												'One handle or partial URL per line.',
-												'performance-optimisation'
-											) }
-										</p>
-									</div>
+									<SettingField
+										name="excludeCSS"
+										type="textarea"
+										label={ __(
+											'Exclude CSS from Minification',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'One handle or partial URL per line. Excluded files are served exactly as authored.',
+											'performance-optimisation'
+										) }
+										placeholder={ __(
+											'e.g. handle-name or /wp-content/…/critical.css',
+											'performance-optimisation'
+										) }
+										rows={ 3 }
+										mono
+										nested
+										subject={ subjectFor(
+											'excludeCSS',
+											settings
+										) }
+										value={ settings.excludeCSS }
+										onChange={ onFieldChange }
+									/>
 								) }
 								<SettingRow
 									subject={ subjectFor(
@@ -3639,150 +3598,90 @@ const FileOptimization = ( {
 								</SettingRow>
 								{ settings.criticalCSS && (
 									<>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssMaxSize"
-											>
-												{ __(
-													'Critical CSS Max Size (bytes)',
-													'performance-optimisation'
-												) }
-											</label>
-											<input
-												className="wppo-input"
-												type="number"
-												inputMode="numeric"
-												id="ccssMaxSize"
-												name="ccssMaxSize"
-												min="1024"
-												max="102400"
-												step="1024"
-												value={ settings.ccssMaxSize }
-												onChange={ onFieldChange }
-												aria-describedby="ccssMaxSize-desc"
-											/>
-											<p
-												id="ccssMaxSize-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'Inline output above this size is served from a per-template file with cache busting instead (default: 20480).',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssSafelistExtra"
-											>
-												{ __(
-													'Critical CSS Safelist',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea wppo-textarea--mono"
-												id="ccssSafelistExtra"
-												name="ccssSafelistExtra"
-												rows="3"
-												placeholder={ __(
-													'e.g. .modal-open',
-													'performance-optimisation'
-												) }
-												value={
-													typeof settings.ccssSafelistExtra ===
-													'string'
-														? settings.ccssSafelistExtra
-														: ''
-												}
-												onChange={ onFieldChange }
-												aria-describedby="ccssSafelistExtra-desc"
-											/>
-											<p
-												id="ccssSafelistExtra-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'One selector per line — always kept in Critical CSS, even when not above the fold. Use for hidden or JS-injected selectors. Empty keeps current behaviour.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssExcludedPostTypes"
-											>
-												{ __(
-													'Excluded Post Types (Critical / Used CSS)',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea wppo-textarea--mono"
-												id="ccssExcludedPostTypes"
-												name="ccssExcludedPostTypes"
-												rows="2"
-												placeholder={ __(
-													'fl-builder-template, elementor_library',
-													'performance-optimisation'
-												) }
-												value={
-													typeof settings.ccssExcludedPostTypes ===
-													'string'
-														? settings.ccssExcludedPostTypes
-														: ''
-												}
-												onChange={ onFieldChange }
-												aria-describedby="ccssExcludedPostTypes-desc"
-											/>
-											<p
-												id="ccssExcludedPostTypes-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'One post type per line or comma-separated — builder templates are skipped, never error-looped. Empty keeps the builder defaults.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="ccssMaxRetries"
-											>
-												{ __(
-													'Critical CSS Max Retries',
-													'performance-optimisation'
-												) }
-											</label>
-											<input
-												className="wppo-input"
-												type="number"
-												inputMode="numeric"
-												id="ccssMaxRetries"
-												name="ccssMaxRetries"
-												min="0"
-												max="5"
-												step="1"
-												value={ normalizeRetries(
-													settings.ccssMaxRetries
-												) }
-												onChange={ onFieldChange }
-												aria-describedby="ccssMaxRetries-desc"
-											/>
-											<p
-												id="ccssMaxRetries-desc"
-												className="wppo-text-muted wppo-mt-8 wppo-text-small"
-											>
-												{ __(
-													'Consecutive failures before a template is marked failed (0–5, default 5).',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
+										<SettingField
+											name="ccssMaxSize"
+											type="number"
+											label={ __(
+												'Critical CSS Max Size (bytes)',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'How much critical CSS may be inlined into the page before it is served as a separate file instead. 1024 to 102400, default 20480.',
+												'performance-optimisation'
+											) }
+											nested
+											subject={ subjectFor(
+												'ccssMaxSize',
+												settings
+											) }
+											value={ settings.ccssMaxSize }
+											onChange={ onFieldChange }
+										/>
+										<SettingField
+											name="ccssSafelistExtra"
+											type="textarea"
+											label={ __(
+												'Critical CSS Safelist',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Selectors always kept in the critical CSS, even when they are not visible at the top of the page. Use for menus, modals and tabs.',
+												'performance-optimisation'
+											) }
+											rows={ 3 }
+											mono
+											nested
+											subject={ subjectFor(
+												'ccssSafelistExtra',
+												settings
+											) }
+											value={ settings.ccssSafelistExtra }
+											onChange={ onFieldChange }
+										/>
+										<SettingField
+											name="ccssExcludedPostTypes"
+											type="textarea"
+											label={ __(
+												'Excluded Post Types',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Content types skipped by both critical and used CSS. Builder templates are excluded by default because stripping their CSS breaks the page.',
+												'performance-optimisation'
+											) }
+											rows={ 2 }
+											mono
+											nested
+											subject={ subjectFor(
+												'ccssExcludedPostTypes',
+												settings
+											) }
+											value={
+												settings.ccssExcludedPostTypes
+											}
+											onChange={ onFieldChange }
+										/>
+										<SettingField
+											name="ccssMaxRetries"
+											type="number"
+											label={ __(
+												'Critical CSS Max Retries',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Consecutive failures before a template is marked failed and left alone. 0 to 5, default 5.',
+												'performance-optimisation'
+											) }
+											nested
+											subject={ subjectFor(
+												'ccssMaxRetries',
+												settings
+											) }
+											value={ normalizeRetries(
+												settings.ccssMaxRetries
+											) }
+											onChange={ onFieldChange }
+										/>
 										<div className="wppo-field wppo-mt-16">
 											<label
 												className="wppo-field-label"

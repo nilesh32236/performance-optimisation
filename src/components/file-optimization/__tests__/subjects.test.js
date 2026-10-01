@@ -13,7 +13,7 @@
  * @package
  */
 
-import CSS_SUBJECTS from '../subjects';
+import CSS_SUBJECTS, { subjectFor } from '../subjects';
 
 const KEYS = Object.keys( CSS_SUBJECTS );
 
@@ -29,6 +29,15 @@ describe( 'CSS optimisation subjects', () => {
 				'fontMetricFallback',
 				'fontSubset',
 				'excludeCombineCSS',
+				// Sub-fields of Remove Unused CSS. These are the escape
+				// hatches for the specific ways aggressive trimming goes
+				// wrong, so they are explained as part of that decision.
+				'excludeUnusedCSS',
+				'unusedCSSSafelistExtra',
+				'unusedCSSRegressionGuard',
+				'unusedCSSRegressionThreshold',
+				'usedCSSExcludeUrls',
+				'usedCSSDeliveryMode',
 				'excludeCSS',
 				'ccssMaxSize',
 				'ccssSafelistExtra',
@@ -112,5 +121,66 @@ describe( 'CSS optimisation subjects', () => {
 		expect( CSS_SUBJECTS.fontMetricFallback.cost ).toMatch(
 			/no known downside/i
 		);
+	} );
+} );
+
+describe( 'subjectFor — the "where you stand now" block', () => {
+	// This function had no tests at all, and the only thing that caught its
+	// one real bug was looking at a screenshot: an empty safelist rendered the
+	// value as a blank row, which reads as a broken panel rather than as
+	// "you have not filled this in".
+	it( 'reports a boolean as On or Off', () => {
+		expect( subjectFor( 'minifyCSS', { minifyCSS: true } ).now ).toEqual( [
+			{ label: 'Currently', value: 'On', tone: 'good' },
+		] );
+		expect( subjectFor( 'minifyCSS', { minifyCSS: false } ).now ).toEqual( [
+			{ label: 'Currently', value: 'Off', tone: 'idle' },
+		] );
+	} );
+
+	it( 'reports an empty text value as Empty, not as a blank row', () => {
+		[ '', '   ' ].forEach( ( value ) => {
+			expect(
+				subjectFor( 'excludeUnusedCSS', { excludeUnusedCSS: value } )
+					.now[ 0 ].value
+			).toBe( 'Empty' );
+		} );
+	} );
+
+	it( 'reports a number as a string, so the panel never renders a bare node', () => {
+		expect(
+			subjectFor( 'ccssMaxSize', { ccssMaxSize: 20480 } ).now[ 0 ].value
+		).toBe( '20480' );
+	} );
+
+	it( 'reports a missing setting as Not set', () => {
+		expect( subjectFor( 'ccssMaxSize', {} ).now[ 0 ].value ).toBe(
+			'Not set'
+		);
+	} );
+
+	it( 'preserves the static copy', () => {
+		const s = subjectFor( 'removeUnusedCSS', { removeUnusedCSS: true } );
+		expect( s.id ).toBe( 'setting:removeUnusedCSS' );
+		expect( s.does ).toBe( CSS_SUBJECTS.removeUnusedCSS.does );
+		expect( s.costTone ).toBe( 'warn' );
+	} );
+
+	it( 'returns undefined for an unknown key, so the row degrades to plain', () => {
+		// SettingRow renders children unchanged when there is no subject, which
+		// is how an unconverted screen keeps working.
+		expect( subjectFor( 'noSuchSetting', {} ) ).toBeUndefined();
+	} );
+
+	it( 'gives every CSS-card subject a non-empty now block', () => {
+		KEYS.forEach( ( key ) => {
+			const rows = subjectFor( key, { [ key ]: '' } ).now;
+			expect( Array.isArray( rows ) ).toBe( true );
+			expect( rows.length ).toBeGreaterThan( 0 );
+			// The bug this guards: a row whose value renders as nothing.
+			rows.forEach( ( r ) => {
+				expect( String( r.value ).trim() ).not.toBe( '' );
+			} );
+		} );
 	} );
 } );

@@ -43,6 +43,30 @@ const EXPECT = [
 		expect: [ 'safelist', 'What it costs you' ],
 		tone: 'warn',
 	},
+	// A textarea, not a switch. This is the case that used to have no
+	// explanation at all, and a field that can hold an invalid selector is
+	// exactly the one that needs one.
+	{
+		key: 'excludeUnusedCSS',
+		label: 'Safelist Selectors',
+		expect: [ 'What it does', 'dropdown', 'Where you stand now' ],
+		tone: 'warn',
+		control: 'textarea',
+	},
+	{
+		key: 'usedCSSDeliveryMode',
+		label: 'Used CSS Delivery Mode',
+		expect: [ 'What it does', 'What it costs you' ],
+		tone: 'warn',
+		control: 'select',
+	},
+	{
+		key: 'unusedCSSRegressionThreshold',
+		label: 'Minimum Retained CSS',
+		expect: [ 'What it does', 'Where you stand now' ],
+		tone: 'warn',
+		control: 'input',
+	},
 ];
 
 const results = [];
@@ -82,20 +106,31 @@ let failures = 0;
 		// `ToggleControl` and does **not** forward its `name` prop to the input,
 		// so `[name="minifyCSS"]` matches nothing — the row's identity in the DOM
 		// is the text it shows.
-		const focused = await page.evaluate( ( label ) => {
-			const row = [ ...document.querySelectorAll( '.wppo-setting-row' ) ].find(
-				( r ) => r.textContent.includes( label )
-			);
-			if ( ! row ) {
-				return 'no row';
-			}
-			const input = row.querySelector( 'input[type=checkbox]' );
-			if ( ! input ) {
-				return 'no input';
-			}
-			input.focus();
-			return 'ok';
-		}, item.label );
+		//
+		// The control to focus is chosen by `item.control` where given, because
+		// a row can contain more than one focusable thing (a switch and the
+		// fields it reveals) and picking the first checkbox would silently test
+		// the parent toggle instead of the field under test.
+		const focused = await page.evaluate(
+			( { label, control } ) => {
+				const row = [
+					...document.querySelectorAll( '.wppo-setting-row' ),
+				].find( ( r ) => r.textContent.includes( label ) );
+				if ( ! row ) {
+					return 'no row';
+				}
+				const selector = control
+					? control
+					: 'input[type=checkbox]';
+				const el = row.querySelector( selector );
+				if ( ! el ) {
+					return `no ${ selector }`;
+				}
+				el.focus();
+				return 'ok';
+			},
+			{ label: item.label, control: item.control }
+		);
 
 		await page.waitForTimeout( 500 );
 
