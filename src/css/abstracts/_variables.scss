@@ -38,9 +38,12 @@
 	--wppo-success-light: #10b981;
 	--wppo-success-bg: #ecfdf5;
 	--wppo-success-border: #a7f3d0;
+	/* Badge/rule fills that hold white glyphs at WCAG AA — not the general accents */
+	--wppo-success-strong: #0f7b4f;
 	--wppo-error: #dc2626;
 	--wppo-error-bg: #fef2f2;
 	--wppo-error-border: #fecaca;
+	--wppo-error-strong: #b3261e;
 	--wppo-warning: #d97706;
 	--wppo-warning-badge: #f59e0b;
 	--wppo-warning-text: #92400e;
@@ -48,9 +51,11 @@
 	--wppo-warning-bg-mid: #fef3c7;
 	--wppo-warning-bg-end: #ffedd5;
 	--wppo-warning-border: #fcd34d;
+	--wppo-warning-strong: #8a5a00;
 	--wppo-info: #0284c7;
 	--wppo-info-bg: #f0f9ff;
 	--wppo-info-border: #bae6fd;
+	--wppo-info-strong: #0b6e75;
 
 	/* Danger */
 	--wppo-danger: #dc2626;
