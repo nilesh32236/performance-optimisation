@@ -60,5 +60,5 @@
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
 
 ## 2026-10-01 - Dynamic Theme Adaptation in Message Region
-**Learning:** Hardcoded hex colors in the notification toast/message region (like `#0f172a` for text and `#fff` for background) fail to adapt to the active WordPress theme, breaking accessibility or consistency in dark modes or custom themes.
-**Action:** Replace hardcoded colors with their respective CSS variables (e.g., `var(--wppo-text-main)`, `var(--wppo-bg-card)`, and status variables like `var(--wppo-success)`) in `_message-region.scss`.
+**Learning:** Hardcoded hex colors duplicated in components cannot be re-themed centrally, so a palette change has to be hunted down file by file.
+**Action:** Replace hardcoded colors with design-system tokens plus a literal fallback that matches the token value (e.g. `var(--wppo-text-main, #0f172a)`), keeping every fallback aligned with `_variables.scss` so a failed var() does not shift the color. Note that only `--wppo-primary*` reads `--wp-admin-theme-color`; the surface and text tokens are fixed `:root` values, so this is tokenisation, not theme adaptation.
