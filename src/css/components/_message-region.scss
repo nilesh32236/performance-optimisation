@@ -26,13 +26,21 @@
 	padding: 12px 14px;
 	font-size: 0.875rem;
 	line-height: 1.45;
-	color: #0f172a;
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	color: var(--wppo-text-main, #0f172a);
+	background: var(--wppo-bg-card, #fff);
+	border: 1px solid var(--wppo-border, #e2e8f0);
 	border-left-width: 3px;
 	border-radius: 8px;
 	box-shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 8px 24px -12px rgb(15 23 42 / 18%);
 	pointer-events: auto;
+}
+
+/* Scoped: consumed only by .wppo-message-region. Mirrors _overview.scss:204-208. */
+.wppo-message-region {
+	--wppo-success-strong: #0f7b4f;
+	--wppo-error-strong: #b3261e;
+	--wppo-warning-strong: #8a5a00;
+	--wppo-info-strong: #0b6e75;
 }
 
 .wppo-message-region__icon {
@@ -44,9 +52,11 @@
 	font-size: 12px;
 	font-weight: 700;
 	line-height: 1;
-	color: #fff;
+	color: var(--wppo-text-inverse, #fff);
 	border-radius: 50%;
-	background: #64748b;
+	/* Deliberate: no neutral-badge token exists yet. `--wppo-warning-badge`
+	   (_variables.scss:48) is the only established glyph-fill token. */
+	background: var(--wppo-text-light, #64748b);
 }
 
 .wppo-message-region__text {
@@ -57,31 +67,31 @@
 /* The left rule carries the tone; the icon repeats it, so neither is the only
    signal — which also keeps it readable without relying on colour alone. */
 .wppo-message-region__item--success {
-	border-left-color: #0f7b4f;
+	border-left-color: var(--wppo-success-strong, #0f7b4f);
 }
 .wppo-message-region__item--success .wppo-message-region__icon {
-	background: #0f7b4f;
+	background: var(--wppo-success-strong, #0f7b4f);
 }
 
 .wppo-message-region__item--error {
-	border-left-color: #b3261e;
+	border-left-color: var(--wppo-error-strong, #b3261e);
 }
 .wppo-message-region__item--error .wppo-message-region__icon {
-	background: #b3261e;
+	background: var(--wppo-error-strong, #b3261e);
 }
 
 .wppo-message-region__item--warning {
-	border-left-color: #8a5a00;
+	border-left-color: var(--wppo-warning-strong, #8a5a00);
 }
 .wppo-message-region__item--warning .wppo-message-region__icon {
-	background: #8a5a00;
+	background: var(--wppo-warning-strong, #8a5a00);
 }
 
 .wppo-message-region__item--info {
-	border-left-color: #0b6e75;
+	border-left-color: var(--wppo-info-strong, #0b6e75);
 }
 .wppo-message-region__item--info .wppo-message-region__icon {
-	background: #0b6e75;
+	background: var(--wppo-info-strong, #0b6e75);
 }
 
 @media (max-width: 600px) {

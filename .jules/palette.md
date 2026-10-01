@@ -58,3 +58,7 @@
 ## YYYY-MM-DD - [Dynamic Danger Button Shadows]
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
+
+## 2026-10-01 - Dynamic Theme Adaptation in Message Region
+**Learning:** Hardcoded hex colors duplicated in components cannot be re-themed centrally, so a palette change has to be hunted down file by file.
+**Action:** Replace hardcoded colors with design-system tokens plus a literal fallback that matches the token value (e.g. `var(--wppo-text-main, #0f172a)`), keeping every fallback aligned with `_variables.scss` so a failed var() does not shift the color. Note that only `--wppo-primary*` reads `--wp-admin-theme-color`; the surface and text tokens are fixed `:root` values, so this is tokenisation, not theme adaptation.
