@@ -26,6 +26,8 @@ import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
+import SettingRow from './common/SettingRow';
+import { subjectFor } from './plugin-settings/subjects';
 import { __, sprintf, _n } from '@wordpress/i18n';
 import {
 	SECRET_KEY_PATTERN as SHARED_SECRET_KEY_PATTERN,
@@ -1302,7 +1304,9 @@ const PluginSetting = ( { options } ) => {
 
 					<hr className="wppo-divider wppo-my-20" />
 
-					<div className="wppo-field">
+					<SettingRow
+						subject={ subjectFor( 'autoRescan', { autoRescan } ) }
+					>
 						<label
 							className="wppo-field-label"
 							htmlFor="auto-rescan-frequency"
@@ -1341,7 +1345,7 @@ const PluginSetting = ( { options } ) => {
 								{ __( 'Weekly', 'performance-optimisation' ) }
 							</option>
 						</select>
-					</div>
+					</SettingRow>
 
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--secondary wppo-mt-16"
@@ -1397,30 +1401,41 @@ const PluginSetting = ( { options } ) => {
 						) }
 						className="wppo-checkbox-option--spaced"
 					/>
-					<label
-						htmlFor="wppo-high-value-urls"
-						className="wppo-field-label"
+					<SettingRow
+						subject={ subjectFor( 'highValueUrls', {
+							highValueUrls,
+						} ) }
 					>
-						{ __( 'High-value URLs', 'performance-optimisation' ) }
-					</label>
-					<textarea
-						id="wppo-high-value-urls"
-						className="wppo-textarea wppo-textarea--mono"
-						rows={ 4 }
-						value={ highValueUrls }
-						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
-						placeholder={ [
-							'https://example.com/about/',
-							'https://example.com/contact/',
-						].join( '\n' ) }
-						aria-describedby="wppo-high-value-urls-desc"
-					/>
-					<p className="wppo-text-muted wppo-text-small">
-						{ __(
-							'Plain text, one per line. URLs must be on the same origin.',
-							'performance-optimisation'
-						) }
-					</p>
+						<label
+							htmlFor="wppo-high-value-urls"
+							className="wppo-field-label"
+						>
+							{ __(
+								'High-value URLs',
+								'performance-optimisation'
+							) }
+						</label>
+						<textarea
+							id="wppo-high-value-urls"
+							className="wppo-textarea wppo-textarea--mono"
+							rows={ 4 }
+							value={ highValueUrls }
+							onChange={ ( e ) =>
+								setHighValueUrls( e.target.value )
+							}
+							placeholder={ [
+								'https://example.com/about/',
+								'https://example.com/contact/',
+							].join( '\n' ) }
+							aria-describedby="wppo-high-value-urls-desc"
+						/>
+						<p className="wppo-text-muted wppo-text-small">
+							{ __(
+								'Plain text, one per line. URLs must be on the same origin.',
+								'performance-optimisation'
+							) }
+						</p>
+					</SettingRow>
 					<p
 						id="wppo-high-value-urls-desc"
 						className="wppo-text-muted wppo-text-small"

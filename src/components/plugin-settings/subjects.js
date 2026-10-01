@@ -69,12 +69,59 @@ const PLUGIN_SETTINGS_SUBJECTS = {
 	} ),
 };
 
+const LABELS = {
+	autoRescan: __( 'Re-scan frequency', 'performance-optimisation' ),
+	highValueUrls: __( 'Tracked URLs', 'performance-optimisation' ),
+};
+
 /**
- * Look up the subject for one setting key.
+ * Look up the subject for one setting key, with its current value attached.
  *
- * @param {string} key The setting key.
+ * The third inspector block, "Where you stand now", is rendered from the
+ * subject's `now` list rather than from the control, so a subject built
+ * without the value loses that block entirely. Every other area's subjectFor
+ * takes the settings slice for exactly this reason, and this one matches it.
+ *
+ * @param {string} key      The setting key.
+ * @param {Object} settings Current values, keyed by setting key.
  * @return {Object|undefined} The subject, or undefined when the key has none.
  */
-export const subjectFor = ( key ) => PLUGIN_SETTINGS_SUBJECTS[ key ];
+export const subjectFor = ( key, settings = {} ) => {
+	const base = PLUGIN_SETTINGS_SUBJECTS[ key ];
+	if ( ! base ) {
+		return undefined;
+	}
+
+	const raw = settings[ key ];
+	const empty =
+		raw === undefined ||
+		raw === null ||
+		raw === '' ||
+		( Array.isArray( raw ) && raw.length === 0 );
+	let shown;
+	if ( empty ) {
+		shown = __( 'Not set', 'performance-optimisation' );
+	} else if ( key === 'highValueUrls' ) {
+		// A list reads better as a count than as a wall of URLs in a 320px panel.
+		shown = String(
+			String( raw )
+				.split( '\n' )
+				.filter( ( line ) => line.trim() ).length
+		);
+	} else {
+		shown = String( raw );
+	}
+
+	return {
+		...base,
+		now: [
+			{
+				label: LABELS[ key ],
+				value: shown,
+				tone: empty ? 'idle' : 'good',
+			},
+		],
+	};
+};
 
 export default PLUGIN_SETTINGS_SUBJECTS;
