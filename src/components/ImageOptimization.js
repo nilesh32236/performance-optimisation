@@ -1182,38 +1182,45 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</legend>
-									<div className="wppo-post-types-grid--chips">
-										{ CLIENT_SIDE_MIME_OPTIONS.map(
-											( option ) => (
-												<label
-													key={ option.value }
-													htmlFor={ `client-mime-${ option.value }` }
-													className={ `wppo-post-type-chip ${
-														mimeList.includes(
-															option.value
-														)
-															? 'wppo-post-type-chip--active'
-															: ''
-													}` }
-												>
-													<input
-														type="checkbox"
-														id={ `client-mime-${ option.value }` }
-														className="screen-reader-text"
-														checked={ mimeList.includes(
-															option.value
-														) }
-														onChange={ () =>
-															toggleClientSideMimeType(
+									<SettingRow
+										subject={ subjectFor(
+											'postTypeScope',
+											settings
+										) }
+									>
+										<div className="wppo-post-types-grid--chips">
+											{ CLIENT_SIDE_MIME_OPTIONS.map(
+												( option ) => (
+													<label
+														key={ option.value }
+														htmlFor={ `client-mime-${ option.value }` }
+														className={ `wppo-post-type-chip ${
+															mimeList.includes(
 																option.value
 															)
-														}
-													/>
-													{ option.label }
-												</label>
-											)
-										) }
-									</div>
+																? 'wppo-post-type-chip--active'
+																: ''
+														}` }
+													>
+														<input
+															type="checkbox"
+															id={ `client-mime-${ option.value }` }
+															className="screen-reader-text"
+															checked={ mimeList.includes(
+																option.value
+															) }
+															onChange={ () =>
+																toggleClientSideMimeType(
+																	option.value
+																)
+															}
+														/>
+														{ option.label }
+													</label>
+												)
+											) }
+										</div>
+									</SettingRow>
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										{ __(
 											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Unchecking every format disables browser-side processing (empty list is supported by core). Formats core cannot process are ignored — HEIC/HEIC Sequence/JPEG XL appear only when this build\u2019s wasm-vips includes that decoder; JPEG is always safe.',
@@ -1455,38 +1462,45 @@ const ImageOptimization = ( { options = {} } ) => {
 							</SettingRow>
 							{ settings.preloadPostTypeImage && (
 								<>
-									<div className="wppo-post-types-grid--chips">
-										{ settings.availablePostTypes.map(
-											( type ) => (
-												<label
-													key={ type }
-													htmlFor={ `type-${ type }` }
-													className={ `wppo-post-type-chip ${
-														settings.selectedPostType.includes(
-															type
-														)
-															? 'wppo-post-type-chip--active'
-															: ''
-													}` }
-												>
-													<input
-														type="checkbox"
-														id={ `type-${ type }` }
-														className="screen-reader-text"
-														checked={ settings.selectedPostType.includes(
-															type
-														) }
-														onChange={ () =>
-															togglePostType(
+									<SettingRow
+										subject={ subjectFor(
+											'postTypeScope',
+											settings
+										) }
+									>
+										<div className="wppo-post-types-grid--chips">
+											{ settings.availablePostTypes.map(
+												( type ) => (
+													<label
+														key={ type }
+														htmlFor={ `type-${ type }` }
+														className={ `wppo-post-type-chip ${
+															settings.selectedPostType.includes(
 																type
 															)
-														}
-													/>
-													{ type }
-												</label>
-											)
-										) }
-									</div>
+																? 'wppo-post-type-chip--active'
+																: ''
+														}` }
+													>
+														<input
+															type="checkbox"
+															id={ `type-${ type }` }
+															className="screen-reader-text"
+															checked={ settings.selectedPostType.includes(
+																type
+															) }
+															onChange={ () =>
+																togglePostType(
+																	type
+																)
+															}
+														/>
+														{ type }
+													</label>
+												)
+											) }
+										</div>
+									</SettingRow>
 									<div className="wppo-field wppo-field--spaced">
 										<SettingField
 											name="excludePostTypeImgUrl"

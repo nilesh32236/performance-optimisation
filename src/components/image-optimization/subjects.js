@@ -464,6 +464,25 @@ const IMAGE_SUBJECTS = {
 			'performance-optimisation'
 		),
 	} ),
+	// A chip grid is ONE decision, not one per post type: which content this
+	// setting applies to. Each chip is a raw <label>+<input> pair with no
+	// subject of its own; one explanation per chip would repeat the same prose
+	// four times for four chips.
+	postTypeScope: subject( 'postTypeScope', {
+		kicker: __( 'Images · Scope', 'performance-optimisation' ),
+		title: __(
+			'Which content this applies to',
+			'performance-optimisation'
+		),
+		does: __(
+			'Chooses which post types this setting runs on. It applies to every page of the types you pick, including the ones you did not mean - archives, search results and feeds.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Optimising a page type that does not need it costs a little time on every page of that type and buys nothing. Start with the homepage and your main content type, and add more only when a specific page needs it.',
+			'performance-optimisation'
+		),
+	} ),
 };
 
 export default IMAGE_SUBJECTS;
