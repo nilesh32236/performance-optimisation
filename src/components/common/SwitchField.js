@@ -35,8 +35,6 @@ const SwitchField = ( {
 	};
 
 	const labelId = useId();
-	// Audit #1420: description programmatically associated with the toggle.
-	const descriptionId = description ? `desc-${ labelId }` : undefined;
 
 	return (
 		<div className="wppo-switch-field">
@@ -51,9 +49,7 @@ const SwitchField = ( {
 						</span>
 					) }
 					{ description && (
-						<p id={ descriptionId } className="wppo-text-muted">
-							{ description }
-						</p>
+						<p className="wppo-text-muted">{ description }</p>
 					) }
 				</div>
 			) }
@@ -74,6 +70,17 @@ const SwitchField = ( {
 				checked={ checked }
 				onChange={ handleToggle }
 				label={ label }
+				// `help` is the **only** ToggleControl prop that reaches the
+				// input: it derives the `aria-describedby` target internally
+				// from the id it generated. A previous version put an
+				// `id`-keyed `<p>` on the description and passed
+				// `aria-describedby` down as a prop, which landed on
+				// BaseControl's wrapper `<div>` rather than the checkbox — so
+				// the description was on screen and invisible to assistive
+				// tech. The `<p>` above is the visible copy; this is the
+				// programmatic one, and its own span is hidden in
+				// `_forms.scss` for the same reason the label's is.
+				help={ description }
 				disabled={ disabled }
 			/>
 		</div>

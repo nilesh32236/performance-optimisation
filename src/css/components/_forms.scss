@@ -194,7 +194,8 @@
    The label stays in the DOM and stays the toggle's accessible name — it is
    bound to the input with `htmlFor`, and that id is generated internally so it
    cannot be referenced from the component — and is hidden from view instead. */
-.wppo-switch-field .components-toggle-control__label {
+.wppo-switch-field .components-toggle-control__label,
+.wppo-switch-field .components-toggle-control__help {
 	position: absolute;
 	width: 1px;
 	height: 1px;
@@ -206,6 +207,11 @@
 	white-space: nowrap;
 	border: 0;
 }
+
+/* The description is also passed as `help`, which is the only ToggleControl
+   prop that reaches the input's `aria-describedby`. Both that span and the
+   label are therefore present but not painted — the visible copies are the
+   `<span>` and `<p>` this component renders itself. */
 
 /* The toggle track sits on the right of the row; give it the same alignment
    the removed legacy switch had, now that its label no longer occupies space. */
