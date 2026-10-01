@@ -317,7 +317,8 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 		// Null-safe: internal string functions deprecate null arguments on
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
 		// the invalid-node path handled by callers).
-		$node = is_string( $node ) ? $node : (string) $node;
+		$node         = is_string( $node ) ? $node : (string) $node;
+		$default_port = 26379;
 
 		if ( 0 === strpos( $node, '[' ) ) {
 			$port_start = strpos( $node, ']:' );
@@ -331,14 +332,14 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 
 			return array(
 				'host' => trim( $node, '[]' ),
-				'port' => 26379,
+				'port' => $default_port,
 			);
 		}
 
 		if ( substr_count( $node, ':' ) > 1 ) {
 			return array(
 				'host' => $node,
-				'port' => 26379,
+				'port' => $default_port,
 			);
 		}
 
@@ -353,7 +354,7 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 
 		return array(
 			'host' => $node,
-			'port' => 26379,
+			'port' => $default_port,
 		);
 	}
 }
