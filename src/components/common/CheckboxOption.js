@@ -1,4 +1,5 @@
-import { useId } from '@wordpress/element';
+import { useCallback, useId } from '@wordpress/element';
+import { useInspector } from '../../lib/InspectorContext';
 
 /**
  * A reusable checkbox option component with optional description and nested settings.
@@ -24,7 +25,15 @@ import { useId } from '@wordpress/element';
  * @param {Function}             [props.onTextareaChange]    Change handler for the textarea.
  * @param {string}               [props.description]         Optional description text.
  * @param {import('react').Node} [props.children]            Additional child elements.
- * @param {string}               [props.className]           Optional additional class names.
+ * @param {string}               [props.className]           Optional addition
+ * @param {Object}               [props.subject]             Inspector subject.
+ *
+ *                                                           A checkbox is a setting like any other, so it carries the same inspector
+ *                                                           wiring `SettingRow` gives a row - hover, focus, and a pin that survives the
+ *                                                           pointer leaving. `leave` and `blur` are guarded where SettingRow's are not,
+ *                                                           because this component IS nested inside subject-bearing SettingRows, and an
+ *                                                           unguarded release blanks the panel while the pointer is still in the row.
+ * @see src/components/common/SwitchField.js for the same shape.al class names.
  */
 export const CheckboxOption = ( {
 	label,
@@ -38,14 +47,42 @@ export const CheckboxOption = ( {
 	onTextareaChange,
 	description,
 	children,
+	subject,
 	className = '',
 } ) => {
 	const uid = useId();
 	const id = idProp ?? uid;
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
+	const { show, hide } = useInspector();
+
+	const enter = useCallback( () => {
+		if ( subject ) {
+			show( subject, 'hover' );
+		}
+	}, [ show, subject ] );
+	const leave = useCallback( () => {
+		if ( subject ) {
+			hide( 'hover' );
+		}
+	}, [ hide, subject ] );
+	const focus = useCallback( () => {
+		if ( subject ) {
+			show( subject, 'focus' );
+		}
+	}, [ show, subject ] );
+	const blur = useCallback( () => {
+		if ( subject ) {
+			hide( 'focus' );
+		}
+	}, [ hide, subject ] );
+
 	return (
 		<div
+			onMouseEnter={ enter }
+			onMouseLeave={ leave }
+			onFocusCapture={ focus }
+			onBlurCapture={ blur }
 			className={ `wppo-checkbox-option ${
 				checked ? 'wppo-is-checked' : ''
 			} ${ className }`.trim() }
