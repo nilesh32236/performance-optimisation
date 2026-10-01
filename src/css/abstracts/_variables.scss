@@ -165,8 +165,12 @@
 	--wppo-radius-tool-sm: 5px;
 
 	/* Effects */
-	--wppo-radius: 16px;
-	--wppo-radius-sm: 10px;
+	// 8 / 6 / 4, per designs/variant-c/style.css --wppo-radius:8px. The admin
+	// read as "Soft" at 16/10/6; Variant C is a dense utility look whose corner
+	// radius is part of the density, not decoration. Measured: cards rendered
+	// 16px where the reference specifies 8px.
+	--wppo-radius: 8px;
+	--wppo-radius-sm: 6px;
 	--wppo-radius-xs: 6px;
 	--wppo-focus-ring: 0 0 0 3px var(--wppo-primary-soft);
 	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.06);

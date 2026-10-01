@@ -9,6 +9,10 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	// The reference's 48px is the WHOLE bar. Without border-box the 1px
+	// hairline is added on top and the bar measures 49px, which is what the
+	// token probe found.
+	box-sizing: border-box;
 	height: 48px;
 	padding: 0 12px;
 	background: var(--wppo-surface, #fff);
