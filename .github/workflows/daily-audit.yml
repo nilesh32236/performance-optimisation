@@ -156,7 +156,7 @@ jobs:
       # which creates a branch → PR → review → fix loop automatically.
       - name: AI Codebase Audit
         id: ai-audit
-        uses: nilesh32236/opencode-ai-reviewer@ad1c202cba9023ee789a5a828835748b81896566 # v1.22.1+ad1c202 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@6dd173ae5fb309ec80221b7e639f6d93193e98a7 # v1.22.2+6dd173ae — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: audit
           # Fail-open checksum (Sep 2026): upstream opencode releases
