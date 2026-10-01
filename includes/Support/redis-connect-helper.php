@@ -318,32 +318,42 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
 		// the invalid-node path handled by callers).
 		$node = is_string( $node ) ? $node : (string) $node;
+
 		if ( 0 === strpos( $node, '[' ) ) {
 			$port_start = strpos( $node, ']:' );
+
 			if ( false !== $port_start ) {
-				$host = substr( $node, 1, $port_start - 1 );
-				$port = (int) substr( $node, $port_start + 2 );
-			} else {
-				$host = trim( $node, '[]' );
-				$port = 26379;
+				return array(
+					'host' => substr( $node, 1, $port_start - 1 ),
+					'port' => (int) substr( $node, $port_start + 2 ),
+				);
 			}
-		} elseif ( substr_count( $node, ':' ) > 1 ) {
-			$host = $node;
-			$port = 26379;
-		} else {
-			$last_colon = strrpos( $node, ':' );
-			if ( false !== $last_colon ) {
-				$host = substr( $node, 0, $last_colon );
-				$port = (int) substr( $node, $last_colon + 1 );
-			} else {
-				$host = $node;
-				$port = 26379;
-			}
+
+			return array(
+				'host' => trim( $node, '[]' ),
+				'port' => 26379,
+			);
+		}
+
+		if ( substr_count( $node, ':' ) > 1 ) {
+			return array(
+				'host' => $node,
+				'port' => 26379,
+			);
+		}
+
+		$last_colon = strrpos( $node, ':' );
+
+		if ( false !== $last_colon ) {
+			return array(
+				'host' => substr( $node, 0, $last_colon ),
+				'port' => (int) substr( $node, $last_colon + 1 ),
+			);
 		}
 
 		return array(
-			'host' => $host,
-			'port' => $port,
+			'host' => $node,
+			'port' => 26379,
 		);
 	}
 }
