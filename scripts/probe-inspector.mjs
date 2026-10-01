@@ -17,17 +17,25 @@ const TARGETS = [
 	[ 'select', 'select' ],
 ];
 
+// The check asserts on BLOCK ELEMENTS, not on phrases. A previous version
+// matched /what it does/i against the panel's innerText, which the EMPTY STATE
+// satisfies by construction — its placeholder reads "explains what it does,
+// what it costs you, and where you stand now". That made Manage report three
+// blocks while rendering none.
 const read = () => {
 	const insp = document.querySelector( '.wppo-inspector' );
-	const txt = ( insp?.innerText || '' ).trim();
+	const blocks = [ ...( insp?.querySelectorAll( '.wppo-inspector__block' ) || [] ) ];
+	const empty = !! insp?.querySelector( '.wppo-inspector__empty' );
+	const kickers = blocks.map( ( b ) =>
+		( b.querySelector( 'h3, .wppo-eyebrow' )?.textContent || '' ).trim()
+	);
 	const active = document.activeElement;
 	return {
 		present: !! insp,
-		len: txt.length,
-		whatItDoes: /what it does/i.test( txt ),
-		whatItCosts: /what it costs/i.test( txt ),
-		whereYouStand: /where you stand/i.test( txt ),
-		head: txt.slice( 0, 120 ).replace( /\s+/g, ' ' ),
+		empty,
+		blockCount: blocks.length,
+		kickers,
+		len: ( insp?.innerText || '' ).trim().length,
 		focused:
 			active?.getAttribute( 'name' ) ||
 			active?.getAttribute( 'id' ) ||
@@ -35,6 +43,13 @@ const read = () => {
 			null,
 	};
 };
+
+// Only controls that are real settings: the inspector's own controls (its HIDE
+// toggle, its clear button) and the sidebar chrome are not settings, and
+// focusing one must not count as an inspector pass.
+const SETTINGS = 'input:not([type=hidden]), select, textarea, [role=switch]';
+const isSetting = ( el ) =>
+	! el.closest( '.wppo-inspector' ) && ! el.closest( '.wppo-sidebar' );
 
 const b = await chromium.launch( {
 	args: [ '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu' ],
@@ -59,40 +74,49 @@ await page.waitForSelector( '.wppo-section', { timeout: 45000 } );
 await page.waitForTimeout( 1500 );
 
 console.log( `area=${ AREA }` );
+let allPassed = true;
 for ( const [ kind, sel ] of TARGETS ) {
-	const loc = page.locator( sel ).first();
-	if ( ( await loc.count() ) === 0 ) {
-		console.log( `  ${ kind.padEnd( 9 )} ABSENT on this screen` );
-		continue;
-	}
-	// Walk the real controls, not just the first: hover precedence, focus
-	// precedence and pin precedence are three different paths.
-	const count = await page.locator( sel ).count();
-	let allOk = true;
-	const seen = [];
-	for ( let i = 0; i < Math.min( count, 4 ); i++ ) {
-		const el = page.locator( sel ).nth( i );
+	const loc = page.locator( sel );
+	const count = await loc.count();
+	let checked = 0;
+	let passed = 0;
+	const failures = [];
+	for ( let i = 0; i < count && checked < 6; i++ ) {
+		const el = loc.nth( i );
+		if ( ! ( await el.evaluate( isSetting ) ) ) {
+			continue;
+		}
+		checked++;
 		await el.scrollIntoViewIfNeeded().catch( () => {} );
 		await el.focus().catch( () => {} );
-		await page.waitForTimeout( 320 );
+		await page.waitForTimeout( 300 );
 		const r = await page.evaluate( read );
+		// A pass needs real blocks, no empty state, and all three headings.
 		const ok =
-			r.present && r.whatItDoes && r.whatItCosts && r.whereYouStand && r.len > 60;
-		allOk = allOk && ok;
-		if ( i === 0 ) {
-			seen.push( r );
+			r.present &&
+			! r.empty &&
+			r.blockCount >= 3 &&
+			/does/i.test( r.kickers.join( '|' ) ) &&
+			/cost/i.test( r.kickers.join( '|' ) ) &&
+			/stand/i.test( r.kickers.join( '|' ) );
+		ok ? passed++ : failures.push( `${ r.blockCount }blocks empty=${ r.empty }` );
+	}
+	if ( checked === 0 ) {
+		console.log( `  ${ kind.padEnd( 9 ) } (none on this screen)` );
+		continue;
+	}
+	const ok = passed === checked;
+	allPassed = allPassed && ok;
+	console.log(
+		`  ${ kind.padEnd( 9 ) } settings=${ checked }  3blocks=${ passed }/${ checked }  ${
+			ok ? 'PASS' : 'FAIL'
+		}`
+	);
+	if ( ! ok ) {
+		for ( const f of failures.slice( 0, 3 ) ) {
+			console.log( `             ${ f }` );
 		}
 	}
-	const r = seen[ 0 ] || {};
-	console.log(
-		`  ${ kind.padEnd( 9 ) } found=${ count }  checked=${ Math.min( count, 4 ) }` +
-			`  3blocks=${ allOk }  inspectorLen=${ r.len }`
-	);
-	console.log( `             "${ r.head || '' }"` );
-	if ( ! allOk ) {
-		console.log(
-			`             present=${ r.present } does=${ r.whatItDoes } costs=${ r.whatItCosts } stand=${ r.whereYouStand }`
-		);
-	}
 }
+console.log( allPassed ? '  AREA: PASS' : '  AREA: FAIL' );
 await b.close();
