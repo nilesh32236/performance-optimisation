@@ -16,7 +16,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import SettingField from './common/SettingField';
+import SettingRow from './common/SettingRow';
 import SwitchField from './common/SwitchField';
+import { subjectFor } from './database-cleanup/subjects';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import NoticeBanner from './common/NoticeBanner';
@@ -556,136 +559,124 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faCalendarAlt } /> }
 				>
 					<div className="wppo-field-group">
-						<div className="wppo-field">
-							<label
-								className="wppo-field-label"
-								htmlFor="dbSchedule"
-							>
-								{ __(
-									'Schedule Frequency',
-									'performance-optimisation'
-								) }
-							</label>
-							<select
-								className="wppo-select"
-								id="dbSchedule"
-								name="dbSchedule"
-								value={ settings.dbSchedule }
-								onChange={ handleChange( setSettings ) }
-								aria-describedby="dbSchedule-desc"
-							>
-								<option value="none">
-									{ __(
-										'None (Manual Only)',
-										'performance-optimisation'
-									) }
-								</option>
-								<option value="daily">
-									{ __(
-										'Daily',
-										'performance-optimisation'
-									) }
-								</option>
-								<option value="weekly">
-									{ __(
-										'Weekly',
-										'performance-optimisation'
-									) }
-								</option>
-								<option value="monthly">
-									{ __(
-										'Monthly',
-										'performance-optimisation'
-									) }
-								</option>
-							</select>
-							<p
-								id="dbSchedule-desc"
-								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
-									'How often the automated database cleanup routine should run in the background.',
-									'performance-optimisation'
-								) }
-							</p>
-						</div>
-						<div className="wppo-grid-2-col wppo-mt-24">
-							<div>
-								<label
-									className="wppo-field-label"
-									htmlFor="dbRevMaxAge"
-								>
-									{ __(
-										'Revision Max Age (Days)',
-										'performance-optimisation'
-									) }
-								</label>
-								<input
-									className="wppo-input wppo-input--mono"
-									type="number"
-									inputMode="numeric"
-									id="dbRevMaxAge"
-									name="dbRevMaxAge"
-									min="0"
-									value={ settings.dbRevMaxAge }
-									onChange={ handleChange( setSettings ) }
-									aria-describedby="dbRevMaxAge-desc"
-								/>
-								<p
-									id="dbRevMaxAge-desc"
-									className="wppo-text-muted wppo-mt-10 wppo-text-small"
-								>
-									{ __(
-										'Delete post revisions older than this many days (0 for no age limit).',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
-							<div>
-								<label
-									className="wppo-field-label"
-									htmlFor="dbRevKeepLatest"
-								>
-									{ __(
-										'Keep Latest Revisions',
-										'performance-optimisation'
-									) }
-								</label>
-								<input
-									className="wppo-input wppo-input--mono"
-									type="number"
-									inputMode="numeric"
-									id="dbRevKeepLatest"
-									name="dbRevKeepLatest"
-									min="0"
-									value={ settings.dbRevKeepLatest }
-									onChange={ handleChange( setSettings ) }
-									aria-describedby="dbRevKeepLatest-desc"
-								/>
-								<p
-									id="dbRevKeepLatest-desc"
-									className="wppo-text-muted wppo-mt-10 wppo-text-small"
-								>
-									{ __(
-										'Always retain this many recent revisions per post, regardless of age.',
-										'performance-optimisation'
-									) }
-								</p>
-							</div>
-						</div>
-						<SwitchField
+						<SettingField
+							name="dbSchedule"
+							type="select"
 							label={ __(
-								'Optimize tables after cleanup',
+								'Schedule Frequency',
 								'performance-optimisation'
 							) }
 							description={ __(
-								'Automatically run OPTIMIZE TABLE on affected tables after cleanup to reclaim disk space and rebuild indexes.',
+								'How often the automated database cleanup routine should run in the background.',
 								'performance-optimisation'
 							) }
-							name="dbOptimize"
-							checked={ settings.dbOptimize }
+							options={ [
+								{
+									value: 'none',
+									label: __(
+										'None (Manual Only)',
+										'performance-optimisation'
+									),
+								},
+								{
+									value: 'daily',
+									label: __(
+										'Daily',
+										'performance-optimisation'
+									),
+								},
+								{
+									value: 'weekly',
+									label: __(
+										'Weekly',
+										'performance-optimisation'
+									),
+								},
+								{
+									value: 'monthly',
+									label: __(
+										'Monthly',
+										'performance-optimisation'
+									),
+								},
+							] }
+							subject={ subjectFor( 'dbSchedule', settings ) }
+							value={ settings.dbSchedule }
 							onChange={ handleChange( setSettings ) }
 						/>
+						<div className="wppo-grid-2-col wppo-mt-24">
+							{ /* `nested`: both of these only describe what a
+							     *scheduled or manual revision cleanup* removes, so
+							     they belong to the schedule above rather than
+							     standing as peers of it. They stay visible when
+							     the schedule is None, because the Clean button on
+							     the Post Revisions card reads the same two
+							     values (Database_Cleanup::get_revision_defaults),
+							     so hiding them would drop an explanation for a
+							     control that still works. */ }
+							<SettingField
+								name="dbRevMaxAge"
+								type="number"
+								mono
+								nested
+								label={ __(
+									'Revision Max Age (Days)',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Delete post revisions older than this many days.',
+									'performance-optimisation'
+								) }
+								subject={ subjectFor(
+									'dbRevMaxAge',
+									settings
+								) }
+								value={ settings.dbRevMaxAge }
+								onChange={ handleChange( setSettings ) }
+							/>
+							<SettingField
+								name="dbRevKeepLatest"
+								type="number"
+								mono
+								nested
+								label={ __(
+									'Keep Latest Revisions',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Always retain this many recent revisions per post, regardless of age.',
+									'performance-optimisation'
+								) }
+								subject={ subjectFor(
+									'dbRevKeepLatest',
+									settings
+								) }
+								value={ settings.dbRevKeepLatest }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
+						{ /* A `SwitchField`, not a `SettingField`: it renders its
+						     own label, description and control, so converting it
+						     would replace a working toggle. `SettingRow` is the
+						     documented way to wire a component that is not
+						     converted. */ }
+						<SettingRow
+							subject={ subjectFor( 'dbOptimize', settings ) }
+						>
+							<SwitchField
+								label={ __(
+									'Optimize tables after cleanup',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically run OPTIMIZE TABLE on affected tables after cleanup to reclaim disk space and rebuild indexes.',
+									'performance-optimisation'
+								) }
+								name="dbOptimize"
+								checked={ settings.dbOptimize }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</SettingRow>
 					</div>
 				</FeatureCard>
 
