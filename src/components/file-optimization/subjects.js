@@ -327,6 +327,67 @@ const CSS_SUBJECTS = {
 		costTone: 'warn',
 	} ),
 
+	// --- HTML optimisation -----------------------------------------------------
+	// Minifying a document is riskier than minifying a stylesheet, because the
+	// markup is what every other layer parses. The cost line on each of these
+	// names the specific way it can break rather than saying "may cause issues",
+	// which tells the reader nothing they can act on.
+
+	minifyHTML: subject( 'minifyHTML', {
+		kicker: __( 'HTML · Document output', 'performance-optimisation' ),
+		title: __( 'Minify HTML', 'performance-optimisation' ),
+		does: __(
+			'Strips the indentation, comments and blank lines out of the HTML WordPress sends, so the page arrives smaller.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Alters the markup itself. Anything that parses your HTML with a strict regex, or that injects content by string matching, can misbehave; check any plugin that post-processes the final HTML.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	removeHTMLComments: subject( 'removeHTMLComments', {
+		kicker: __( 'HTML · Document output', 'performance-optimisation' ),
+		title: __( 'Remove HTML Comments', 'performance-optimisation' ),
+		does: __(
+			'Removes the comments WordPress and your theme leave in the page source before it is sent.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'Rarely a problem, but conditional-comment tricks and some caching plugins mark up the HTML with comments they read back later. Turn this off first if a plugin suddenly stops working.',
+			'performance-optimisation'
+		),
+	} ),
+
+	minifyInlineCSS: subject( 'minifyInlineCSS', {
+		kicker: __( 'HTML · Document output', 'performance-optimisation' ),
+		title: __( 'Minify Inline CSS', 'performance-optimisation' ),
+		does: __(
+			'Cleans up the CSS that is written directly into the page by your theme and plugins, rather than by the stylesheet settings above.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'A theme that inlines deliberately hand-formatted CSS as documentation will lose it. The saving is small, so this is rarely worth the risk on its own.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
+	minifyInlineJS: subject( 'minifyInlineJS', {
+		kicker: __( 'HTML · Document output', 'performance-optimisation' ),
+		title: __( 'Minify Inline JavaScript', 'performance-optimisation' ),
+		does: __(
+			'Strips whitespace and comments from the JavaScript written straight into the page, which is usually added by plugins rather than by a file.',
+			'performance-optimisation'
+		),
+		cost: __(
+			'The most likely of these four to break a page. Minifying inline script breaks any plugin that depends on its own formatting or comments, and it can break code that closes over whitespace-sensitive templates. Turn this off first if a plugin stops working after a speed change.',
+			'performance-optimisation'
+		),
+		costTone: 'warn',
+	} ),
+
 	ccssMaxRetries: subject( 'ccssMaxRetries', {
 		title: __( 'Critical CSS Max Retries', 'performance-optimisation' ),
 		does: __(

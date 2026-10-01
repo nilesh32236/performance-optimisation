@@ -3917,6 +3917,10 @@ const FileOptimization = ( {
 										checked={ settings.minifyHTML }
 										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
+										subject={ subjectFor(
+											'minifyHTML',
+											settings
+										) }
 									/>
 								</Tooltip>
 								<SwitchField
@@ -3931,6 +3935,10 @@ const FileOptimization = ( {
 									name="removeHTMLComments"
 									checked={ settings.removeHTMLComments }
 									onChange={ onFieldChange }
+									subject={ subjectFor(
+										'removeHTMLComments',
+										settings
+									) }
 								/>
 								<Tooltip
 									content={
@@ -3950,6 +3958,10 @@ const FileOptimization = ( {
 										checked={ settings.minifyInlineCSS }
 										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
+										subject={ subjectFor(
+											'minifyInlineCSS',
+											settings
+										) }
 									/>
 								</Tooltip>
 								<Tooltip
@@ -3970,6 +3982,10 @@ const FileOptimization = ( {
 										checked={ settings.minifyInlineJS }
 										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
+										subject={ subjectFor(
+											'minifyInlineJS',
+											settings
+										) }
 									/>
 								</Tooltip>
 							</div>

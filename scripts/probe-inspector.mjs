@@ -81,7 +81,7 @@ for ( const [ kind, sel ] of TARGETS ) {
 	let checked = 0;
 	let passed = 0;
 	const failures = [];
-	for ( let i = 0; i < count && checked < 6; i++ ) {
+	for ( let i = 0; i < count && checked < 40; i++ ) {
 		const el = loc.nth( i );
 		if ( ! ( await el.evaluate( isSetting ) ) ) {
 			continue;

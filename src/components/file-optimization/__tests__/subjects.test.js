@@ -28,6 +28,12 @@ describe( 'CSS optimisation subjects', () => {
 				'hostGoogleFontsLocally',
 				'fontMetricFallback',
 				'fontSubset',
+				// HTML optimisation, added with the SwitchField subject support:
+				// without these four the switches rendered an empty inspector.
+				'minifyHTML',
+				'removeHTMLComments',
+				'minifyInlineCSS',
+				'minifyInlineJS',
 				'excludeCombineCSS',
 				// Sub-fields of Remove Unused CSS. These are the escape
 				// hatches for the specific ways aggressive trimming goes
