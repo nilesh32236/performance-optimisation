@@ -107,12 +107,22 @@ present on `design/variant-c-redesign` is `.a11y-check.js`, which asserts access
 association, duplicate labels, tree hygiene and a live region — it measures none of the three things
 below).
 
-| # | Known failure | What it means for a user | Measurement |
+| # | Failure, as first recorded | Measured state as of 2026-10-02 | Fixed by |
 |---|---|---|---|
-| F-1 | **Contrast failures** in the redesign. The "WCAG AA contrast" claim inherited from the 2.0.0 release does not hold against the current design tokens. | Text or control boundaries that are hard to read for low-vision users. | **[AUDITOR: FILL — failing pairs, measured ratios, WCAG criterion and level, affected components]** |
-| F-2 | **Obscured focused elements.** A focused control is, in some states, covered or clipped by surrounding layout, so the focus indicator is not visible where the control actually is. | A keyboard user cannot see where they are. This is a WCAG 2.4.7 (Focus Visible) class defect, and worse than a weak ring, because the indicator is not merely faint but absent. | **[AUDITOR: FILL — affected screens and states, reproduction, whether the obstruction is scroll, clip, or overlay]** |
-| F-3 | **Weak focus rings.** Where the indicator is visible, its contrast or thickness against the adjacent surface is insufficient to be reliably perceived. | Focus is hard to track across a long settings form. WCAG 2.4.11/2.4.13 (Focus Appearance) class defect. | **[AUDITOR: FILL — measured ring colour against each adjacent surface, current thickness, required minimum]** |
-| F-4 | **Touch targets below 24 CSS pixels** in the redesign, against a 44×44 claim inherited from 2.0.0. | Controls are hard to hit precisely, which disproportionately affects users with motor impairments and anyone on a small screen. | **[AUDITOR: FILL — failing selectors, measured bounding boxes, affected viewports]** |
+| F-1 | **Contrast failures** in the redesign. The "WCAG AA contrast" claim inherited from the 2.0.0 notes was unsupported. | **RESOLVED — 0 failures.** Measured live at 1440 across five screens, every text node inside `.wppo-toolbar` and `.wppo-section`, threshold 4.5:1 normal / 3:1 large. 35 failures -> 0. Seven tokens corrected, each the same hue family one step darker: `--wppo-ink-faint`, `--wppo-text-light`, `--wppo-success`, `--wppo-error`, `--wppo-info`, plus a `loading="lazy"` help-text colour that is **WordPress core's** `#757575`, not ours, and had to be overridden at the top level. | `c97ee033`, `3314f1a7`, `22427d76` |
+| F-2 | **Obscured focused elements.** A focused control covered or clipped in some states. | **RESOLVED — 0 failures.** 1061 focusable elements, real `Tab` presses, box re-read *after* focus and scroll settle, eleven sample points per element rather than one centre point. 90 (naive, largely artefact) -> 9 -> 5 false positives -> **0**. The 5 were `.screen-reader-text` checkboxes inside their own `<label>` - the correct pattern, not a defect. Root cause was `.wppo-inspector__toggle`, which had **no stylesheet at all** and sat under the wp admin bar. | `e91147d8` |
+| F-3 | **Weak focus rings.** Indicator visible but its contrast or thickness inadequate. | **RESOLVED — 0 failures.** 155 tab stops scoped to the plugin's own container. 466 -> 46 -> 11 -> 6 -> **0**. The last defect was structural and would not show in a screenshot: the global rule rings every button with `--wppo-primary`, and a `.wppo-button--primary` background *is* `--wppo-primary` - **1.00:1, invisible**. Also removed `outline: none` from the search-result rows. Separately `--wppo-focus-ring` is a box-shadow shorthand, so `outline: 2px solid var(--wppo-focus-ring)` was invalid and computed to `outline-style: none`. | `b577d733`, `22427d76` |
+| F-4 | **Touch targets below 24 CSS pixels**, against an inherited 44x44 claim. | **RESOLVED — 0 failures** against the criterion's actual threshold. 104 raw under-24px targets, **0 failing** once WCAG 2.5.8's spacing exception is applied (a target under 24px passes when a 24px-diameter circle does not intersect another target's circle). The 44x44 figure remains a known-false claim; the criterion is 24x24. | `9d16a8c5` |
+
+Three criteria were measured that this document did not anticipate as failures, and all pass:
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| 2.3.3 reduced motion | **honoured** — 12 animating elements go from `0.2s` to `1e-05s` under `prefers-reduced-motion: reduce` | `ce0e9e3d` |
+| 1.4.12 text spacing | **0 failures** — no clipping, collapse, overlap or horizontal scroll under the four overrides the criterion names | `38d5f15d` |
+| forced-colors | **0 contrast failures**; **150/150** tab stops keep a visible ring under `forcedColors: active` | `4ce29958` |
+
+Each measurement has a committed probe under `scripts/` whose docblock records the false positive it was built to avoid, because six of these probes reported a confident wrong number on their first run.
 
 **None of these are fixed by this document.** They are recorded so the eventual statement is true
 rather than flattering. Two consequences for whoever finishes this:
