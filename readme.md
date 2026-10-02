@@ -24,6 +24,14 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ---
 
+## What's New in v2.4.1
+
+- **Corrected the compatibility description.** The previous listing text read
+  "Fully compatible with popular themes and page builders", which is a claim
+  about software this plugin does not control and which we had no evidence
+  for. It now states what is true: the plugin includes compatibility
+  safeguards for named themes and builders. No behavioural change in 2.4.1.
+
 ## What's New in v2.4.0
 
 - **Recursive responsibility architecture:** runtime code is organized by cache, settings, assets, CSS, images, edge delivery, insight, integrations, scheduler, support, and admin boundaries, with a generated source reference.
@@ -203,7 +211,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "scripts": {
     "build": "wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js src/esi.js",
     "start": "wp-scripts start"

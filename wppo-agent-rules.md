@@ -63,7 +63,7 @@ Modular detail lives in `AGENTS.md`, `.agents/AGENTS.md`, and `docs/` — load t
 - Required order: `npm run lint:js` → `composer lint` → `npm test` → `npm run build` (plus `composer test` for PHP unit tests where touched). After PHP source changes, run `php scripts/generate-class-inventory.php --check` and review the architecture delta.
 - Rebuild after every JS/SCSS change and stage `build/` output.
 - Before any wordpress.org release: regression-test old + new functionality (cache generate/serve/purge, minify/defer/delay, lazy load, WebP/AVIF, DB cleanup, Redis object cache, PageSpeed, RUM, CLI `wp wppo` 8 subcommands). Fix breakage first, then release.
-- Release tags are `vX.Y.Z` (plugin is at `2.4.0`).
+- Release tags are `vX.Y.Z` (plugin is at `2.4.1`).
 
 ## Module 7 — Evidence before claims
 
