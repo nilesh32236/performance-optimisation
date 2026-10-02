@@ -98,7 +98,24 @@ System Info dashboard, Google PageSpeed Insights integration, per-page asset man
 
 = Compatibility =
 
-Performance Optimisation includes compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+Here is exactly which versions this plugin is tested against, and what "tested" means in each case.
+
+**WordPress.** The declared range is `Requires at least: 6.2` and `Tested up to: 7.1`.
+
+* WordPress **6.2 is an enforced floor, not a preference.** On any older version the plugin refuses to load its optimisation runtime and shows the administrator a notice naming the required and detected versions. Your site stays up; the optimisations stay off.
+* WordPress **6.2 through 7.2 are covered by an automated version-gate suite** that runs every version-conditional code path in the plugin against each of those version values, so a version check cannot silently drift. This is a unit matrix over version values, **not** a browser run of this plugin on every WordPress release.
+* There is **no automated multi-WordPress-version install matrix** in this plugin's CI. "Tested up to" reflects a manual readiness audit of the release, not a per-release automated test run.
+
+**PHP.** The declared floor is `Requires PHP: 8.2`.
+
+* PHP **8.2 is the enforced floor** and is the version the automated unit-test suite runs on.
+* PHP **8.2, 8.3, 8.4 and 8.5 are each syntax-checked** on every push and pull request, so the code parses cleanly across that whole range.
+* PHP **8.4 and 8.5 deprecation handling is additionally pinned by a dedicated test** that scans for deprecated reflection and resource-teardown calls.
+* Extensions and host limits still apply. A PHP version passing the plugin's checks is not a statement about your host's configuration.
+
+**Themes, builders and other plugins.** Performance Optimisation ships compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are **integration safeguards, not a blanket guarantee for every version of every integration**. Test caching, minification, defer/delay rules, and image handling on a staging site before production, and use the exclusion rules when a specific theme, builder or plugin needs an adjustment. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+
+Every version statement on this page is backed by a named file in the plugin's public repository, and the file plus the command that proves it is listed in `docs/growth/claims.md`. If a claim here and that register ever disagree, the register is the one to trust.
 
 = Who is this plugin for? =
 
