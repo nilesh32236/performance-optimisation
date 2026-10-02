@@ -191,7 +191,7 @@
 	width: 100%;
 	padding: 12px 14px;
 	border: 1px solid var(--wppo-border);
-	border-radius: var(--wppo-radius-sm, 10px);
+	border-radius: var(--wppo-radius-sm, 6px);
 	background: var(--wppo-bg-card, #fff);
 	color: var(--wppo-text-main);
 	text-align: start;
@@ -252,7 +252,7 @@
 	border-left: 4px solid var(--wppo-border, #e2e8f0);
 	background: transparent;
 	margin-top: 20px;
-	border-radius: var(--wppo-radius-sm, 10px);
+	border-radius: var(--wppo-radius-sm, 6px);
 	overflow: hidden;
 }
 
