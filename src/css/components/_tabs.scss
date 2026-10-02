@@ -70,6 +70,17 @@
 	}
 
 	&--active {
+		// The rule above rings this tab with --wppo-primary, and the ACTIVE tab's
+		// own background is --wppo-primary - measured at 1.00:1, so the indicator
+		// was invisible on exactly the tab a keyboard user is most likely to be
+		// on. Same defect as .wppo-button--primary, one level down.
+		&:focus,
+		&:focus-visible {
+			outline: 2px solid var(--wppo-text-sidebar-active, #fff);
+			outline-offset: 2px;
+			box-shadow: 0 0 0 4px var(--wppo-ink, #0c1420);
+		}
+
 		background: var(--wppo-primary);
 		color: var(--wppo-text-sidebar-active, #fff);
 		border-color: var(--wppo-primary);
