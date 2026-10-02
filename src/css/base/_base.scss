@@ -305,3 +305,45 @@ alternative to the WP core screen-reader-text class). */
 	white-space: nowrap;
 	border: 0;
 }
+
+// ---------------------------------------------------------------------------
+// Reduced motion — one global rule, not another exception site.
+//
+// This file already carried 15 scattered `@media (prefers-reduced-motion: true)`
+// blocks, and a scan of every `transition`/`animation` declaration found 6
+// genuine MOTION animations still uncovered: transform on the inspector, a
+// width transition on the progress bar, filter on the lazy placeholder, two on
+// the stat cards, and transform on the video placeholder.
+//
+// Adding a 16th block per site is how the first 15 came to be scattered and
+// incomplete. So this disables motion once, globally, for everything that moves:
+// transform, width/height/top/left/right/bottom, and the keyframe animations.
+// Colour, shadow and opacity fades are deliberately NOT touched - they are not
+// motion, and removing them would flatten the UI for no accessibility gain.
+//
+// Kept at the end of the base layer so it wins on source order against every
+// component-level transition without needing !important.
+// ---------------------------------------------------------------------------
+@media ( prefers-reduced-motion: reduce ) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		animation-name: none !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	// The properties above neutralise DURATION, which still leaves a transform
+	// applied at the end state. These remove the movement itself.
+	.wppo-inspector__panel,
+	.wppo-stat-item,
+	.wppo-video-placeholder,
+	.wppo-lazy-placeholder,
+	.wppo-progress__fill,
+	.wppo-progress__bar-fill {
+		transition-property: none !important;
+		transform: none !important;
+	}
+}
