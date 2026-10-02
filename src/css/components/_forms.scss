@@ -124,6 +124,18 @@
 		color: var(--wppo-bg-card);
 		box-shadow: 0 1px 3px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
 
+		// The global rule rings every button with --wppo-primary, and a primary
+		// button's OWN background is --wppo-primary. The ring therefore sat at
+		// 1.00:1 - mathematically present, completely invisible. Measured, not
+		// guessed: white is 4.57:1 on the fill, and the dark ring outside it keeps
+		// the indicator visible when the button sits on a dark surface.
+		&:focus,
+		&:focus-visible {
+			outline: 2px solid var(--wppo-bg-card, #fff);
+			outline-offset: 2px;
+			box-shadow: 0 0 0 4px var(--wppo-ink, #0c1420);
+		}
+
 		&:hover:not(:disabled) {
 			background: var(--wppo-primary-hover);
 			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-primary) 35%, transparent);
