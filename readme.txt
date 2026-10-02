@@ -115,7 +115,7 @@ Here is exactly which versions this plugin is tested against, and what "tested" 
 
 **Themes, builders and other plugins.** Performance Optimisation ships compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are **integration safeguards, not a blanket guarantee for every version of every integration**. Test caching, minification, defer/delay rules, and image handling on a staging site before production, and use the exclusion rules when a specific theme, builder or plugin needs an adjustment. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
 
-Every version statement on this page is backed by a named file in the plugin's public repository, and the file plus the command that proves it is listed in `docs/growth/claims.md`. If a claim here and that register ever disagree, the register is the one to trust.
+Every version statement above is backed by a named file in this plugin's public repository. The [claim register](https://github.com/nilesh32236/performance-optimisation/blob/master/docs/growth/claims.md) lists, for each one, the file or CI check that proves it and the exact command that produces the evidence. If this page and that register ever disagree, the register is the one to trust — and every claim in it carries an expiry condition, so a stale claim is visible rather than merely wrong.
 
 = Who is this plugin for? =
 
