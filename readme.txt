@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, core-web-vitals, pagespeed
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.4.0
+Stable tag: 2.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -224,6 +224,17 @@ This plugin relies on the following external services. The PageSpeed and Google 
 When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin records **anonymised field metrics only** — the page path and that page's Largest Contentful Paint (LCP), Interaction to Next Paint (INP) and Cumulative Layout Shift (CLS) samples. No cookies, names, email addresses, user IDs, form values, or IP addresses are stored with the samples. A visitor IP is read into memory solely to rate-limit the public beacon (120 requests/hour) and is never persisted. Metrics are aggregated and stored only in your own site's database (`wppo_web_vitals_rum` option plus per-path trend data), retained on a rolling 14-day window (up to 200 paths/day, 600 paths total), and are never sent to the plugin author or any third party. Disabling RUM stops collection; uninstalling the plugin removes the stored data. See `includes/class-rum.php`.
 
 == Changelog ==
+
+= 2.4.1 (2026-10-02) =
+* Documentation: corrected the compatibility description. The previous text
+  read "Fully compatible with popular themes and page builders", which is a
+  claim about the behaviour of software this plugin does not control, and
+  which we had no evidence for. It now states what is actually true: the
+  plugin includes compatibility safeguards for named themes and builders.
+  This copy has been correct in the repository since bc377d41 and had not yet
+  reached the WordPress.org listing, which was still serving the 2.4.0 text.
+* Documentation: page-builder and theme questions in the FAQ now carry the
+  same wording as the listing description, so they cannot drift apart again.
 
 = 2.4.0 (2026-09-24) =
 * Improvement: under-the-hood architecture modernization — the plugin's internals are now organized by responsibility (cache, settings, assets, images, CSS, database, edge delivery, integrations) behind a centralized loader, with no settings changes required and all existing behavior preserved. Includes focused services for settings migrations, script defer/delay strategy, CSS combining, cache invalidation, LCP/hero preloading, anomaly detection, critical-CSS storage, REST cache/settings handlers, and scheduler primitives, plus the first File Optimisation settings card extraction.
