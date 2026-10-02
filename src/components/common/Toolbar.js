@@ -203,13 +203,17 @@ export default function Toolbar( { onNavigate, actions } ) {
 
 			{ showList ? (
 				<>
-					<button
-						type="button"
+					{ /* A <button> is in the tab sequence. A full-viewport button therefore put a
+ focus stop between the search field and EVERY element after it, and the
+ keyboard walkthrough measured 16-58 focused elements fully obscured per
+ screen as a result - the single largest WCAG failure in the redesign.
+ A div with aria-hidden takes it out of the tab order while keeping the
+ click-to-dismiss affordance for pointer users. Escape already closes the
+ palette from the input, so keyboard users lose nothing.
+					*/ }
+					<div
 						className="wppo-toolbar__scrim"
-						aria-label={ __(
-							'Close search',
-							'performance-optimisation'
-						) }
+						aria-hidden="true"
 						onClick={ () => {
 							setOpen( false );
 							setQuery( '' );
