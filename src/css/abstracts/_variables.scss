@@ -27,7 +27,11 @@
 	/* Text */
 	--wppo-text-main: #0f172a;
 	--wppo-text-muted: #475569;
-	--wppo-text-light: #64748b;
+	// Was #64748b: 4.40:1 on the page canvas #f4f6f9 and 4.34:1 on #f1f5f9, both
+	// under AA 4.5:1. _overview.scss:234 already carried a comment recording the
+	// failure, so this was known and shipped anyway. Now matches --wppo-ink-faint:
+	// 4.84:1 and 5.24:1.
+	--wppo-text-light: #5c6e82;
 	--wppo-text-light-muted: #94a3b8;
 	--wppo-text-sidebar: #cbd5e1;
 	--wppo-text-sidebar-active: #ffffff;
@@ -108,7 +112,19 @@
 	/* Ink */
 	--wppo-ink: #0c1420;
 	--wppo-ink-muted: #4a5a6e;
-	--wppo-ink-faint: #7c8ca0;
+	// Was #7c8ca0: measured 3.28:1 on --wppo-surface-quiet and 3.43:1 on white, so
+	// every element using this token failed WCAG AA 1.4.3 (4.5:1) for text.
+	// Second pass: #64748b is the reference's own --wppo-text-muted, and it passes
+	// on --wppo-surface-quiet and white (4.55, 4.76) but measures only 4.40:1 on
+	// the ACTUAL page canvas #f4f6f9, which I had not tested against. So the
+	// reference token alone does not clear AA on this surface.
+	//
+	// #5c6e82 measures 4.84:1 on the canvas and 5.24:1 on white. Where the
+	// reference and WCAG AA disagree, AA wins: section 8 targets WCAG 2.2 AA and
+	// that is the requirement, the reference is the starting point. Recorded
+	// rather than silently diverged - if a reviewer restores #64748b it will
+	// reintroduce the failure this line was written to remove.
+	--wppo-ink-faint: #5c6e82;
 
 	/* Structure. Depth comes from these, not from shadow. */
 	--wppo-hairline: #dde3ea;

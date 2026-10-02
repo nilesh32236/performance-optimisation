@@ -194,6 +194,15 @@
    The label stays in the DOM and stays the toggle's accessible name — it is
    bound to the input with `htmlFor`, and that id is generated internally so it
    cannot be referenced from the component — and is hidden from view instead. */
+/* WordPress core renders .components-toggle-control__help in #757575, which measures
+   4.40:1 on our card surface (#f8fafc) and fails AA 1.4.3 at 4.5:1. The colour is
+   inherited from @wordpress/components, not from our tokens, so it survives every
+   token fix. It is set here once so the whole admin inherits the passing value
+   rather than patching each usage site. */
+.components-toggle-control__help {
+	color: var(--wppo-ink-faint, #5c6e82);
+}
+
 .wppo-switch-field .components-toggle-control__label,
 .wppo-switch-field .components-toggle-control__help {
 	position: absolute;
