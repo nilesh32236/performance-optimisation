@@ -14,7 +14,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 const SITE = 'https://nileshportfolio.duckdns.org';
 const APP = `${SITE}/wp-admin/admin.php?page=performance-optimisation`;
 const USER = process.env.WPPO_USER || 'admin';
-const PASS = process.env.WPPO_PASS || 'tempPass123!';
+const PASS = process.env.WPPO_PASS || (process.env.WPPO_ADMIN_PASS';
 const OUT = process.argv[ 2 ] || '/var/tmp/work/shots/areas';
 const WIDTHS = [ 1440, 1200, 992, 768, 640, 390 ];
 

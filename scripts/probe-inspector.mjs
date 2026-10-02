@@ -61,7 +61,7 @@ page.setDefaultNavigationTimeout( 60000 );
 
 await page.goto( `${ SITE }/wp-login.php`, { waitUntil: 'domcontentloaded' } );
 await page.fill( '#user_login', 'admin' );
-await page.fill( '#user_pass', 'tempPass123!' );
+await page.fill( '#user_pass', (process.env.WPPO_ADMIN_PASS' );
 await Promise.all( [
 	page.waitForNavigation( { waitUntil: 'domcontentloaded' } ),
 	page.click( '#wp-submit' ),

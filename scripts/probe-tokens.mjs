@@ -21,7 +21,7 @@ import { chromium } from 'playwright';
 
 const SITE = 'https://nileshportfolio.duckdns.org';
 const USER = 'admin';
-const PASS = 'tempPass123!';
+const PASS = process.env.WPPO_ADMIN_PASS; // never hardcode a live credential
 
 const REF = {
 	toolbarH: 48,

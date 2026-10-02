@@ -23,7 +23,7 @@ p.on( 'request', ( r ) => {
 } );
 await p.goto( `${ SITE }/wp-login.php`, { waitUntil: 'domcontentloaded' } );
 await p.fill( '#user_login', 'admin' );
-await p.fill( '#user_pass', 'tempPass123!' );
+await p.fill( '#user_pass', (process.env.WPPO_ADMIN_PASS' );
 await Promise.all( [
 	p.waitForNavigation( { waitUntil: 'domcontentloaded' } ),
 	p.click( '#wp-submit' ),
