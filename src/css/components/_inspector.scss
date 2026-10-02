@@ -417,3 +417,67 @@
 		transition: none;
 	}
 }
+
+
+// The inspector panel's header row and its expand/collapse toggle.
+//
+// These classes had NO stylesheet at all, so the toggle was laid out by the
+// browser's default flow and landed under the wp admin bar. The focus probe
+// reported `.wppo-inspector__toggle` as fully obscured by `.ab-item` on
+// every screen — a real WCAG 2.4.11 failure, and it was missing because the
+// selector did not exist rather than because the rule was wrong.
+
+.wppo-inspector__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	// Clear the wp admin bar, which is position:fixed at top 0 and is what
+	// was covering the focused toggle.
+	padding-block-start: var(
+		--wp-admin--admin-bar--height,
+		32px
+	);
+	padding-inline: 16px;
+	min-block-size: 40px;
+	border-block-end: 1px solid var(--wppo-hairline, #dde3ea);
+	background: var(--wppo-surface, #fff);
+}
+
+.wppo-inspector__toggle {
+	// 24x24 minimum target (WCAG 2.5.8) with room for the label beside it.
+	min-block-size: 24px;
+	min-inline-size: 24px;
+	padding: 4px 8px;
+	border: 1px solid var(--wppo-hairline, #dde3ea);
+	border-radius: 6px;
+	background: var(--wppo-surface, #fff);
+	color: var(--wppo-ink, #0c1420);
+	font-size: 12px;
+	line-height: 1.4;
+	cursor: pointer;
+
+	// A focus indicator that meets 3:1 against BOTH the button and the
+	// surface behind it, so it is visible whichever the admin colour scheme
+	// makes it sit on. The probe counts a weak ring as a separate failure,
+	// so this is not decoration.
+	&:focus-visible {
+		outline: 2px solid var(--wppo-focus-ring, #1b5fd9);
+		outline-offset: 2px;
+	}
+
+	&:hover {
+		background: var(--wppo-surface-quiet, #f1f5f9);
+	}
+}
+
+// The toggle is the only control in this bar, so a visible focus ring on it
+// is what makes the whole inspector reachable by keyboard.
+@media ( forced-colors: active ) {
+	.wppo-inspector__toggle {
+		border-color: ButtonText;
+		&:focus-visible {
+			outline: 2px solid Highlight;
+		}
+	}
+}
