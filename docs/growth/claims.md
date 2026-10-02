@@ -181,6 +181,45 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | "Battle-tested" / "trusted by N sites" | `active_installs` is 0 and `num_ratings` is 4 (C-11). A volume claim would be false on its face. |
 | "Faster than plugin X" | No head-to-head benchmark exists. |
 
+### C-12 — "Fully compatible with popular themes and page builders"
+
+**This is the plugin's single most public compatibility claim, and it is the
+one the register did not previously cover.**
+
+The register tracked the *repository readme* phrasing. It did not track the
+**WordPress.org listing description**, which is where the claim is actually
+made and where every prospective user reads it.
+
+| Where | Claim | State |
+|---|---|---|
+| `readme.txt` (repo) | "includes compatibility safeguards for…" | Retracted in `bc377d41`. |
+| **WordPress.org listing** | **"Fully compatible with popular themes and page builders (Elementor…)"** | **Still served. Unretracted for users.** |
+
+**Evidence — the live listing, re-fetched 2026-10-02:**
+
+```sh
+curl -sS -A "Mozilla/5.0" \
+  "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=performance-optimisation"
+```
+
+Returns `"version":"2.4.0"`, and the `sections.description` field contains
+"Fully compatible with popular themes and page builders".
+
+**Why it is false as stated.** "Fully compatible" is a claim about the
+behaviour of software this plugin does not control. Nothing in this repository
+can establish it, and no test suite here exercises a third party's themes or
+page builders. The plugin ships *safeguards* — guards against known
+conflicts — which is a real and much smaller claim.
+
+**Correction status.** PR #1760 bumps to 2.4.1 with the corrected wording and
+records this retraction in the changelog. The SVN release has **not** been cut,
+so the listing still serves 2.4.0's text and **this row remains true for
+users**. It moves to corrected only when the release is live and the API
+returns a different `version`.
+
+**Recorded because** a register that omits the claim that caused the incident
+is not a correct register, however accurate it is about everything else.
+
 ## Pending correction — as of 2026-10-02, not yet on `master`
 
 Recorded here because a register that describes the future is a register that lies. This section
