@@ -55,6 +55,7 @@ const buildIndex = () =>
 export default function Toolbar( { onNavigate, actions } ) {
 	const [ query, setQuery ] = useState( '' );
 	const [ open, setOpen ] = useState( false );
+	const [ active, setActive ] = useState( 0 );
 	const inputRef = useRef( null );
 	const index = useMemo( buildIndex, [] );
 
@@ -90,6 +91,12 @@ export default function Toolbar( { onNavigate, actions } ) {
 			if ( ( e.metaKey || e.ctrlKey ) && e.key.toLowerCase() === 'k' ) {
 				e.preventDefault();
 				setOpen( ( v ) => ! v );
+				// Open AND focus. Opening without focusing leaves a keyboard user
+				// on whatever they were on, looking at a list they cannot type
+				// into or arrow through - the shortcut appeared to do nothing.
+				// Deferred so the field exists; ⌘K is bound on the document, so
+				// the ref may not be mounted on the very first keystroke.
+				setTimeout( () => inputRef.current?.focus(), 0 );
 			}
 			if ( e.key === 'Escape' ) {
 				// Both, not just `open`: showList is `open || query.trim()`, so
@@ -98,6 +105,7 @@ export default function Toolbar( { onNavigate, actions } ) {
 				// closes.
 				setOpen( false );
 				setQuery( '' );
+				setTimeout( () => inputRef.current?.focus(), 0 );
 			}
 		};
 		document.addEventListener( 'keydown', onKey );
@@ -105,6 +113,35 @@ export default function Toolbar( { onNavigate, actions } ) {
 	}, [] );
 
 	const showList = open || query.trim().length > 0;
+
+	const onKeyDown = useCallback(
+		( e ) => {
+			if ( ! showList ) {
+				return;
+			}
+			if ( e.key === 'ArrowDown' ) {
+				e.preventDefault();
+				setActive( ( i ) => ( i + 1 ) % Math.max( matches.length, 1 ) );
+			} else if ( e.key === 'ArrowUp' ) {
+				e.preventDefault();
+				setActive(
+					( i ) =>
+						( i - 1 + Math.max( matches.length, 1 ) ) %
+						Math.max( matches.length, 1 )
+				);
+			} else if ( e.key === 'Enter' && matches[ active ] ) {
+				e.preventDefault();
+				pick( matches[ active ] );
+			} else if ( e.key === 'Home' ) {
+				e.preventDefault();
+				setActive( 0 );
+			} else if ( e.key === 'End' ) {
+				e.preventDefault();
+				setActive( Math.max( matches.length - 1, 0 ) );
+			}
+		},
+		[ showList, matches, active, pick ]
+	);
 
 	return (
 		<div className="wppo-toolbar">
@@ -141,7 +178,18 @@ export default function Toolbar( { onNavigate, actions } ) {
 					onFocus={ () => setOpen( true ) }
 					aria-expanded={ showList }
 					aria-controls="wppo-toolbar-results"
+					aria-activedescendant={
+						showList && matches[ active ]
+							? `wppo-toolbar-result-${ active }`
+							: undefined
+					}
+					aria-autocomplete="list"
 					role="combobox"
+					// Focus stays in the input the whole time - that is what makes
+					// this a combobox rather than a dialog. The list is announced
+					// through aria-activedescendant, so arrow keys move the
+					// selection without ever moving focus off the field.
+					onKeyDown={ onKeyDown }
 				/>
 			</div>
 
@@ -170,6 +218,11 @@ export default function Toolbar( { onNavigate, actions } ) {
 					<div
 						className="wppo-toolbar__results"
 						id="wppo-toolbar-results"
+						role="listbox"
+						aria-label={ __(
+							'Search results',
+							'performance-optimisation'
+						) }
 					>
 						{ matches.length === 0 ? (
 							<p className="wppo-toolbar__empty">
@@ -183,8 +236,22 @@ export default function Toolbar( { onNavigate, actions } ) {
 								<button
 									key={ `${ entry.sectionId }:${ entry.viewId }` }
 									type="button"
-									className="wppo-toolbar__result"
+									id={ `wppo-toolbar-result-${ matches.indexOf(
+										entry
+									) }` }
+									role="option"
+									aria-selected={
+										matches.indexOf( entry ) === active
+									}
+									className={ `wppo-toolbar__result${
+										matches.indexOf( entry ) === active
+											? ' wppo-toolbar__result--active'
+											: ''
+									}` }
 									onClick={ () => pick( entry ) }
+									onMouseEnter={ () =>
+										setActive( matches.indexOf( entry ) )
+									}
 								>
 									<span className="wppo-toolbar__result-area">
 										{ entry.area }

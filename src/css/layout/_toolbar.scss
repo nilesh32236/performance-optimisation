@@ -125,6 +125,14 @@
 	}
 }
 
+// The keyboard-selected row. Without this, ArrowDown moved an invisible
+// selection: aria-activedescendant pointed at a row with no visual state, so
+// a screen reader announced one thing and the screen showed another.
+.wppo-toolbar__result--active {
+	background: var(--wppo-surface-quiet, #f1f5f9);
+	box-shadow: inset 2px 0 0 var(--wppo-accent, #1b5fd9);
+}
+
 .wppo-toolbar__result-area {
 	flex-shrink: 0;
 	font-family: var(--wppo-font-mono, ui-monospace, monospace);
