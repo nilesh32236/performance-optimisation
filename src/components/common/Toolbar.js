@@ -240,6 +240,11 @@ export default function Toolbar( { onNavigate, actions } ) {
 								<button
 									key={ `${ entry.sectionId }:${ entry.viewId }` }
 									type="button"
+									// A role="option" inside a role="listbox" is NOT a tab stop.
+									// Leaving it focusable made every result an extra tab stop and
+									// put the selection out of step with aria-activedescendant,
+									// which is the mechanism this combobox actually uses.
+									tabIndex={ -1 }
 									id={ `wppo-toolbar-result-${ matches.indexOf(
 										entry
 									) }` }

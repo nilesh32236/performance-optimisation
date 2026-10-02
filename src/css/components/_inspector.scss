@@ -461,8 +461,14 @@
 	// surface behind it, so it is visible whichever the admin colour scheme
 	// makes it sit on. The probe counts a weak ring as a separate failure,
 	// so this is not decoration.
+	// :focus as well as :focus-visible. :focus-visible alone is browser- and
+	// input-modality dependent, and the probe walked this element with real Tab
+	// presses and still found no indicator - the ring simply was not painted.
+	// Both selectors agree here, so covering both costs nothing and removes the
+	// dependency on when :focus-visible applies.
+	&:focus,
 	&:focus-visible {
-		outline: 2px solid var(--wppo-focus-ring, #1b5fd9);
+		outline: 2px solid var(--wppo-focus, #1b5fd9);
 		outline-offset: 2px;
 	}
 

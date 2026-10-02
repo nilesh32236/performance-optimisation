@@ -118,10 +118,18 @@
 	cursor: pointer;
 	text-align: start;
 
-	&:hover,
-	&:focus {
+	&:hover {
 		background: var(--wppo-surface-quiet, #f1f5f9);
-		outline: none;
+	}
+
+	// There was `outline: none` here on :focus. That removed the focus
+	// indicator from every search-result row and left only a background tint,
+	// which is a colour-only change and does not satisfy WCAG 2.4.13 - it needs
+	// an indicator at 3:1, not a subtle fill. The focus ring below meets 3:1
+	// against both the row background and the white it sits on.
+	&:focus-visible {
+		outline: 2px solid var(--wppo-focus, #1b5fd9);
+		outline-offset: -2px;
 	}
 }
 
