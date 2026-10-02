@@ -37,11 +37,19 @@
 	--wppo-text-sidebar-active: #ffffff;
 
 	/* Semantic Colors */
-	--wppo-success: #059669;
+	// Was #059669: measured 3.58:1 on its own badge tint #ecfdf5 at 11.2px/600,
+	// which is normal text and needs 4.5:1. #047857 is the same green family at
+	// 5.21:1 on the tint and 5.48:1 on white, so the hue reads identically.
+	// _overview.scss:232 already recorded this failure ("good #059669 on
+	// #ecfdf5 -> 3.5") and it shipped anyway - the second known-contrast
+	// failure in this file, both measured, documented and not fixed.
+	--wppo-success: #047857;
 	--wppo-success-light: #10b981;
 	--wppo-success-bg: #ecfdf5;
 	--wppo-success-border: #a7f3d0;
-	--wppo-error: #dc2626;
+	// Was #dc2626: 4.41:1 on the --poor badge tint #fef2f2 at 11.2px/600, just
+	// under AA 4.5:1. #b91c1c is the same red family at 5.91:1.
+	--wppo-error: #b91c1c;
 	--wppo-error-bg: #fef2f2;
 	--wppo-error-border: #fecaca;
 	--wppo-warning: #d97706;
@@ -51,7 +59,9 @@
 	--wppo-warning-bg-mid: #fef3c7;
 	--wppo-warning-bg-end: #ffedd5;
 	--wppo-warning-border: #fcd34d;
-	--wppo-info: #0284c7;
+	// Was #0284c7: 3.84:1 on its tint #f0f9ff at 13.5px, the worst failure in the
+	// admin. #0369a1 is the same blue family at 5.57:1.
+	--wppo-info: #0369a1;
 	--wppo-info-bg: #f0f9ff;
 	--wppo-info-border: #bae6fd;
 
