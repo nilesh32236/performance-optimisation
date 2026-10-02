@@ -173,13 +173,37 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | Not claimed | Why not |
 |---|---|
 | "Tested on every WordPress release since 6.2" | No such matrix exists (C-09). |
-| "Full test suite runs on PHP 8.2–8.5" | PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked (C-05). `docs/site/compatibility.html` said otherwise until this register existed. |
+| "Full test suite runs on PHP 8.2–8.5" | PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked (C-05). See the pending correction below. |
 | "Fully compatible with WooCommerce / Elementor / Divi" | Integration safeguards exist; a blanket guarantee across every version of every extension is not testable and is not tested. |
 | "Works with every theme" | Same reason. |
 | "Will improve your PageSpeed score by X%" | The only benchmark in the repo is a single internal example, and the readme already says results vary. No reproducible harness. |
-| "Accessible / WCAG compliant" | See `docs/growth/ACCESSIBILITY-STATEMENT.md`. No independent audit, no assistive-technology user testing. |
+| "Accessible / WCAG compliant" | See `docs/growth/ACCESSIBILITY-STATEMENT.md`. No independent audit, no assistive-technology user testing, and known open failures not yet enumerated. |
 | "Battle-tested" / "trusted by N sites" | `active_installs` is 0 and `num_ratings` is 4 (C-11). A volume claim would be false on its face. |
 | "Faster than plugin X" | No head-to-head benchmark exists. |
+
+## Pending correction — as of 2026-10-02, not yet on `master`
+
+Recorded here because a register that describes the future is a register that lies. This section
+states what is **true today on `master`**, and what is queued to change it.
+
+**As `master` stands at `6823bf1d`, `docs/site/compatibility.html` still contains two rows that this
+register shows to be wrong:**
+
+| Row on `master` today | What C-04, C-05 and C-09 show |
+|---|---|
+| "PHP 8.2–8.5 — **Verified** — CI syntax checks **and full PHPUnit runs**" | PHPUnit runs on PHP 8.2 in CI only. 8.3/8.4/8.5 receive `parallel-lint` syntax checks and nothing else. |
+| "WordPress 7.1 — **Verified** — CI syntax and React 19 coverage" | No CI job installs more than one WordPress version (C-09). The evidence is a dated readiness audit, not an automated run. |
+
+**Queued, not merged:** PR #1756 (`growth/evidenceable-compat-claim`) rewrites both rows to say what
+actually happens, and adds an "Audited, not automated" label so dated-review evidence stops wearing
+the same badge as automated evidence.
+
+Until #1756 is merged, treat the two rows above as **open inaccuracies on the documentation site**,
+and treat this register as the thing that says so. After it merges, delete this section rather than
+letting it become history nobody updates.
+
+The same PR adds the version-specific block to `readme.txt` that this register backs.
+
 
 ---
 
