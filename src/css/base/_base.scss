@@ -26,7 +26,11 @@
 		font-family: var(--wppo-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 		font-size: 12px;
 		background: var(--wppo-primary-soft);
-		color: var(--wppo-primary);
+		/* Was var(--wppo-primary): that is var(--wp-admin-theme-color), so the
+		   contrast depended on whichever accent the admin theme installed
+		   (measured 3.94:1 here on the #e4f0f7 tint). See the --wppo-code-ink
+		   note in _variables.scss for why the ink must be theme-independent. */
+		color: var(--wppo-code-ink);
 		padding: 1px 5px;
 		border-radius: 4px;
 		/* A path like `wp-content/wppo-redis-config.php` is one unbroken token.

@@ -173,7 +173,14 @@
 
 		.wppo-sidebar-version {
 			font-size: 11px;
-			color: rgba(148, 163, 184, 0.5);
+			/* Was rgba(148, 163, 184, 0.5), a leftover from the dark-sidebar
+			   design: it composited to #cad1dc on the white sidebar and measured
+			   1.53:1, against the 4.5:1 that 11px normal text needs. axe flagged
+			   it on all 8 screens x 6 states. This rule was painting over the
+			   token _shell.scss:165 already puts on .wppo-sidebar-footer, so the
+			   fix is to use that token rather than to re-pick a grey:
+			   --wppo-ink-faint is documented at 5.24:1 on white. */
+			color: var(--wppo-ink-faint);
 			text-align: center;
 			letter-spacing: 0.05em;
 		}
