@@ -9456,11 +9456,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Validate via WP_Speculation_Rules when available, else allowlist.
-			// Tests pass custom names like WPPO_TEST_SPECULATIVE_LOADING_DEFAULT_EAGERNESS.
-			// We check for the substring to allow custom test constants but default strictly.
-			if ( false !== strpos( $name, 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' ) || false !== strpos( $name, 'WPPO_TEST_SPECULATIVE_LOADING_DEFAULT_MODE' ) ) {
+			if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
 				$key = 'mode';
-			} elseif ( false !== strpos( $name, 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ) || false !== strpos( $name, 'WPPO_TEST_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ) ) {
+			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
 				$key = 'eagerness';
 			} else {
 				return $value; // Unknown key, pass through safely.
@@ -9477,11 +9475,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Validates a speculation rule value (mode or eagerness) against WP 7.1 core standards
 		 * or local fallbacks.
 		 *
+		 * @since NEXT
+		 *
 		 * @param string $key   The speculation attribute to validate ('mode' or 'eagerness').
 		 * @param string $value The value to check.
 		 * @return bool True if valid, false otherwise.
 		 */
-		private function is_valid_speculation_value( $key, $value ) {
+		private function is_valid_speculation_value( string $key, string $value ): bool {
 			if ( class_exists( 'WP_Speculation_Rules' ) ) {
 				if ( 'mode' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
 					return \WP_Speculation_Rules::is_valid_mode( $value );
