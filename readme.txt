@@ -111,7 +111,12 @@ This plugin bundles 7 Composer packages: `voku/html-min` (HTML minification), `m
 == Installation ==
 
 1. Install the plugin from the **WordPress Plugin Directory** (search for "Performance Optimisation") or upload it manually to `/wp-content/plugins/performance-optimisation`.
+
+   **Check three things before you go further.** This plugin requires **PHP 8.2+** and **WordPress 6.2+**; on older versions it activates but stays paused and does nothing. If you upload a ZIP manually, unzip it first - otherwise the folder arrives as `performance-optimisation-master` and activation fails with a missing-file error. And if another caching plugin already provides a drop-in, check that first.
+
 2. Activate the plugin through the **Plugins** screen in WordPress.
+
+   **Activation edits two files on your server, and you should know that before you click.** It writes `wp-content/advanced-cache.php` - the slot other caching plugins also use, so an existing drop-in there will conflict. It also edits `wp-config.php`, flipping `define('WP_CACHE', false)` to `true` or inserting a block above `/* That's all, stop editing! */`. If you set WP_CACHE to false deliberately - because another drop-in broke your site - activating this plugin will turn it back on. **Back up wp-config.php first**, and test on a staging site if you have one.
 3. Go to the **Performance Optimisation** menu in your WordPress admin panel.
 4. Start with the **Dashboard** to see your current performance status, then enable features one at a time.
 
