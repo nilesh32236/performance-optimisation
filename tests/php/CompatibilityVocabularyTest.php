@@ -20,6 +20,8 @@
 use PHPUnit\Framework\TestCase;
 
 /**
+ * Guards the compatibility vocabulary across every document that names the page.
+ *
  * @coversNothing
  */
 class CompatibilityVocabularyTest extends TestCase {
@@ -105,19 +107,29 @@ class CompatibilityVocabularyTest extends TestCase {
 		// THIS page. Files reference it as `docs/site/compatibility.html`,
 		// `compatibility.html`, or `compatibility/`, so match the page name
 		// rather than one spelling of its path.
-		$position = strpos( $text, 'compatibility.html' );
-		if ( false === $position ) {
-			$position = strpos( $text, 'compatibility/' );
-		}
-		self::assertNotFalse( $position, $relative . ' does not reference the page' );
+		self::assertTrue(
+			false !== strpos( $text, 'compatibility.html' )
+				|| false !== strpos( $text, 'compatibility/' ),
+			$relative . ' does not reference the page'
+		);
 
-		$window = substr( $text, $position, 600 );
+		// A previous version scanned a 600-character window starting at the
+		// FIRST page mention. In DOCUMENTATION-MAP.md that mention sits 3491
+		// characters before the vocabulary list, so the window never reached
+		// the text it was written to protect and the guard passed a document
+		// carrying the retired tier. Scan the whole document, and allow the
+		// words only in a sentence that says they are retired.
 		foreach ( self::RETIRED as $retired ) {
-			self::assertStringNotContainsString(
-				$retired,
-				$window,
-				$relative . ' describes the page with the retired status "' . $retired . '"'
-			);
+			$offset = 0;
+			while ( false !== ( $at = strpos( $text, $retired, $offset ) ) ) {
+				$sentence = substr( $text, max( 0, $at - 120 ), 260 );
+				self::assertStringContainsString(
+					'retired',
+					strtolower( $sentence ),
+					$relative . ' describes the page with the retired status "' . $retired . '"'
+				);
+				$offset = $at + strlen( $retired );
+			}
 		}
 	}
 
