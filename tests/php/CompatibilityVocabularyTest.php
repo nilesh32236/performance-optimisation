@@ -58,12 +58,19 @@ class CompatibilityVocabularyTest extends TestCase {
 	 * The page's legend must define exactly the statuses its table uses.
 	 */
 	public function test_legend_defines_exactly_the_statuses_the_table_uses(): void {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- repository file on disk; wp_remote_get is HTTP and wrong here.
 		$html = (string) file_get_contents( $this->root . '/docs/site/compatibility.html' );
 
 		self::assertNotSame( '', $html, 'compatibility.html must be readable' );
 
 		// Statuses actually carried by a table row.
-		preg_match_all( '#<td>(Supported|Best effort|Known limitation|Verified)</td>#', $html, $rows );
+		preg_match_all( '#<td>(Supported|Best effort|Known limitation|Verified)([^<]*)</td>#', $html, $rows );
+		$variants = array_values( array_unique( array_filter( array_map( 'trim', $rows[2] ) ) ) );
+		self::assertSame(
+			array(),
+			$variants,
+			'every status cell must carry the bare status; a variant such as \'Supported with limitation\' is an undefined third status'
+		);
 		$used = array_values( array_unique( $rows[1] ) );
 		self::assertNotEmpty( $used, 'the table must carry at least one status' );
 
@@ -101,6 +108,7 @@ class CompatibilityVocabularyTest extends TestCase {
 		$path = $this->root . '/' . $relative;
 		self::assertFileExists( $path, $relative . ' should exist' );
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- repository file on disk; wp_remote_get is HTTP and wrong here.
 		$text = (string) file_get_contents( $path );
 
 		// A retired status is only a violation when the file is talking about
@@ -121,7 +129,11 @@ class CompatibilityVocabularyTest extends TestCase {
 		// words only in a sentence that says they are retired.
 		foreach ( self::RETIRED as $retired ) {
 			$offset = 0;
-			while ( false !== ( $at = strpos( $text, $retired, $offset ) ) ) {
+			while ( true ) {
+				$at = strpos( $text, $retired, $offset );
+				if ( false === $at ) {
+					break;
+				}
 				$sentence = substr( $text, max( 0, $at - 120 ), 260 );
 				self::assertStringContainsString(
 					'retired',
