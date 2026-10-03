@@ -278,7 +278,7 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | Not claimed | Why not |
 |---|---|
 | "Tested on every WordPress release since 6.2" | No such matrix exists (C-09). |
-| "Full test suite runs on PHP 8.2–8.5" | **FIXED in compatibility.html**; PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked (C-05). PR #1756 corrects `docs/site/compatibility.html`, which still says otherwise on `master`. |
+| "Full test suite runs on PHP 8.2–8.5" | PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked (C-05). Corrected on this branch by #1765, which rewrites the compatibility table to say so.ility.html`, which still says otherwise on `master`. |
 | "Fully compatible with WooCommerce / Elementor / Divi" | Integration safeguards exist; a blanket guarantee across every version of every extension is not testable and is not tested (C-12). |
 | "Works with every theme" | Same reason. |
 | "Will improve your PageSpeed score by X%" | The only benchmark in the repo is a single internal example, and the readme already says results vary. No reproducible harness. |
@@ -297,7 +297,7 @@ Copy that is not backed by anything in this file. Fix the copy or add the eviden
 | Location | Text | Status |
 |---|---|---|
 | `readme.txt:282` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
-| `docs/site/compatibility.html:4` | **FIXED** — was `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Open PR #1756 replaces both rows. Not edited here to avoid colliding with it. |
+| `docs/site/compatibility.html:4` | Was `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Open PR #1756 replaces both rows. Not edited here to avoid colliding with it. |
 | `docs/growth/claims.md` (previous revision) | citation to `docs/growth/ACCESSIBILITY-STATEMENT.md` | **DANGLING at the time of writing** — the file arrives with PR #1759. Now cited precisely as such in C-13. |
 
 ---
