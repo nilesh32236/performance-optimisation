@@ -109,10 +109,10 @@ See the methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PE
 ### Compatibility & Ecosystem
 
 Performance Optimisation includes compatibility safeguards and guarded behavior for common WordPress environments and integrations. Test cache, minification, defer/delay, image, and CDN behavior on staging before production; safeguards are not a blanket guarantee for every theme or plugin combination:
-- **Themes:** Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four are supported starting points.
+- **Themes:** the plugin contains product-specific integration code for **Elementor**, **Divi**, **Kadence**, **Bricks**, **WPBakery** and **Beaver Builder**. Other themes are handled by generic rules, not theme-specific code, and we make no compatibility guarantee for them.
 - **Page Builders:** Elementor, Divi, Beaver Builder, and WPBakery receive exclusion, purge, and builder-update safeguards.
 - **E-Commerce:** WooCommerce safe mode excludes dynamic cart, checkout, account, Store API, AJAX, and faceted routes.
-- **SEO Plugins:** Yoast SEO, Rank Math, All in One SEO, and SEOPress are treated as integration contexts; feeds and REST/sitemap routes remain dynamic.
+- **SEO Plugins:** there is no SEO-plugin-specific integration code. These plugins are coexistence contexts the generic rules must not break, and we make no compatibility claim for them.
 
 ---
 
