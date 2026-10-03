@@ -82,3 +82,7 @@
 **Bug/Gap:** PHPStan throws `catch.neverThrown` errors in `includes/Scheduler/class-cron.php` and `includes/class-util.php`.
 **Root Cause:** Simple boolean checks and integer assignment/comparisons were wrapped in `try...catch (\Throwable)` blocks unnecessarily.
 **Test Added:** Static analysis will no longer fail on these files for `catch.neverThrown`.
+## 2025-01-16 - Resolve catch.neverThrown dead catch errors
+**Bug/Gap:** 5 `catch.neverThrown` static analysis errors reported by PHPStan.
+**Root Cause:** `try...catch (\Throwable)` blocks were wrapped around simple logic (variable assignment, conditionals, array generation) that cannot natively throw exceptions.
+**Test Added:** Removed the redundant try...catch blocks to satisfy PHPStan strict static analysis.

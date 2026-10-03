@@ -1545,14 +1545,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 5093,
+        "lines": 5089,
         "methods": 167,
         "public_methods": 67,
         "large_methods": 7,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "maybe_store_cache",
-            "line": 3695,
+            "line": 3691,
             "lines": 177
         },
         "method_prefixes": {
@@ -2270,7 +2270,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10306,
+        "lines": 10286,
         "methods": 237,
         "public_methods": 151,
         "large_methods": 17,

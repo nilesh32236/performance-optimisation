@@ -4676,28 +4676,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return array<string, mixed>
 		 */
 		public static function get_safe_preset_bundle(): array {
-			try {
-				return array(
-					'minifyJS'                 => true,
-					'minifyCSS'                => true,
-					'minifyHTML'               => true,
-					'deferJS'                  => true,
-					'delayJS'                  => true,
-					'delayJSBuilderPreset'     => true,
-					'delayJSCommercePreset'    => true,
-					'delayJSInteractionPreset' => true,
-					'delayJSJqueryPreset'      => true,
-					'delayJSSafeMode'          => true,
-					'elementorSafeMode'        => true,
-					'delayJSConsentPreset'     => false,
-					'delayJSAnalyticsPreset'   => false,
-					'delayJSGalleryPreset'     => false,
-					'combineCSS'               => false,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
+			return array(
+				'minifyJS'                 => true,
+				'minifyCSS'                => true,
+				'minifyHTML'               => true,
+				'deferJS'                  => true,
+				'delayJS'                  => true,
+				'delayJSBuilderPreset'     => true,
+				'delayJSCommercePreset'    => true,
+				'delayJSInteractionPreset' => true,
+				'delayJSJqueryPreset'      => true,
+				'delayJSSafeMode'          => true,
+				'elementorSafeMode'        => true,
+				'delayJSConsentPreset'     => false,
+				'delayJSAnalyticsPreset'   => false,
+				'delayJSGalleryPreset'     => false,
+				'combineCSS'               => false,
+			);
 		}
 
 		/**
@@ -4713,25 +4708,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return array<string, mixed>
 		 */
 		public static function get_aggressive_preset_bundle(): array {
-			try {
-				return array(
-					'minifyJS'                 => true,
-					'minifyCSS'                => true,
-					'minifyHTML'               => true,
-					'deferJS'                  => true,
-					'delayJS'                  => true,
-					'delayJSBuilderPreset'     => false,
-					'delayJSCommercePreset'    => false,
-					'delayJSInteractionPreset' => false,
-					'delayJSJqueryPreset'      => false,
-					'delayJSSafeMode'          => false,
-					'elementorSafeMode'        => false,
-					'combineCSS'               => true,
-				);
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array();
-			}
+			return array(
+				'minifyJS'                 => true,
+				'minifyCSS'                => true,
+				'minifyHTML'               => true,
+				'deferJS'                  => true,
+				'delayJS'                  => true,
+				'delayJSBuilderPreset'     => false,
+				'delayJSCommercePreset'    => false,
+				'delayJSInteractionPreset' => false,
+				'delayJSJqueryPreset'      => false,
+				'delayJSSafeMode'          => false,
+				'elementorSafeMode'        => false,
+				'combineCSS'               => true,
+			);
 		}
 
 		/**
@@ -4796,33 +4786,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool
 		 */
 		public static function is_safe_preset_active( array $file_opt ): bool {
-			try {
-				foreach ( array( 'minifyJS', 'minifyCSS', 'minifyHTML', 'deferJS', 'delayJS' ) as $key ) {
-					if ( empty( $file_opt[ $key ] ) ) {
-						return false;
-					}
-				}
-				$required_safe = array(
-					'delayJSBuilderPreset',
-					'delayJSCommercePreset',
-					'delayJSInteractionPreset',
-					'delayJSJqueryPreset',
-					'delayJSSafeMode',
-					'elementorSafeMode',
-				);
-				foreach ( $required_safe as $key ) {
-					if ( empty( $file_opt[ $key ] ) ) {
-						return false;
-					}
-				}
-				if ( ! empty( $file_opt['combineCSS'] ) ) {
+			foreach ( array( 'minifyJS', 'minifyCSS', 'minifyHTML', 'deferJS', 'delayJS' ) as $key ) {
+				if ( empty( $file_opt[ $key ] ) ) {
 					return false;
 				}
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			}
+			$required_safe = array(
+				'delayJSBuilderPreset',
+				'delayJSCommercePreset',
+				'delayJSInteractionPreset',
+				'delayJSJqueryPreset',
+				'delayJSSafeMode',
+				'elementorSafeMode',
+			);
+			foreach ( $required_safe as $key ) {
+				if ( empty( $file_opt[ $key ] ) ) {
+					return false;
+				}
+			}
+			if ( ! empty( $file_opt['combineCSS'] ) ) {
 				return false;
 			}
+			return true;
 		}
 
 		/**
@@ -5546,13 +5531,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return array Slice with safeMode enabled.
 		 */
 		public static function build_safe_mode_enable_payload( array $file_optimisation = array() ): array {
-			try {
-				$file_optimisation['safeMode'] = true;
-				return $file_optimisation;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return array( 'safeMode' => true );
-			}
+			$file_optimisation['safeMode'] = true;
+			return $file_optimisation;
 		}
 
 		/**
