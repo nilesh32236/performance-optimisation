@@ -14,6 +14,19 @@
  * 1. The page's own legend defines exactly the statuses its table uses.
  * 2. No other file describes this page using a status it no longer defines.
  *
+ * WHEN IT ACTUALLY RUNS - read this before relying on it. The PHPUnit job
+ * lives in .github/workflows/webpack.yml, which declares
+ * `paths-ignore: ['**.md']` on both push and pull_request. A commit that
+ * touches ONLY Markdown therefore does not run the suite, and this guard does
+ * not execute for it. It fires when compatibility.html, another HTML page, or
+ * any PHP file changes - which is the case that matters most, because that is
+ * when the table itself moves.
+ *
+ * Narrowing that ignore so docs/growth/**.md triggers the suite is the real
+ * fix and is tracked separately; until then this guard is a backstop for the
+ * HTML and PHP paths, NOT an enforcement of the Markdown mirrors. Do not
+ * describe it as the latter.
+ *
  * @package PerformanceOptimise\Tests
  */
 
