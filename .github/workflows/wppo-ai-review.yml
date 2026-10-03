@@ -133,7 +133,7 @@ jobs:
           npm ci || npm install
 
       - name: Fix Issue
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.22.2+6dd173ae — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): upstream opencode releases
@@ -260,7 +260,7 @@ jobs:
           npm ci || npm install
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.22.2+6dd173ae — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: review
           # Fail-open checksum (Sep 2026): see fix job above.
@@ -488,7 +488,7 @@ jobs:
           retention-days: 30
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.22.2+6dd173ae — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         if: failure()
         with:
           mode: review
@@ -633,7 +633,7 @@ jobs:
           npm ci || npm install
 
       - name: Autofix Review Loop
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.22.2+6dd173ae — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): see first fix job above.
