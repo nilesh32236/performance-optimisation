@@ -24,6 +24,14 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ---
 
+## What's New in v2.4.1
+
+- **Corrected the compatibility description.** The previous listing text read
+  "Fully compatible with popular themes and page builders", which is a claim
+  about software this plugin does not control and which we had no evidence
+  for. It now states what is true: the plugin includes compatibility
+  safeguards for named themes and builders. No behavioural change in 2.4.1.
+
 ## What's New in v2.4.0
 
 - **Recursive responsibility architecture:** runtime code is organized by cache, settings, assets, CSS, images, edge delivery, insight, integrations, scheduler, support, and admin boundaries, with a generated source reference.
@@ -101,10 +109,10 @@ See the methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PE
 ### Compatibility & Ecosystem
 
 Performance Optimisation includes compatibility safeguards and guarded behavior for common WordPress environments and integrations. Test cache, minification, defer/delay, image, and CDN behavior on staging before production; safeguards are not a blanket guarantee for every theme or plugin combination:
-- **Themes:** Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four are supported starting points.
+- **Themes:** the plugin contains product-specific integration code for **Elementor**, **Divi**, **Kadence**, **Bricks**, **WPBakery** and **Beaver Builder**. Other themes are handled by generic rules, not theme-specific code, and we make no compatibility guarantee for them.
 - **Page Builders:** Elementor, Divi, Beaver Builder, and WPBakery receive exclusion, purge, and builder-update safeguards.
 - **E-Commerce:** WooCommerce safe mode excludes dynamic cart, checkout, account, Store API, AJAX, and faceted routes.
-- **SEO Plugins:** Yoast SEO, Rank Math, All in One SEO, and SEOPress are treated as integration contexts; feeds and REST/sitemap routes remain dynamic.
+- **SEO Plugins:** there is no SEO-plugin-specific integration code. These plugins are coexistence contexts the generic rules must not break, and we make no compatibility claim for them.
 
 ---
 
@@ -203,7 +211,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "scripts": {
     "build": "wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js src/esi.js",
     "start": "wp-scripts start"

@@ -26,7 +26,7 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 
 ## Operational metrics
 
-- Latest release: `v2.4.0` (2026-09-24T01:09:01Z).
+- Latest release: `v2.4.0` (2026-09-24T01:09:01Z). **[recorded at capture; becomes v2.4.1 only once 2.4.1 is actually released — not on merge]**
 - Median release gap across the last 10 releases: `4.33` days.
 - Regression count, issue-to-merge time, merge-to-release time, structured verification failures, and Playwright failure history are not yet exported as series.
 
