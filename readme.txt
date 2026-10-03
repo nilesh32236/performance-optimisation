@@ -98,7 +98,7 @@ System Info dashboard, Google PageSpeed Insights integration, per-page asset man
 
 = Compatibility =
 
-Performance Optimisation includes compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+Performance Optimisation contains explicit integration code for Elementor, Divi, Kadence (a narrow defer/delay exclusion) and WooCommerce. Other themes and plugins are handled by generic rules rather than product-specific code, and we make no compatibility guarantee for them. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
 
 = Who is this plugin for? =
 
@@ -146,7 +146,7 @@ Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS,
 The plugin includes compatibility safeguards for Elementor, Divi, Beaver Builder, and WPBakery, including builder-aware asset handling and exclusions. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
 
 = Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
-The plugin includes safeguards for common themes (including Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four), WooCommerce, and SEO plugins (including Yoast SEO, Rank Math, All in One SEO, and SEOPress). This is not a blanket guarantee for every version: test on staging, and use the File Optimization exclusion rules when a theme, builder, or integration needs a specific adjustment. WooCommerce cart, checkout, and account pages are excluded from full-page caching.
+The plugin contains product-specific integration code for Elementor, Divi, Kadence and WooCommerce. For other themes and SEO plugins it applies generic rules - it does not contain code written for them, and we do not claim compatibility. Test on a staging site before updating a production one.
 
 = How do I convert images to WebP or AVIF? =
 Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
@@ -155,7 +155,7 @@ Go to the **Image Optimization** tab, enable image conversion, and choose your f
 Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
 
 = Does the plugin support lazy loading? =
-Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
+Yes, but it is OFF by default on a fresh install. You have to turn on Settings -> Media -> Lazy Loading for images (or the equivalent preset) before anything is deferred; a new install defers nothing until you do. When enabled it uses the browser's native loading=lazy where available. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
 
 = How do I clean up my WordPress database? =
 Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
