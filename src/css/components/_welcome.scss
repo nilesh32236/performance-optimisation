@@ -62,14 +62,12 @@
 		justify-content: center;
 		line-height: 1;
 		margin-top: 1px;
-		box-shadow: 0 2px 8px rgba(34, 113, 177, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
 		box-shadow:
 			0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent),
 			0 1px 3px rgba(0, 0, 0, 0.08);
 
 		.wppo-welcome-step--done & {
 			background: var(--wppo-success);
-			box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
 			box-shadow:
 				0 2px 8px color-mix(in srgb, var(--wppo-success) 30%, transparent),
 				0 1px 3px rgba(0, 0, 0, 0.08);
