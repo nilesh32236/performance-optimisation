@@ -1,0 +1,137 @@
+<?php
+/**
+ * Guards the compatibility vocabulary across every file that describes
+ * docs/site/compatibility.html.
+ *
+ * WHY THIS EXISTS. The compatibility page was corrected from a four-tier
+ * vocabulary (Verified / Supported / Best effort / Known limitation) down to
+ * two (Supported / Best effort). Nothing in the suite referenced the page, so
+ * the retired words survived in five other documents and each one was
+ * rediscovered by hand — a repeated review finding rather than a caught
+ * regression. See claims.md C-04 and C-09.
+ *
+ * WHAT IT ASSERTS.
+ * 1. The page's own legend defines exactly the statuses its table uses.
+ * 2. No other file describes this page using a status it no longer defines.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * @coversNothing
+ */
+class CompatibilityVocabularyTest extends TestCase {
+
+	/**
+	 * Repository root.
+	 *
+	 * @var string
+	 */
+	private $root;
+
+	/**
+	 * Statuses the page is allowed to define.
+	 *
+	 * @var string[]
+	 */
+	private const ALLOWED = array( 'Supported', 'Best effort' );
+
+	/**
+	 * Statuses the page used to define and must not be referenced again.
+	 *
+	 * @var string[]
+	 */
+	private const RETIRED = array( 'Verified', 'Known limitation' );
+
+	/**
+	 * Set up the repository root.
+	 */
+	protected function setUp(): void {
+		$this->root = dirname( __DIR__, 2 );
+	}
+
+	/**
+	 * The page's legend must define exactly the statuses its table uses.
+	 */
+	public function test_legend_defines_exactly_the_statuses_the_table_uses(): void {
+		$html = (string) file_get_contents( $this->root . '/docs/site/compatibility.html' );
+
+		self::assertNotSame( '', $html, 'compatibility.html must be readable' );
+
+		// Statuses actually carried by a table row.
+		preg_match_all( '#<td>(Supported|Best effort|Known limitation|Verified)</td>#', $html, $rows );
+		$used = array_values( array_unique( $rows[1] ) );
+		self::assertNotEmpty( $used, 'the table must carry at least one status' );
+
+		// Statuses defined by the legend.
+		preg_match_all( '#<strong>(Supported|Best effort|Known limitation|Verified):</strong>#', $html, $legend );
+		$defined = array_values( array_unique( $legend[1] ) );
+
+		sort( $used );
+		sort( $defined );
+
+		$allowed = self::ALLOWED;
+		sort( $allowed );
+
+		self::assertSame(
+			$allowed,
+			$used,
+			'the table must use exactly the supported statuses'
+		);
+
+		self::assertSame(
+			$used,
+			$defined,
+			'the legend must define exactly the statuses the table uses; a defined status no row carries is dead vocabulary'
+		);
+	}
+
+	/**
+	 * No document may describe this page using a retired status.
+	 *
+	 * @dataProvider narrativeDocuments
+	 *
+	 * @param string $relative Path relative to the repository root.
+	 */
+	public function test_no_document_describes_the_page_with_a_retired_status( string $relative ): void {
+		$path = $this->root . '/' . $relative;
+		self::assertFileExists( $path, $relative . ' should exist' );
+
+		$text = (string) file_get_contents( $path );
+
+		// A retired status is only a violation when the file is talking about
+		// THIS page. Files reference it as `docs/site/compatibility.html`,
+		// `compatibility.html`, or `compatibility/`, so match the page name
+		// rather than one spelling of its path.
+		$position = strpos( $text, 'compatibility.html' );
+		if ( false === $position ) {
+			$position = strpos( $text, 'compatibility/' );
+		}
+		self::assertNotFalse( $position, $relative . ' does not reference the page' );
+
+		$window = substr( $text, $position, 600 );
+		foreach ( self::RETIRED as $retired ) {
+			self::assertStringNotContainsString(
+				$retired,
+				$window,
+				$relative . ' describes the page with the retired status "' . $retired . '"'
+			);
+		}
+	}
+
+	/**
+	 * Documents that describe the compatibility page in prose.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function narrativeDocuments(): array {
+		return array(
+			array( 'docs/growth/DOCUMENTATION-MAP.md' ),
+			array( 'docs/growth/TRUST-AND-CONVERSION.md' ),
+			array( 'docs/site/features.html' ),
+			array( 'docs/site/performance-optimisation.html' ),
+		);
+	}
+}
