@@ -9,6 +9,8 @@
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
 		"lint:js:fix": "wp-scripts lint-js src --fix",
+		"a11y:axe": "node scripts/a11y-axe-run.js",
+		"test:a11y-failsafe": "node scripts/a11y-axe-selfcheck.js",
 		"typecheck": "tsc --noEmit -p model-intelligence/tsconfig.json",
 		"lint": "npm run lint:js && node model-intelligence/check-syntax.mjs",
 		"doc:check": "node model-intelligence/check-docs.mjs",
@@ -21,6 +23,7 @@
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
 	"devDependencies": {
+		"@axe-core/playwright": "^4.13.0",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/react": "^16.3.2",
 		"@wordpress/components": "^29.0.0",
