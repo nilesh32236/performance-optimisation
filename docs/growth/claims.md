@@ -163,11 +163,11 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Verified** | 2026-10-03 |
 | **Expires** | On any change to that test file or to `docs/php-84-85-compat.md`. |
 
-### C-08 — WordPress 6.2 through 7.2 are covered by a version-gate unit matrix
+### C-08 — Named WordPress versions are covered by a version-gate unit matrix (7.1 is NOT among them)
 
 | Field | Value |
 |---|---|
-| **Claim** | "WordPress 6.2 through 7.2 are covered by an automated version-gate suite." |
+| **Claim** | "Named WordPress versions are covered by an automated version-gate suite." |
 | **Verdict** | **TRUE** |
 | **Evidence — what it is** | `tests/php/WpVersionGateTest.php` data provider `version_provider()` enumerates `'6.2'`, `'6.2.6'`, `'6.3-alpha'`, `'6.3'`, `'6.6.2'`, `'6.7.2'`, `'6.8'`, `'6.8.3'`, `'6.9-alpha'`, `'6.9-beta1'`, `'6.9'`, `'6.9.1'`, `'7.0-alpha'`, `'7.0'`, `'7.2'`, plus unset and empty globals. Every test evaluates the plugin's real `Wp_Version` gate helpers against each value. |
 | **Evidence — what it is NOT** | It is a matrix over **version strings**, not a matrix over **WordPress installations**. No WordPress core is downloaded, booted, or rendered. It runs inside the PHPUnit job described in C-04, and therefore is also subject to that job's `paths-ignore`. `readme.txt` must say this explicitly. |
