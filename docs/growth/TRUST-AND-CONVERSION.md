@@ -60,12 +60,10 @@ The readmes now link the support route and repeat the redaction rule.
 
 ## Compatibility trust
 
-The existing Phase E compatibility matrix remains the source of truth. It separates:
+`docs/site/compatibility.html` is the compatibility page. It separates:
 
-- Verified: current CI or recorded live evidence
 - Supported: implemented path with configuration and recovery
 - Best effort: common setup that needs site-specific testing
-- Known limitation: a deliberate boundary the plugin does not hide
 
 The public readme keeps the caution that cache, minification, defer/delay, image, and CDN behavior must be tested on staging.
 
