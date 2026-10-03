@@ -65,6 +65,19 @@
 	--wppo-info-bg: #f0f9ff;
 	--wppo-info-border: #bae6fd;
 
+	/* Inline code. The background stays a theme-tinted wash, but the ink is
+	   deliberately NOT --wppo-primary: that resolves to var(--wp-admin-theme-color),
+	   so its contrast against --wppo-primary-soft is whatever the admin theme
+	   happens to be. This site shipped #007cba, which measured 3.94:1 on the
+	   composited tint #e4f0f7 at 12px — under the 4.5:1 that 12px normal text
+	   needs — and no accent value can be guaranteed, because the token is
+	   admin-controlled. A file path has to be readable whatever accent is
+	   installed, so the ink is fixed to a validated ink token: --wppo-ink-muted
+	   measures 6.08:1 on that tint and stays above 4.5:1 on any 8%-accent wash,
+	   since such a wash cannot drop below roughly 0.8 luminance. Tint stays
+	   decorative; the ink carries the contrast guarantee. */
+	--wppo-code-ink: var(--wppo-ink-muted);
+
 	/* Danger */
 	--wppo-danger: #dc2626;
 	--wppo-danger-hover: #b91c1c;

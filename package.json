@@ -11,6 +11,7 @@
 		"lint:js:fix": "wp-scripts lint-js src --fix",
 		"a11y:axe": "node scripts/a11y-axe-run.js",
 		"test:a11y-failsafe": "node scripts/a11y-axe-selfcheck.js",
+		"test:a11y-canfail": "node scripts/a11y-contrast-canfail.js",
 		"typecheck": "tsc --noEmit -p model-intelligence/tsconfig.json",
 		"lint": "npm run lint:js && node model-intelligence/check-syntax.mjs",
 		"doc:check": "node model-intelligence/check-docs.mjs",

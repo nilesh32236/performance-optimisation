@@ -95,7 +95,15 @@
 	&--warning {
 		background: var(--wppo-warning-bg);
 		border-color: var(--wppo-warning-border);
-		color: var(--wppo-warning);
+		/* Was var(--wppo-warning) (#d97706): measured 3.07:1 on
+		   --wppo-warning-bg (#fffbeb), under the 4.5:1 that 13.5px normal text
+		   needs. #d97706 stays the right colour for the WARNING BADGE and the
+		   non-text borders, which need only 3:1. For text this uses
+		   --wppo-warning-text (#92400e) — the token this codebase already
+		   reserves for readable warning text (_stats.scss:375,
+		   _performance-audit.scss:173) and which measures 6.84:1 on the same
+		   background. Same amber family, so it still reads as a warning. */
+		color: var(--wppo-warning-text);
 	}
 
 	&--success {
