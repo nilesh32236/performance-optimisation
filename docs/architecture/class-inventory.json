@@ -2270,10 +2270,10 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10306,
-        "methods": 237,
+        "lines": 10297,
+        "methods": 238,
         "public_methods": 151,
-        "large_methods": 17,
+        "large_methods": 16,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "enqueue_scripts",
@@ -2282,7 +2282,7 @@
         },
         "method_prefixes": {
             "get": 54,
-            "is": 34,
+            "is": 35,
             "maybe": 22,
             "on": 13,
             "add": 9,
