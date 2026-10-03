@@ -98,7 +98,7 @@ System Info dashboard, Google PageSpeed Insights integration, per-page asset man
 
 = Compatibility =
 
-Performance Optimisation contains explicit integration code for Elementor, Divi, Kadence (a narrow defer/delay exclusion) and WooCommerce. Other themes and plugins are handled by generic rules rather than product-specific code, and we make no compatibility guarantee for them. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+Performance Optimisation contains explicit integration code for Elementor, Divi, Kadence, Bricks, WPBakery and Beaver Builder, plus WooCommerce. It has no integration code for any SEO plugin. Everything else is handled by generic rules rather than product-specific code, and we make no compatibility guarantee for it. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
 
 = Who is this plugin for? =
 
@@ -148,7 +148,7 @@ Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image c
 Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
 
 = Is this compatible with page builders like Elementor or Divi? =
-The plugin includes compatibility safeguards for Elementor, Divi, Beaver Builder, and WPBakery, including builder-aware asset handling and exclusions. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
+The plugin contains product-specific integration code for Elementor, Divi, Kadence, Bricks, WPBakery and Beaver Builder, including builder-aware asset handling and exclusions. It has no integration code for any SEO plugin. For everything else it applies generic rules - it does not contain code written for them, and we do not claim compatibility. Test on a staging site before updating a production one. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
 
 = Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
 The plugin contains product-specific integration code for Elementor, Divi, Kadence and WooCommerce. For other themes and SEO plugins it applies generic rules - it does not contain code written for them, and we do not claim compatibility. Test on a staging site before updating a production one.
