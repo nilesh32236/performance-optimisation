@@ -2346,12 +2346,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// core's own cancel path) already closed our buffer, the level no
 			// longer matches and this is a no-op, never fatal. Fail-open on
 			// any throwable so shutdown can never white-screen the response.
-			try {
-				if ( ob_get_level() === $level ) {
-					ob_end_flush();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( ob_get_level() === $level ) {
+				ob_end_flush();
 			}
 		}
 
