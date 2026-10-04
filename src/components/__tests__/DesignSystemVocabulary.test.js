@@ -86,7 +86,7 @@ describe( 'button link modifiers are correctly applied', () => {
 	it( 'applies inline display overrides to in-sentence call sites', () => {
 		const css = read( 'build/style-index.css' );
 		expect( css ).toMatch(
-			/\.wppo-overview__action-hint \.wppo-button--link,\.wppo-overview__stale \.wppo-button--link\{display:inline\}/
+			/\.wppo-overview__action-hint \.wppo-button--link,\.wppo-overview__stale \.wppo-button--link\{display:inline-block;white-space:nowrap\}/
 		);
 	} );
 } );

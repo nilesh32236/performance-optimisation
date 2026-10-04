@@ -188,6 +188,11 @@
 			text-decoration: underline;
 			text-underline-offset: 2px;
 		}
+
+		// Touch target: base is 44px at `respond-to('lg')`; restore it below `md` (768px).
+		@include respond-to('md') {
+			min-height: 44px;
+		}
 	}
 
 	&:disabled {
@@ -217,18 +222,6 @@
 @media (prefers-reduced-motion: reduce) {
 	.wppo-button {
 		transition: none;
-	}
-}
-
-// Touch target: the base button is 38px, and 44px at `respond-to('lg')`
-// (max-width: 992px). This rule overrides that to use `respond-to('md')` (768px),
-// matching WP core's admin breakpoint and `.wppo-stat-link`. WCAG 2.5.8 (AA) is
-// already satisfied at all widths by the 24px minimum height.
-// Note: WCAG SC 2.5.8 exempts inline-in-a-sentence targets from the 24px requirement,
-// so `min-height` does not apply to the two `display: inline` instances in `_overview.scss`.
-@include respond-to('md') {
-	.wppo-button--link {
-		min-height: 44px;
 	}
 }
 

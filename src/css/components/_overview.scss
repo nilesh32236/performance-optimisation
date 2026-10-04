@@ -108,7 +108,8 @@
 // In-sentence links reset to inline display to avoid inflating line heights
 .wppo-overview__stale .wppo-button--link,
 .wppo-overview__action-hint .wppo-button--link {
-	display: inline;
+	display: inline-block;
+	white-space: nowrap;
 }
 
 // Deliberately NO focus rule here.
