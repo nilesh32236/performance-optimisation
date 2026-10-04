@@ -215,9 +215,10 @@
 	}
 }
 
-// Touch target: the base button is 38px (44px <=992px). Restore it here so
-// the rule covers every `.wppo-button--link`.
-@media ( max-width: 782px ) {
+// Touch target: the base button is 38px, and 44px at `respond-to('lg')`
+// (max-width: 992px). Mirror that exact breakpoint, or `--link` is the only
+// variant below 44px between 783px and 992px.
+@include respond-to('lg') {
 	.wppo-button--link {
 		min-height: 44px;
 	}

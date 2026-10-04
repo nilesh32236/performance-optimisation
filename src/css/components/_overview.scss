@@ -105,6 +105,12 @@
 	text-align: start;
 }
 
+// In-sentence links reset to inline display to avoid inflating line heights
+.wppo-overview__stale .wppo-button--link,
+.wppo-overview__action-hint .wppo-button--link {
+	display: inline;
+}
+
 // Deliberately NO focus rule here.
 //
 // An earlier version of this file set `outline: none` and substituted
