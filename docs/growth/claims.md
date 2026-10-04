@@ -251,7 +251,7 @@ users**. It moves to corrected only when the release is live and the API returns
 | Field | Value |
 |---|---|
 | **Claim** | The plugin makes **no WCAG conformance claim of any kind.** This row exists so that the absence is deliberate and recorded, not merely forgotten. |
-| **Verdict** | **TRUE**, with the measurements below |
+| **Verdict** | **TRUE** — but on the absence claim alone. The measurements below are **inadmissible as evidence** under the rule at the top of this file ("evidence from another branch, another commit, or another file is not evidence for this one"): every one of them is on `origin/design/variant-c-redesign`, which is unmerged. They are recorded as history, not as support. The claim itself — that the plugin makes no WCAG conformance claim — is an absence verifiable on `master`. |
 | **The narrow, real measurement** | On `design/variant-c-redesign`, two WCAG criteria were measured to zero failures in a real browser against the live admin: **1.4.3 Contrast (Minimum)** (Level AA) and **1.4.12 Text Spacing** (Level AA). |
 | **Command** | `git show origin/design/variant-c-redesign:scripts/probe-text-spacing.mjs`, and the commit bodies of `77e89ce1` and `38d5f15d` for the contrast and text-spacing results. |
 | **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". |
