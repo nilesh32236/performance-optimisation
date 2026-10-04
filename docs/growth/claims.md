@@ -129,7 +129,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 | Field | Value |
 |---|---|
 | **Claim** | "PHP 8.2, 8.3, 8.4 and 8.5 are each syntax-checked by CI on pushes and pull requests that touch source." |
-| **Verdict** | **TRUE, but re-cited and narrowed.** The previous run record was attached to the wrong commit. The phrase "every push and pull request" was also false: `webpack.yml:6-9` sets `paths-ignore` for `build/**`, `**.md`, `.distignore`, `.gitignore`. |
+| **Verdict** | **TRUE, but re-cited and narrowed.** The previous run record was attached to the wrong commit. The phrase "every push and pull request" was also false: `webpack.yml:6-9 (push) and :13-16 (pull_request)` sets `paths-ignore` for `build/**`, `**.md`, `.distignore`, `.gitignore`. |
 | **Evidence** | `.github/workflows/webpack.yml:120` job `php-syntax`; `:126` `strategy.matrix`; `:131` `- name: Setup PHP ${{ matrix.php }}`; `:134` `php-version: ${{ matrix.php }}`; `:138` `run: parallel-lint --exclude vendor .`. Matrix values `["8.2","8.3","8.4","8.5"]`. |
 | **Command** | same `gh api ... check-runs` call as C-04 |
 | **Result** | `PHP Syntax Check (8.2–8.5) (8.2) \| success \| 2026-10-02T14:24:41Z`<br>`PHP Syntax Check (8.2–8.5) (8.3) \| success \| 2026-10-02T14:24:41Z`<br>`PHP Syntax Check (8.2–8.5) (8.4) \| success \| 2026-10-02T14:24:50Z`<br>`PHP Syntax Check (8.2–8.5) (8.5) \| success \| 2026-10-02T14:24:42Z` |
@@ -286,7 +286,7 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | "Battle-tested" / "trusted by N sites" | `active_installs` is **0** and `num_ratings` is **4** (C-11). A volume claim would be false on its face. |
 | "Faster than plugin X" | No head-to-head benchmark exists. |
 | "Rated 100% by users" | `rating: 100` is computed from 4 ratings (C-11). |
-| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9`, `:13-16`). |
+| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9 (push) and :13-16 (pull_request)`, `:13-16`). |
 
 ---
 
