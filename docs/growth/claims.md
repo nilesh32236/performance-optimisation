@@ -286,7 +286,7 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | "Battle-tested" / "trusted by N sites" | `active_installs` is **0** and `num_ratings` is **4** (C-11). A volume claim would be false on its face. |
 | "Faster than plugin X" | No head-to-head benchmark exists. |
 | "Rated 100% by users" | `rating: 100` is computed from 4 ratings (C-11). |
-| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9 (push) and :13-16 (pull_request)`, `:13-16`). |
+| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9` for push, `webpack.yml:13-16` for pull_request). |
 
 ---
 
