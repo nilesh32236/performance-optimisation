@@ -269,6 +269,19 @@ users**. It moves to corrected only when the release is live and the API returns
 > not WCAG checks. The honest sentence is the one in this row: two AA criteria, measured, on an
 > unmerged branch, reported by their authors.
 
+### C-14 — WordPress 7.1 has two behavioural tests, and no CI installs WordPress core
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/compatibility.html` states that two tests pin WordPress 7.1 behaviour, and that `wp-env`, `playground`, `wp core install` and the WordPress setup action appear in no workflow. Both statements are claims and both are recorded here. |
+| **Verdict** | **TRUE**, with the limit stated rather than hidden |
+| **Evidence — the two tests** | `tests/php/MainSpeculationRulesTest.php:6` reconciles speculation-rules handling with the WP 7.1 `moderate` default and pins an explicit eagerness so the escalation cannot override the plugin UI. `tests/php/ImgConverterTest.php:97` stubs `wp_get_image_encode_quality()` (WP 7.1+) *while simulating the WP 7.1+ runtime*. |
+| **Evidence — the limit** | Both SIMULATE the 7.1 runtime; neither exercises a real 7.1 install. `setup-php` is used by six workflows to select a PHP version and none of them installs WordPress. |
+| **Evidence — the absence** | `grep -rnE "wordpress-version\|wp-env\|playground\|wp core install\|wp-env (start\|run)\|playground (run\|cli)\|wordpress-setup-action" .github/workflows/` returns no output (exit 1). |
+| **NOT a conformance claim** | No automated WCAG conformance scan. `axe-core` is not a dependency on this branch. No independent audit, no assistive-technology testing. See C-13. |
+| **Rule 7** | This row exists so the compatibility page's 7.1 statements are not unbacked copy. |
+| **Verified** | 2026-10-04 |
+
 ---
 
 ## Claims deliberately NOT made
