@@ -170,6 +170,26 @@
 		}
 	}
 
+	&--link {
+		background: transparent;
+		border: none;
+		color: var(--wppo-primary);
+		padding: 0;
+		min-height: auto;
+		box-shadow: none;
+
+		&:hover:not(:disabled) {
+			text-decoration: underline;
+			background: transparent;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: 2px;
+			border-radius: 4px;
+		}
+	}
+
 	&:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
