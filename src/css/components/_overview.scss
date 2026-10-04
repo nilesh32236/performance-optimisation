@@ -109,6 +109,8 @@
 .wppo-overview__stale .wppo-button--link,
 .wppo-overview__action-hint .wppo-button--link {
 	display: inline;
+	font-size: inherit;
+	white-space: normal;
 }
 
 // Deliberately NO focus rule here.
