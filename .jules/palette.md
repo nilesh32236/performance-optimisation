@@ -58,6 +58,6 @@
 ## YYYY-MM-DD - [Dynamic Danger Button Shadows]
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
-## 2024-10-04 - Fix missing button link styling
-**Learning:** The `wppo-button--link` class is used in `QuickActionsCard.js` and `SiteStatusCard.js` but is completely missing from the SCSS files (`_forms.scss`, `_overview.scss`). This means these elements just look like unstyled native buttons.
+## 2026-10-04 - Fix missing button link styling
+**Learning:** The `.wppo-button--link` class had an unset color overriding to the UA `buttontext` color, and the 38/44px box was oversized for the role, causing inline links in `QuickActionsCard.js` and `SiteStatusCard.js` to look unstyled or misaligned.
 **Action:** Add `.wppo-button--link` to `_forms.scss` and style it to look like a standard link (transparent background, primary color, hover underline) while retaining button accessibility.

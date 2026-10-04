@@ -174,19 +174,15 @@
 		background: transparent;
 		border: none;
 		color: var(--wppo-primary);
-		padding: 0;
-		min-height: auto;
+		padding: 2px 0;
+		min-height: 24px;
 		box-shadow: none;
+		font-weight: 400;
+		letter-spacing: normal;
 
 		&:hover:not(:disabled) {
 			text-decoration: underline;
 			background: transparent;
-		}
-
-		&:focus-visible {
-			outline: 2px solid var(--wppo-primary);
-			outline-offset: 2px;
-			border-radius: 4px;
 		}
 	}
 
