@@ -22,7 +22,13 @@ we control. Pinned to a commit, the URL is a fixed artifact: either it is the bl
 verified here, or it is broken and says so.
 
 The blueprint's own plugin source is a **GitHub release asset at tag `v2.4.1`** — also a fixed,
-published artifact rather than a branch. That asset is content-addressed and immutable.
+published artifact rather than a branch.
+
+It is **pinned, not immutable**. A GitHub release asset is addressed by tag, and anyone with release
+rights on this repository can delete a release, re-upload a different asset under the same tag, or
+force-move the tag. The integrity of what the demo installs therefore rests on repository policy, not
+on a technical guarantee. What it does guarantee is reproducibility in the useful direction: the URL
+does not follow a moving branch, so the demo you look at today is the demo you can look at again.
 
 `preferredVersions.php` and `.wp` are **not** pins. They are requests that Playground's build index
 resolves at run time — the table below records `7.1` → `7.1.2` because that is what the index mapped
