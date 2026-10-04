@@ -26,8 +26,7 @@ re-run on this branch, and four rows did not survive:
 | C-11 | `active_installs 0`, `num_ratings 4` | **TRUE**, re-confirmed 2026-10-03, with a warning added about the `rating` field. |
 
 A fifth row (C-13) was **added** as an ABSENCE claim - that the plugin makes no WCAG
-conformance claim of any kind - not because the register omitted accessibility measurements.
-later turned out to exist.
+conformance claim of any kind. The measurements that prompted the row were recorded in the audit and turned out to be on an unmerged branch, which is why they do not support it.
 
 ---
 
