@@ -81,32 +81,51 @@ describe( 'a class the markup emits has a rule behind it', () => {
 } );
 
 describe( 'button link modifiers are correctly applied', () => {
-	it.each( BUILD_FILES )( 'ships .wppo-button--link with essential styles in %s', ( buildFile ) => {
-		const cssContent = buildFile.includes('rtl') ? BUILD_CSS_RTL : BUILD_CSS;
+	it.each( BUILD_FILES )(
+		'ships .wppo-button--link with essential styles in %s',
+		( buildFile ) => {
+			const cssContent = buildFile.includes( 'rtl' )
+				? BUILD_CSS_RTL
+				: BUILD_CSS;
 
-		const start = cssContent.search( /(?:^|\})[^{}]*\.wppo-button--link\{/ );
-		expect( start ).toBeGreaterThan( -1 );
-		// search returns the start of the match (which may include `}`), but we want to start from the actual selector.
-		const matchStart = cssContent.indexOf( '.wppo-button--link{', start );
-		const end = cssContent.indexOf( '}', matchStart );
-		const block = cssContent.slice( matchStart, end );
+			const start = cssContent.search(
+				/(?:^|\})[^{}]*\.wppo-button--link\{/
+			);
+			expect( start ).toBeGreaterThan( -1 );
+			// search returns the start of the match (which may include `}`), but we want to start from the actual selector.
+			const matchStart = cssContent.indexOf(
+				'.wppo-button--link{',
+				start
+			);
+			const end = cssContent.indexOf( '}', matchStart );
+			const block = cssContent.slice( matchStart, end );
 
-		expect( block ).toMatch( /background:(?:#0000|transparent)/ );
-		expect( block ).toMatch( /color:var\(--wppo-primary\)[,;}]/ );
-		expect( block ).toMatch( /min-height:24px/ );
-	} );
+			expect( block ).toMatch( /background:(?:#0000|transparent)/ );
+			expect( block ).toMatch( /color:var\(--wppo-primary\)[,;}]/ );
+			expect( block ).toMatch( /min-height:24px/ );
+		}
+	);
 
-	it.each( BUILD_FILES )( 'applies inline display overrides to in-sentence call sites in %s', ( buildFile ) => {
-		const cssContent = buildFile.includes('rtl') ? BUILD_CSS_RTL : BUILD_CSS;
-		expect( cssContent ).toMatch(
-			/\.wppo-overview__action-hint \.wppo-button--link,\s*\.wppo-overview__stale \.wppo-button--link\s*\{\s*display:\s*inline[;}]/
-		);
-	} );
+	it.each( BUILD_FILES )(
+		'applies inline display overrides to in-sentence call sites in %s',
+		( buildFile ) => {
+			const cssContent = buildFile.includes( 'rtl' )
+				? BUILD_CSS_RTL
+				: BUILD_CSS;
+			expect( cssContent ).toMatch(
+				/\.wppo-overview__action-hint \.wppo-button--link,\s*\.wppo-overview__stale \.wppo-button--link\s*\{\s*display:\s*inline[;}]/
+			);
+		}
+	);
 
 	it( 'uses the modifiers in markup properly', () => {
 		const jsx = read( 'src/components/overview/SiteStatusCard.js' );
-		expect( jsx ).toMatch( /wppo-overview__stale[\s\S]{0,400}wppo-button wppo-button--link/ );
-		expect( jsx ).toMatch( /wppo-overview__action-hint[\s\S]{0,600}wppo-button wppo-button--link/ );
+		expect( jsx ).toMatch(
+			/wppo-overview__stale[\s\S]{0,400}wppo-button wppo-button--link/
+		);
+		expect( jsx ).toMatch(
+			/wppo-overview__action-hint[\s\S]{0,600}wppo-button wppo-button--link/
+		);
 	} );
 } );
 
