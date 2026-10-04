@@ -176,7 +176,6 @@
 		color: var(--wppo-primary);
 		padding: 2px 0;
 		min-height: 24px;
-		box-shadow: none;
 		font-weight: 400;
 		letter-spacing: normal;
 
@@ -213,6 +212,14 @@
 @media (prefers-reduced-motion: reduce) {
 	.wppo-button {
 		transition: none;
+	}
+}
+
+// Touch target: the base button is 38px (44px <=992px). Restore it here so
+// the rule covers every `.wppo-button--link`.
+@media ( max-width: 782px ) {
+	.wppo-button--link {
+		min-height: 44px;
 	}
 }
 
