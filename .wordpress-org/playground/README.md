@@ -228,8 +228,8 @@ nobody can trust.
 
 ## Not included, on purpose
 
-- No analytics, tracking pixel, or telemetry endpoint. The demo talks to nothing except GitHub
+- No analytics, tracking pixel, or telemetry endpoint. Booting the demo talks to nothing except GitHub
   Releases and WordPress.org.
-- No affiliate link, referral code, or review prompt. The readme already promises the plugin does
+- No affiliate link or referral code. There IS a review prompt in the plugin, but it is gated: `class-admin-notices.php:727` returns unless 7 days have passed since activation, so a visitor opening the demo sees none. The readme already promises the plugin does
   not ask users for a rating, and a demo that contradicted that would be a small lie.
 - No paid tier, no upsell screen, no "premium" nudge.

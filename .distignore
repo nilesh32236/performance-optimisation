@@ -2,6 +2,7 @@
 /.git/
 /.github/
 /.wordpress-org/
+/tools/
 /.agents/
 /.jules/
 /node_modules/
