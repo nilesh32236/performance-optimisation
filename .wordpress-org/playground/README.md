@@ -4,7 +4,7 @@ Lets someone open a working copy of the plugin in a browser tab, with no server,
 admin, and no install step — before deciding whether to install it on a real site.
 
 **Blueprint:** `blueprint.json`
-**Verified:** 2026-10-02 against the plugin release 2.4.0
+**Run record:** the demo below was executed 2026-10-02 against release **2.4.0**. The blueprint has since been repointed to **2.4.1**; that re-point has NOT been re-run, so the 2.4.1 install is unverified here.
 
 ## Open it
 
@@ -37,7 +37,7 @@ still correct and the link does not need touching.
 
 Verified by running it, not by describing what it should do. See the run record below.
 
-WordPress **7.1.2**, logged in as `admin` / `password`, Performance Optimisation **2.4.0 installed and
+WordPress **7.1.2**, logged in as `admin` / `password`, Performance Optimisation **2.4.1 installed and
 activated**, and the Dashboard as the landing page. Nothing is switched on, so you start in the same
 state a fresh install starts in.
 
