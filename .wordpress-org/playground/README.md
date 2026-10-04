@@ -69,6 +69,14 @@ npx @wp-playground/cli@latest build-snapshot \
 
 Result: `Exported to /tmp/pg-snap.zip`, 39,128,903 bytes, exit 0.
 
+**Not verified, and it matters here.** The plugin ships an `advanced-cache.php`
+drop-in whose generation has multiple fail-open paths — `log_dropin_issue()` has 16 call
+sites across `includes/Cache/class-advanced-cache-handler.php`. Whether the drop-in landed
+in this snapshot, and whether `WP_CACHE` was defined, was **not** read out of it. In a
+Playground sandbox that matters more than it does on a normal host: dropping a page-cache
+drop-in opts the runtime out of Playground's own response streaming, so a silent drop-in
+failure would look like a slow demo rather than a cache error.
+
 **No artefact from this run is committed.** The snapshot lived at `/tmp/pg-snap.zip` and is gone;
 the table below records what was read out of it at the time. A reader cannot re-derive these numbers
 from this repository, and should treat them as a record of one run rather than as reproducible
