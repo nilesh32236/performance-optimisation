@@ -21,7 +21,7 @@ mode as shipping a `<script src=…>` pointing at a mutable ref, and it is not a
 we control. Pinned to a commit, the URL is a fixed artifact: either it is the blueprint that was
 verified here, or it is broken and says so.
 
-The blueprint's own plugin source is a **GitHub release asset at tag `v2.4.0`** — also a fixed,
+The blueprint's own plugin source is a **GitHub release asset at tag `v2.4.1`** — also a fixed,
 published artifact rather than a branch. Both refs in the chain are immutable.
 
 **Regenerating the link after any change to the blueprint:**
@@ -138,7 +138,7 @@ PY
 
 # 2. the release asset the blueprint points at actually exists
 curl -sIL -o /dev/null -w '%{http_code}\n' \
-  https://github.com/nilesh32236/performance-optimisation/releases/download/v2.4.0/performance-optimisation-2.4.0.zip
+  https://github.com/nilesh32236/performance-optimisation/releases/download/v2.4.1/performance-optimisation-2.4.1.zip
 
 # 3. the WordPress version the blueprint requests is a key Playground knows
 curl -sS https://raw.githubusercontent.com/WordPress/wordpress-playground/trunk/packages/playground/wordpress-builds/src/wordpress/wp-versions.json
@@ -170,7 +170,7 @@ change together, or the link silently serves the previous release. The **documen
 in a third place: the commit SHA.
 
 1. Tag `vX.Y.Z` and let the release workflow publish `performance-optimisation-X.Y.Z.zip`.
-2. Edit `blueprint.json`: `v2.4.0` → `vX.Y.Z` and `performance-optimisation-2.4.0.zip` →
+2. Edit `blueprint.json`: `v2.4.1` → `vX.Y.Z` and `performance-optimisation-2.4.1.zip` →
    `performance-optimisation-X.Y.Z.zip`. Do not guess the version; read it from the `Version:`
    header in `performance-optimisation.php` or from the tag you just pushed.
 3. Re-run **every** check above, including the boot. A blueprint that points at a 404 is worse than
