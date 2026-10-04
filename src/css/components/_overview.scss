@@ -101,15 +101,14 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	justify-content: flex-start;
-	text-align: start;
 }
 
 // In-sentence links reset to inline display to avoid inflating line heights
 .wppo-overview__stale .wppo-button--link,
 .wppo-overview__action-hint .wppo-button--link {
-	display: inline-block;
-	white-space: nowrap;
+	display: inline;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
 // Deliberately NO focus rule here.

@@ -178,6 +178,11 @@
 		color: var(--wppo-primary);
 		padding: 2px 0;
 		min-height: 24px;
+		display: inline-block;
+		align-items: baseline;
+		justify-content: flex-start;
+		gap: 0;
+		text-align: start;
 		font-size: inherit;
 		font-weight: 400;
 		letter-spacing: normal;
@@ -189,7 +194,12 @@
 			text-underline-offset: 2px;
 		}
 
-		// Touch target: base is 44px at `respond-to('lg')`; restore it below `md` (768px).
+		// Touch target: `.wppo-button` is 38px, and 44px at `respond-to('lg')` (992px).
+		// This rule restores 44px below the design system's `md` token (768px), matching
+		// `.wppo-stat-link` (`_stats.scss:312-315`). Note WP core's admin breakpoint is
+		// 782px and is deliberately not matched here.
+		// above applies to block-level list usage; in-sentence links use display:inline
+		// (min-height is ignored on non-replaced inline boxes) — see _overview.scss
 		@include respond-to('md') {
 			min-height: 44px;
 		}
