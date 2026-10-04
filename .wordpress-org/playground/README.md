@@ -69,6 +69,11 @@ npx @wp-playground/cli@latest build-snapshot \
 
 Result: `Exported to /tmp/pg-snap.zip`, 39,128,903 bytes, exit 0.
 
+**No artefact from this run is committed.** The snapshot lived at `/tmp/pg-snap.zip` and is gone;
+the table below records what was read out of it at the time. A reader cannot re-derive these numbers
+from this repository, and should treat them as a record of one run rather than as reproducible
+evidence. Re-running the blueprint is how to replace them with something checkable.
+
 | Assertion | Method | Result |
 |---|---|---|
 | WordPress version booted as requested | `grep wp_version /wordpress/wp-includes/version.php` in the snapshot | **`7.1.2`** — matches `preferredVersions.wp: "7.1"` |
