@@ -11,7 +11,7 @@ admin, and no install step — before deciding whether to install it on a real s
 **The URL below is pinned to a full commit SHA, not to a branch name.**
 
 ```
-https://playground.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2Fnilesh32236%2Fperformance-optimisation%2Fbeceecbe00f006d1e0c99e7b9ae34161ce4a5e0e%2F.wordpress-org%2Fplayground%2Fblueprint.json
+https://playground.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2Fnilesh32236%2Fperformance-optimisation%2F589776504781ca1705bd4b393793efd81c3108db%2F.wordpress-org%2Fplayground%2Fblueprint.json
 ```
 
 **Why the SHA, and not `master`.** A blueprint is a set of instructions that decides what code the
