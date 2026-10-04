@@ -22,7 +22,12 @@ we control. Pinned to a commit, the URL is a fixed artifact: either it is the bl
 verified here, or it is broken and says so.
 
 The blueprint's own plugin source is a **GitHub release asset at tag `v2.4.1`** — also a fixed,
-published artifact rather than a branch. Both refs in the chain are immutable.
+published artifact rather than a branch. That asset is content-addressed and immutable.
+
+`preferredVersions.php` and `.wp` are **not** pins. They are requests that Playground's build index
+resolves at run time — the table below records `7.1` → `7.1.2` because that is what the index mapped
+it to when the demo ran, not because the mapping is guaranteed. A different index can serve a
+different patch.
 
 **Regenerating the link after any change to the blueprint:**
 
@@ -38,8 +43,13 @@ still correct and the link does not need touching.
 Verified by running it, not by describing what it should do. See the run record below.
 
 WordPress **7.1.2**, logged in as `admin` / `password`, Performance Optimisation **2.4.1 installed and
-activated**, and the Dashboard as the landing page. Nothing is switched on, so you start in the same
-state a fresh install starts in.
+activated**, and the Dashboard as the landing page.
+
+This is **not** an untouched fresh install, and the blueprint says so itself: it enables
+`features.networking`, and `steps[0]` sets `blogdescription` to "WordPress Playground". The site is a
+sandboxed Playground runtime, not a bare WordPress install. What is faithful to a fresh install is the
+plugin state: no optimisation is switched on, so the dashboard is showing you what the plugin does on
+arrival.
 
 ## Run record — 2026-10-02
 
