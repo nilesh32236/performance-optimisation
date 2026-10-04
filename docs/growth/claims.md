@@ -25,7 +25,8 @@ re-run on this branch, and four rows did not survive:
 | C-06 | "2783 tests, **1 failure** (`ArchitectureInventoryTest`)" | **FALSE for this branch.** That result is from `design/variant-c-redesign`. Here the suite is green. |
 | C-11 | `active_installs 0`, `num_ratings 4` | **TRUE**, re-confirmed 2026-10-03, with a warning added about the `rating` field. |
 
-A fifth row (C-13) was **added**, because the register omitted the accessibility measurements that
+A fifth row (C-13) was **added** as an ABSENCE claim - that the plugin makes no WCAG
+conformance claim of any kind - not because the register omitted accessibility measurements.
 later turned out to exist.
 
 ---
