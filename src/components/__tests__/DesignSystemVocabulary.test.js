@@ -25,15 +25,15 @@ const ROOT = path.join( __dirname, '../../..' );
 const read = ( rel ) => fs.readFileSync( path.join( ROOT, rel ), 'utf8' );
 
 const TONES = [ 'good', 'warning', 'poor', 'needs_improvement' ];
+const BUILD_CSS = read( 'build/style-index.css' );
 
 describe( 'status badge vocabulary', () => {
 	const source = read( 'src/components/ObjectCache.js' );
-	const css = read( 'build/style-index.css' );
 
 	it.each( TONES )(
 		'defines a rule for the `%s` tone in the built stylesheet',
 		( tone ) => {
-			expect( css ).toContain( `status-badge--${ tone }` );
+			expect( BUILD_CSS ).toContain( `status-badge--${ tone }` );
 		}
 	);
 
@@ -43,7 +43,7 @@ describe( 'status badge vocabulary', () => {
 		);
 		expect( emitted.length ).toBeGreaterThan( 0 );
 		for ( const tone of emitted ) {
-			expect( css ).toContain( `status-badge--${ tone }` );
+			expect( BUILD_CSS ).toContain( `status-badge--${ tone }` );
 		}
 	} );
 
@@ -74,18 +74,20 @@ describe( 'a class the markup emits has a rule behind it', () => {
 
 describe( 'button link modifiers are correctly applied', () => {
 	it( 'ships .wppo-button--link with essential styles in the built stylesheet', () => {
-		const css = read( 'build/style-index.css' );
-		expect( css ).toContain( '.wppo-button--link' );
+		expect( BUILD_CSS ).toContain( '.wppo-button--link' );
 
-		const block = css.slice( css.indexOf( '.wppo-button--link{' ) );
+		const start = BUILD_CSS.indexOf( '.wppo-button--link{' );
+		expect( start ).toBeGreaterThan( -1 );
+		const end = BUILD_CSS.indexOf( '}', start );
+		const block = BUILD_CSS.slice( start, end );
+
 		expect( block ).toMatch( /background:#0000/ );
 		expect( block ).toMatch( /color:var\(--wppo-primary\)/ );
 		expect( block ).toMatch( /min-height:24px/ );
 	} );
 
 	it( 'applies inline display overrides to in-sentence call sites', () => {
-		const css = read( 'build/style-index.css' );
-		expect( css ).toMatch(
+		expect( BUILD_CSS ).toMatch(
 			/\.wppo-overview__action-hint \.wppo-button--link,\.wppo-overview__stale \.wppo-button--link\{display:inline-block;white-space:nowrap\}/
 		);
 	} );
@@ -152,7 +154,7 @@ describe( 'a reporting screen does not shout', () => {
 	} );
 
 	it( 'and the rule ships in the built stylesheet', () => {
-		expect( read( 'build/style-index.css' ) ).toMatch(
+		expect( BUILD_CSS ).toMatch(
 			/\.wppo-dashboard \.wppo-panel-group \.wppo-button--primary\{/
 		);
 	} );
