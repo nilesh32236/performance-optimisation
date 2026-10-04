@@ -71,7 +71,7 @@ The public readme keeps the caution that cache, minification, defer/delay, image
 
 The plugin documents PageSpeed, Google Fonts, Cloudflare, Bunny, and Varnish behavior. The trust copy does not imply that external services are required for every feature, and it does not ask users to post credentials or leave ratings.
 
-Review automation runs on every pull request in this repository and posts its verdict as a PR review. No fake support content, fabricated installation count, or unsupported score was added.
+Review automation runs on pull requests that touch source files and posts its verdict as a PR review. It does not run on a Markdown-only pull request: the CI workflow sets `paths-ignore: **.md`. No fake support content, fabricated installation count, or unsupported score was added.
 
 ## New-user Playwright journey
 
