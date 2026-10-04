@@ -8,7 +8,7 @@ better than a plausible number, because a missing row is visible and a plausible
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
 **Last reviewed:** 2026-10-03
-**Baseline commit (this branch):** `66fd4914164d135d0176a45243748d7af6eee44e` (`growth/claims-register`)
+**Baseline commit:** `66fd4914164d135d0176a45243748d7af6eee44e` — recorded when the register was first written on `growth/claims-register`; not a claim about the current branch.
 **Live listing version at review time:** 2.4.0, uploaded 2026-09-24
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
 without discussion.
@@ -296,7 +296,7 @@ Copy that is not backed by anything in this file. Fix the copy or add the eviden
 
 | Location | Text | Status |
 |---|---|---|
-| `readme.txt:282` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
+| `readme.txt:298` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
 | `docs/site/compatibility.html:4` | Was `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Corrected in `docs/site/compatibility.html` by #1765. #1756 carried the same correction but also reintroduced the retracted compatibility sentence, so it was closed and only the true part was carried forward. |
 | `docs/growth/claims.md` (previous revision) | citation to `docs/growth/ACCESSIBILITY-STATEMENT.md` | **DANGLING at the time of writing** — the file arrives with PR #1759. Now cited precisely as such in C-13. |
 
