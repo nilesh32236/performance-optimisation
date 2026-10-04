@@ -72,6 +72,25 @@ describe( 'a class the markup emits has a rule behind it', () => {
 	} );
 } );
 
+describe( 'button link modifiers are correctly applied', () => {
+	it( 'ships .wppo-button--link with essential styles in the built stylesheet', () => {
+		const css = read( 'build/style-index.css' );
+		expect( css ).toContain( '.wppo-button--link' );
+
+		const block = css.slice( css.indexOf( '.wppo-button--link{' ) );
+		expect( block ).toMatch( /background:transparent/ );
+		expect( block ).toMatch( /color:var\(--wppo-primary\)/ );
+		expect( block ).toMatch( /min-height:24px/ );
+	} );
+
+	it( 'applies inline display overrides to in-sentence call sites', () => {
+		const css = read( 'build/style-index.css' );
+		expect( css ).toMatch(
+			/\.wppo-overview__stale \.wppo-button--link,\.wppo-overview__action-hint \.wppo-button--link\{display:inline\}/
+		);
+	} );
+} );
+
 describe( 'the area heading is not overridden by WordPress core', () => {
 	it( 'scopes the title rule by the mount id, not only by class', () => {
 		// A **tripwire, not a CSS test**: only a browser can observe which

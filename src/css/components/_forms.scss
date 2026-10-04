@@ -170,14 +170,18 @@
 		}
 	}
 
+	// @see .wppo-stat-link and .wppo-notice__action for alternative hover treatments.
+	// This modifier defines the standard hover-underline variant for link-styled buttons.
 	&--link {
 		background: transparent;
 		border: none;
 		color: var(--wppo-primary);
 		padding: 2px 0;
 		min-height: 24px;
+		font-size: inherit;
 		font-weight: 400;
 		letter-spacing: normal;
+		white-space: normal;
 
 		&:hover:not(:disabled) {
 			color: var(--wppo-primary-hover);
@@ -217,12 +221,12 @@
 }
 
 // Touch target: the base button is 38px, and 44px at `respond-to('lg')`
-// (max-width: 992px). Mirror that exact breakpoint: the rule this replaces was
-// `@media ( max-width: 782px )` scoped to `.wppo-overview__links`, which left
-// `--link` at 24px in the band above 782px while every other variant was 44px.
+// (max-width: 992px). This rule overrides that to use `respond-to('md')` (768px),
+// matching WP core's admin breakpoint and `.wppo-stat-link`. WCAG 2.5.8 (AA) is
+// already satisfied at all widths by the 24px minimum height.
 // Note: WCAG SC 2.5.8 exempts inline-in-a-sentence targets from the 24px requirement,
 // so `min-height` does not apply to the two `display: inline` instances in `_overview.scss`.
-@include respond-to('lg') {
+@include respond-to('md') {
 	.wppo-button--link {
 		min-height: 44px;
 	}
