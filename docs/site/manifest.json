@@ -4,7 +4,7 @@
     "slug": "performance-optimisation",
     "parent_slug": null,
     "title": "Performance Optimisation",
-    "excerpt": "A practical guide to the current 2.4.0 performance plugin, its request layers, safe defaults, and first-run workflow.",
+    "excerpt": "A practical guide to the current 2.4.1 performance plugin, its request layers, safe defaults, and first-run workflow.",
     "menu_order": 0
   },
   {
@@ -172,7 +172,7 @@
     "slug": "settings-reference",
     "parent_slug": "configuration",
     "title": "Settings reference",
-    "excerpt": "Canonical 2.4.0 settings tabs, defaults, safety boundaries, and import/export behavior.",
+    "excerpt": "Canonical 2.4.1 settings tabs, defaults, safety boundaries, and import/export behavior.",
     "menu_order": 10
   },
   {
