@@ -78,7 +78,7 @@ describe( 'button link modifiers are correctly applied', () => {
 		expect( css ).toContain( '.wppo-button--link' );
 
 		const block = css.slice( css.indexOf( '.wppo-button--link{' ) );
-		expect( block ).toMatch( /background:transparent/ );
+		expect( block ).toMatch( /background:#0000/ );
 		expect( block ).toMatch( /color:var\(--wppo-primary\)/ );
 		expect( block ).toMatch( /min-height:24px/ );
 	} );
@@ -86,7 +86,7 @@ describe( 'button link modifiers are correctly applied', () => {
 	it( 'applies inline display overrides to in-sentence call sites', () => {
 		const css = read( 'build/style-index.css' );
 		expect( css ).toMatch(
-			/\.wppo-overview__stale \.wppo-button--link,\.wppo-overview__action-hint \.wppo-button--link\{display:inline\}/
+			/\.wppo-overview__action-hint \.wppo-button--link,\.wppo-overview__stale \.wppo-button--link\{display:inline\}/
 		);
 	} );
 } );
