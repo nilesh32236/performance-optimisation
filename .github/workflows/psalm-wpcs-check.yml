@@ -66,6 +66,10 @@ jobs:
       - name: Check architecture inventory drift
         run: php scripts/generate-class-inventory.php --check
 
+      - name: Verify the Playground demo pin resolves
+        if: hashFiles('docs/site/playground.html') != ''
+        run: php scripts/verify-playground-blueprint.php
+
       - name: Restrict the Psalm scan autoloader to plugin code
         run: |
           # MEASURED, not speculative. With the full dev autoloader installed,
