@@ -7,7 +7,7 @@ produced that evidence, and the **commit SHA that evidence was produced on**.
 better than a plausible number, because a missing row is visible and a plausible number is not.
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
-**Last reviewed:** 2026-10-03
+**Last reviewed:** 2026-10-05
 **Baseline commit (this branch):** `66fd4914164d135d0176a45243748d7af6eee44e` (`growth/claims-register`)
 **Live listing version at review time:** 2.4.0, uploaded 2026-09-24
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
@@ -67,6 +67,20 @@ look healthy. The CI workflow in `webpack.yml` carries `paths-ignore` for `**.md
 result is not a pass. Always read the check **names** that came back, not just the count.
 
 ---
+### C-15 — The Playground demo installs v2.4.1, pinned to a commit that a CI gate keeps honest
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/playground.html` publishes a code-executing WordPress Playground link whose blueprint installs Performance Optimisation 2.4.1. |
+| **Verdict** | **TRUE, with the load-bearing limits stated** |
+| **Evidence — the artifact** | `plugins[0].url` in `.wordpress-org/playground/blueprint.json` names `performance-optimisation-2.4.1.zip`. Downloaded and read: HTTP 200, 3,146,799 bytes, 434 entries, `Version: 2.4.1` in the shipped plugin file. |
+| **Evidence — the gate** | `php scripts/verify-playground-blueprint.php` asserts the SHA resolves, the blueprint parses, the plugin URL is absolute https, **and that the blueprint at the pinned SHA still matches the working tree**. That last check is the stale-pin detection. |
+| **Limit — not booted** | The 2.4.1 install has **NOT** been booted and re-verified. The last executed run was 2026-10-02 against 2.4.0; `blueprint.json` carries no committed snapshot of it. Treat the sandbox behaviour as unproven. |
+| **Limit — no artefact** | No output of that run is committed, so none of it can be re-derived from this repository. |
+| **Evidence — the absence** | The drop-in / page-cache situation and the unbounded-cache default are recorded separately and are **not** implied by this row. |
+| **Verified** | 2026-10-05 on `feat/playground-blueprint-minimal` (#1773) |
+
+
 
 ## Claims
 
@@ -183,7 +197,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 |---|---|
 | **Claim** | "There is no automated multi-WordPress-version install matrix in this plugin's CI." |
 | **Verdict** | **TRUE** |
-| **Evidence** | `grep -rn "wordpress-version\|wp-env\|playground" .github/workflows/` returns **no output** (exit 1). The widened form including `wordpress_version` and `WP_VERSION` also returns nothing. No workflow declares a `wordpress-version` input or matrix key. The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
+| **Evidence** | `grep -rnE "wordpress-version\|wp-env \(start\|run\)\|playground \(run\|cli\)\|wp core install\|wordpress-setup-action" .github/workflows/` returns **no output** (exit 1) — no workflow declares a `wordpress-version` input or matrix key, nor a test-service install. The plain-string form `grep -rn "wordpress-version\|wp-env\|playground"` **now returns five lines**, all of them this repository's own Playground path filters and the verifier step added by #1773. Those are references to a demo blueprint, not a version matrix. **Re-verified 2026-10-05 on #1773.** The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
 | **Command** | `grep -rn "wordpress-version\|wordpress_version\|WP_VERSION\|wp-env\|playground" .github/workflows/` |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
