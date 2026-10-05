@@ -51,7 +51,18 @@ $sha = $s[1];
 echo "pinned SHA: {$sha}\n";
 
 // 3. the blueprint must exist at that SHA and parse.
-$path     = '.wordpress-org/playground/blueprint.json';
+$path = '.wordpress-org/playground/blueprint.json';
+
+// CI checks out at depth 1 (actions/checkout's default), and the pinned SHA is
+// usually an ancestor, so `git show` would fail there even when the pin is
+// perfectly good. Fetch that one object before asking for it. A shallow local
+// clone here hits the same path, which is how this was found.
+if ( 0 !== shell_exec( 'git cat-file -e ' . escapeshellarg( $sha ) . ' 2>/dev/null' ) ) {
+	shell_exec(
+		'git fetch --quiet --depth=1 origin ' . escapeshellarg( $sha ) . ' 2>/dev/null'
+	);
+}
+
 $contents = shell_exec( 'git show ' . escapeshellarg( $sha . ':' . $path ) . ' 2>/dev/null' );
 
 if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
