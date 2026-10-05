@@ -13,37 +13,22 @@ class ErrorBoundary extends Component {
 	}
 
 	componentDidCatch( error ) {
-		// Minimal logging by default: the errorInfo component stack can
-		// contain props/state fragments (settings, request payloads) that
-		// should not sit in a shared console, so it is never logged — even
-		// verbose debug output is restricted to the redacted message-only
-		// string. Verbose output is gated behind window.wppoSettings.debug.
-		const debug =
-			typeof window !== 'undefined' &&
-			typeof window.wppoSettings !== 'undefined' &&
-			window.wppoSettings?.debug;
-		if ( debug ) {
-			const message =
-				error instanceof Error ? error.message : String( error );
-			console.error(
-				'ErrorBoundary caught:',
-				redactLogSecrets( message ) || 'an error.'
-			);
-		} else if ( error instanceof Error ) {
-			// Audit #1493 review: error messages can embed request URLs or
-			// payload fragments carrying nonces/tokens, so the non-debug
-			// branch is redacted too.
-			console.error(
-				'ErrorBoundary caught:',
-				redactLogSecrets( error.message ) || 'an error.'
-			);
-		} else {
-			const primitive = String( error );
-			console.error(
-				'ErrorBoundary caught:',
-				redactLogSecrets( primitive ) || 'an error.'
-			);
-		}
+		// Audit #1776: the previous `window.wppoSettings.debug` gate was dead
+		// configuration surface — wp_localize_script never emitted a `debug`
+		// key — and both of its branches logged the same thing, so the flag is
+		// gone and the redacted message is always what gets logged.
+		//
+		// Minimal logging by design: the errorInfo component stack can contain
+		// props/state fragments (settings, request payloads) that should not sit
+		// in a shared console, so it is never logged. Audit #1493 review: error
+		// messages can themselves embed request URLs or payload fragments
+		// carrying nonces/tokens, so the message is redacted too.
+		const message =
+			error instanceof Error ? error.message : String( error );
+		console.error(
+			'ErrorBoundary caught:',
+			redactLogSecrets( message ) || 'an error.'
+		);
 	}
 
 	render() {

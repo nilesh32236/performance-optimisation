@@ -35,7 +35,7 @@ Use this skill when reviewing pull requests or running codebase audits for the P
 - Pure `useState`, no external state management
 - No routing library (tab switching via `useState`)
 - ARIA labels on interactive elements
-- Translation-ready strings via `wppoSettings.translations`
+- Translation-ready strings via `__()` from `@wordpress/i18n` (SPA); `wppoSettings.translations` does not exist since audit #1333
 
 ### SCSS/CSS
 - `.wppo-` prefix on all classes

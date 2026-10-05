@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { isAuthErrorCode } from './authErrors';
 import { redactLogSecrets } from './logSecrets';
 import {
@@ -592,41 +593,15 @@ export const buildAction = ( action, params = {} ) => {
  * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
  * @return {void}
  */
-/**
- * User-facing validation message with translations lookup (audit #1420).
- *
- * Reads wppoSettings.translations with an English fallback so validation
- * rejections are localizable like other UI notice strings.
- *
- * @since 2.3.0
- * @param {string} key      Translations key.
- * @param {string} fallback English fallback.
- * @return {string} Translated or fallback message.
- */
-const translatedError = ( key, fallback ) => {
-	try {
-		const map =
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.translations
-				: null;
-		if ( map && typeof map[ key ] === 'string' && map[ key ] !== '' ) {
-			return map[ key ];
-		}
-	} catch {
-		// Fall through to English.
-	}
-	return fallback;
-};
-
 export const assertScanUrl = ( url, allowEmpty = false ) => {
 	if ( allowEmpty && ( url === '' || url === undefined || url === null ) ) {
 		return;
 	}
 	if ( ! isValidScanUrl( url ) ) {
 		throw new Error(
-			translatedError(
-				'invalidScanUrl',
-				'Invalid scan URL: must be a same-origin http(s) URL.'
+			__(
+				'Invalid scan URL: must be a same-origin http(s) URL.',
+				'performance-optimisation'
 			)
 		);
 	}
@@ -644,13 +619,13 @@ export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( ! isValidScanStrategy( strategy, allowEmpty ) ) {
 		throw new Error(
 			allowEmpty
-				? translatedError(
-						'invalidScanStrategyEmpty',
-						"Invalid strategy: must be 'mobile', 'desktop' or ''."
+				? __(
+						"Invalid strategy: must be 'mobile', 'desktop' or ''.",
+						'performance-optimisation'
 				  )
-				: translatedError(
-						'invalidScanStrategy',
-						"Invalid strategy: must be 'mobile' or 'desktop'."
+				: __(
+						"Invalid strategy: must be 'mobile' or 'desktop'.",
+						'performance-optimisation'
 				  )
 		);
 	}

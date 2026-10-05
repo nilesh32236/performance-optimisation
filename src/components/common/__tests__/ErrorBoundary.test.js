@@ -4,9 +4,9 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import ErrorBoundary from '../ErrorBoundary';
 
-const ProblemChild = ( { shouldThrow = false } ) => {
+const ProblemChild = ( { shouldThrow = false, error } ) => {
 	if ( shouldThrow ) {
-		throw new Error( 'Test error' );
+		throw error ?? new Error( 'Test error' );
 	}
 	return <div>Normal child</div>;
 };
@@ -68,7 +68,10 @@ describe( 'ErrorBoundary Component', () => {
 		);
 	} );
 
-	it( 'logs only the redacted message (never the component stack) when wppoSettings.debug is set', () => {
+	it( 'logs only the redacted message (never the component stack or the raw Error), whatever wppoSettings carries', () => {
+		// Audit #1776: a stray `debug` key in the global must not change the
+		// logged output — the dead gate was removed, so the redacted
+		// message-only log is unconditional.
 		const saved = global.wppoSettings;
 		global.wppoSettings = { ...( saved || {} ), debug: true };
 		try {
@@ -106,6 +109,23 @@ describe( 'ErrorBoundary Component', () => {
 		} finally {
 			global.wppoSettings = saved;
 		}
+	} );
+
+	it( 'redacts secrets from a non-Error thrown value', () => {
+		render(
+			<ErrorBoundary>
+				<ProblemChild
+					shouldThrow={ true }
+					error={
+						'fetch failed for https://example.com/?_wpnonce=abc123def456'
+					}
+				/>
+			</ErrorBoundary>
+		);
+		expect( console.error ).toHaveBeenCalledWith(
+			'ErrorBoundary caught:',
+			'fetch failed for https://example.com/?_wpnonce=[redacted]'
+		);
 	} );
 
 	it( 'recovers when the ErrorBoundary is remounted with a new key', () => {

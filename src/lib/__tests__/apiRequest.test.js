@@ -1123,6 +1123,41 @@ describe( 'API Request library', () => {
 				'Invalid strategy'
 			);
 		} );
+
+		it( 'routes scan validation messages through @wordpress/i18n (audit #1776)', async () => {
+			// Regression guard: these messages used to read a
+			// `wppoSettings.translations` map that wp_localize_script no
+			// longer emits (audit #1333), so they silently fell back to
+			// English forever. Asserting that __() output reaches the throw
+			// path fails if the call is ever re-pointed at a dead source.
+			const translate = jest.fn( ( text ) => `TRANSLATED: ${ text }` );
+			jest.resetModules();
+			jest.doMock( '@wordpress/i18n', () => ( {
+				__: translate,
+			} ) );
+			try {
+				const {
+					assertScanUrl,
+					assertScanStrategy,
+				} = require( '../apiRequest' );
+				expect( () => assertScanUrl( 'javascript:alert(1)' ) ).toThrow(
+					'TRANSLATED: Invalid scan URL: must be a same-origin http(s) URL.'
+				);
+				expect( () => assertScanStrategy( 'tablet' ) ).toThrow(
+					"TRANSLATED: Invalid strategy: must be 'mobile' or 'desktop'."
+				);
+				expect( () => assertScanStrategy( 'tablet', true ) ).toThrow(
+					"TRANSLATED: Invalid strategy: must be 'mobile', 'desktop' or ''."
+				);
+				expect( translate ).toHaveBeenCalledWith(
+					expect.any( String ),
+					'performance-optimisation'
+				);
+			} finally {
+				jest.dontMock( '@wordpress/i18n' );
+				jest.resetModules();
+			}
+		} );
 	} );
 
 	describe( 'isAuthErrorCode', () => {
