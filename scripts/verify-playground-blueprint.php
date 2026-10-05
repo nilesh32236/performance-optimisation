@@ -22,6 +22,23 @@
 
 declare( strict_types = 1 );
 
+const EXPECTED_OWNER = 'nilesh32236';
+const EXPECTED_REPO  = 'performance-optimisation';
+
+
+const PLUGIN_RELEASE_URL_PATTERN = '#^https://github\.com/'
+	. '(?P<owner>' . EXPECTED_OWNER . ')/(?P<repo>' . EXPECTED_REPO . ')'
+	. '/releases/download/v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)'
+	. '/performance-optimisation-(?P=version)\.zip$#';
+// NOT a class: this is a plain CLI script, so `self::` would fatal with
+// "Cannot access self when no class scope is active" - a fatal on the failure
+// path, which is the worst place for one.
+// The plugin asset must live in THIS project's GitHub releases at a v-tagged
+// version, and the filename version must equal the tag. Anchored, so a substring
+// elsewhere in a URL cannot satisfy it and a scheme prefix is not mistaken for
+// a check.
+
+
 // phpcs:disable WordPress.WP.AlternativeFunctions -- CI development script: it runs
 // outside WordPress and must use native filesystem, shell and output APIs, which is
 // the same scope generate-class-inventory.php disables.
@@ -84,10 +101,22 @@ if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
 	} else {
 		echo "blueprint parses at the pinned SHA\n";
 
-		// 4. the plugin source must be an absolute https URL.
-		$url = $blueprint['plugins'][0]['url'] ?? '';
-		if ( ! is_string( $url ) || 0 !== strpos( $url, 'https://' ) ) {
-			$failures[] = 'blueprint plugins[0].url is not an absolute https URL';
+		// 4. the plugin source must be THIS project's release asset, not merely
+		// a string beginning with https://. A scheme prefix is not a check:
+		// any https URL, including one on an unrelated host serving something
+		// else, passed the old test.
+		$url      = $blueprint['plugins'][0]['url'] ?? '';
+		$expected = PLUGIN_RELEASE_URL_PATTERN;
+		if ( ! is_string( $url ) ) {
+			$failures[] = 'blueprint plugins[0].url is not a string';
+		} elseif ( ! preg_match( $expected, $url, $m ) ) {
+			$failures[] = sprintf(
+				'blueprint plugins[0].url is not this project\'s release asset. Expected '
+				. 'https://github.com/%s/%s/releases/download/v<version>/performance-optimisation-<version>.zip, got: %s',
+				EXPECTED_OWNER,
+				EXPECTED_REPO,
+				$url
+			);
 		} else {
 			echo 'plugin source: ' . basename( $url ) . "\n";
 		}
@@ -117,6 +146,7 @@ if ( ! is_string( $head_blueprint ) ) {
 		basename( (string) $working_url )
 	);
 }
+
 
 // Optional: prove the published URL actually serves it.
 if ( $network ) {
