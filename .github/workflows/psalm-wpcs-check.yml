@@ -233,7 +233,7 @@ jobs:
                           clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                           print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
               except Exception as e:
-                  table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
 
           # Psalm
           psalm_file = 'reports/psalm.sarif'
@@ -258,7 +258,7 @@ jobs:
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                                   print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
               except Exception as e:
-                  table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
 
           # A missing report means the scanner produced nothing to parse.
           # That is NOT a clean result, it is an absent one. This step runs
