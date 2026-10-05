@@ -26,7 +26,7 @@ You are auditing the React SPA and frontend JS of a WordPress plugin. The app mo
 - Color contrast meets WCAG AA for all text on background combinations
 
 ### i18n Readiness
-- All user-facing strings use `wppoSettings.translations.KEY || 'English fallback'`
+- All user-facing SPA strings use `__()` from `@wordpress/i18n`, fed by `wp_set_script_translations()` — there is **no** `wppoSettings.translations` map (removed in audit #1333; a lookup against it silently no-ops)
 - No hardcoded English strings in render output
 - Pluralization handled correctly (not just `count + ' items'`)
 

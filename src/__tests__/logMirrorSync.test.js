@@ -34,7 +34,35 @@ describe( 'log mirror contract', () => {
 			'lib/apiRequest.js',
 		] ) {
 			const src = read( rel );
-			expect( src ).toMatch( /slice\( 0, 500 \)/ );
+			// Whitespace-tolerant: `slice( 0, 500 )` and `slice(0, 500)` are the
+			// same contract, and a pure reformat must not fail this. The exact
+			// spacing also forced the `500` literal to stay copy-pasted in every
+			// mirror, which is what blocks collapsing them onto one shared
+			// MAX_LOG_MESSAGE_LENGTH constant. Behaviour for the SPA copy is
+			// asserted above, not by string-matching the source.
+			expect( src ).toMatch( /slice\(\s*0,\s*500\s*\)/ );
 		}
+	} );
+
+	it( 'no SPA component re-implements the helper inline', () => {
+		// The fifth divergent copy appeared in ErrorBoundary.js: it logged
+		// `redactLogSecrets( String( error ) )` with no nullish guard, no
+		// guarded coercion and no 500-char cap — and a throw from
+		// componentDidCatch escalates the very crash it exists to contain.
+		// It now delegates to getErrorLogMessage(). This pins the delegation.
+		const fs = require( 'fs' );
+		const path = require( 'path' );
+		const src = fs.readFileSync(
+			path.join(
+				__dirname,
+				'..',
+				'components',
+				'common',
+				'ErrorBoundary.js'
+			),
+			'utf8'
+		);
+		expect( src ).toContain( 'getErrorLogMessage( error )' );
+		expect( src ).not.toMatch( /String\(\s*error\s*\)/ );
 	} );
 } );

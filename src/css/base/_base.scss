@@ -202,6 +202,34 @@ textarea:focus-visible,
 	font-size: 14px;
 }
 
+/*
+ * SPA crash fallback (src/components/common/ErrorBoundary.js).
+ *
+ * The class was emitted with no rule anywhere in src/css, so the one screen a
+ * user sees after the settings SPA throws — a full-panel condition — rendered
+ * as bare unstyled markup. Centred like the other "nothing to show" states,
+ * with the heading and copy pulled out of the browser defaults. Pinned by
+ * DesignSystemVocabulary.test.js.
+ */
+.wppo-error-boundary {
+	padding: 48px 16px;
+	text-align: center;
+	color: var(--wppo-text-light);
+	font-size: 14px;
+	line-height: 1.5;
+
+	h3 {
+		margin: 0 0 8px;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+	}
+
+	p {
+		margin: 0 0 16px;
+	}
+}
+
 /* Progress grid */
 .wppo-progress-grid {
 	display: flex;

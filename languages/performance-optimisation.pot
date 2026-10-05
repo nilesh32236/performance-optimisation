@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-28T11:52:11+00:00\n"
+"POT-Creation-Date: 2026-10-05T09:50:41+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -19,13 +19,13 @@ msgstr ""
 #: includes/Admin/class-admin-notices.php:286
 #: includes/Admin/class-admin-notices.php:335
 #: includes/Admin/class-admin-notices.php:681
-#: includes/Core/class-main.php:3034
-#: includes/Core/class-main.php:3035
-#: includes/Core/class-main.php:3846
+#: includes/Core/class-main.php:3053
+#: includes/Core/class-main.php:3054
+#: includes/Core/class-main.php:3865
 #: performance-optimisation.php:168
 #: performance-optimisation.php:245
-#: src/App.js:638
-#: src/App.js:647
+#: src/App.js:643
+#: src/App.js:652
 msgid "Performance Optimisation"
 msgstr ""
 
@@ -264,15 +264,15 @@ msgstr ""
 #: includes/Admin/class-abilities.php:829
 #: includes/Admin/class-abilities.php:851
 #: includes/Admin/class-abilities.php:874
-#: includes/Admin/class-rest.php:2315
-#: includes/Admin/class-rest.php:2371
-#: includes/Admin/class-rest.php:2426
+#: includes/Admin/class-rest.php:2364
+#: includes/Admin/class-rest.php:2420
+#: includes/Admin/class-rest.php:2475
 msgid "You can only query URLs belonging to this website."
 msgstr ""
 
 #: includes/Admin/class-abilities.php:1061
-#: includes/Admin/class-rest.php:1932
-#: includes/Admin/class-rest.php:2022
+#: includes/Admin/class-rest.php:1981
+#: includes/Admin/class-rest.php:2071
 msgid "Flush reported failure."
 msgstr ""
 
@@ -285,7 +285,7 @@ msgid "Regenerate critical CSS for all templates."
 msgstr ""
 
 #: includes/Admin/class-abilities.php:1147
-#: src/components/FileOptimization.js:3421
+#: src/components/FileOptimization.js:3737
 msgid "Regenerate Used CSS"
 msgstr ""
 
@@ -322,14 +322,14 @@ msgid "Action Scheduler not available."
 msgstr ""
 
 #: includes/Admin/class-abilities.php:1317
-#: includes/Admin/class-rest.php:2546
-#: includes/Admin/class-rest.php:2566
-#: includes/Admin/class-rest.php:2703
+#: includes/Admin/class-rest.php:2595
+#: includes/Admin/class-rest.php:2615
+#: includes/Admin/class-rest.php:2752
 msgid "Invalid post ID."
 msgstr ""
 
 #: includes/Admin/class-abilities.php:1342
-#: includes/Admin/class-rest.php:2650
+#: includes/Admin/class-rest.php:2699
 msgid "Used CSS regeneration could not be queued."
 msgstr ""
 
@@ -382,9 +382,9 @@ msgstr ""
 #: includes/Admin/class-admin-notices.php:488
 #: includes/Admin/class-admin-notices.php:535
 #: includes/Admin/class-admin-notices.php:588
-#: includes/Core/class-main.php:10194
+#: includes/Core/class-main.php:10269
 #: src/components/AiPanel.js:587
-#: src/components/common/NoticeBanner.js:76
+#: src/components/common/NoticeBanner.js:99
 msgid "Dismiss"
 msgstr ""
 
@@ -587,7 +587,7 @@ msgid "Gallery preset"
 msgstr ""
 
 #: includes/Admin/class-metabox.php:276
-#: src/components/FileOptimization.js:4825
+#: src/components/FileOptimization.js:5150
 msgid "jQuery legacy preset"
 msgstr ""
 
@@ -613,7 +613,7 @@ msgstr ""
 
 #: includes/Admin/class-metabox.php:326
 #: includes/Admin/class-metabox.php:328
-#: src/components/FileOptimization.js:2920
+#: src/components/FileOptimization.js:3211
 msgid "Scripts"
 msgstr ""
 
@@ -630,7 +630,7 @@ msgstr ""
 
 #: includes/Admin/class-metabox.php:333
 #: includes/Admin/class-metabox.php:433
-#: src/components/LlmsPanel.js:91
+#: src/components/LlmsPanel.js:95
 msgid "Source"
 msgstr ""
 
@@ -711,110 +711,110 @@ msgstr ""
 msgid "Disable style %s"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:135
-#: includes/Admin/class-rest-cache.php:175
-#: includes/Admin/class-rest-cache.php:311
+#: includes/Admin/class-rest-cache.php:137
+#: includes/Admin/class-rest-cache.php:177
+#: includes/Admin/class-rest-cache.php:313
 #: includes/Admin/class-rest-settings.php:90
 #: includes/Admin/class-rest-settings.php:356
 #: includes/Admin/class-rest-settings.php:473
 #: includes/Admin/class-rest-settings.php:534
 #: includes/Admin/class-rest-settings.php:559
 #: includes/Admin/class-rest-settings.php:587
-#: includes/Admin/class-rest.php:505
-#: includes/Admin/class-rest.php:1155
-#: includes/Admin/class-rest.php:1472
-#: includes/Admin/class-rest.php:1621
-#: includes/Admin/class-rest.php:1674
-#: includes/Admin/class-rest.php:1836
-#: includes/Admin/class-rest.php:2158
-#: includes/Admin/class-rest.php:2228
-#: includes/Admin/class-rest.php:2536
-#: includes/Admin/class-rest.php:2901
-#: includes/Admin/class-rest.php:3023
-#: includes/Admin/class-rest.php:3270
-#: includes/Admin/class-rest.php:3537
+#: includes/Admin/class-rest.php:526
+#: includes/Admin/class-rest.php:1204
+#: includes/Admin/class-rest.php:1521
+#: includes/Admin/class-rest.php:1670
+#: includes/Admin/class-rest.php:1723
+#: includes/Admin/class-rest.php:1885
+#: includes/Admin/class-rest.php:2207
+#: includes/Admin/class-rest.php:2277
+#: includes/Admin/class-rest.php:2585
+#: includes/Admin/class-rest.php:2950
+#: includes/Admin/class-rest.php:3072
+#: includes/Admin/class-rest.php:3319
+#: includes/Admin/class-rest.php:3586
 msgid "Too many requests. Please try again shortly."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:162
+#: includes/Admin/class-rest-cache.php:164
 #: src/components/PreloadSettings.js:203
 msgid "Preload queue resumed."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:162
+#: includes/Admin/class-rest-cache.php:164
 msgid "Nothing to resume."
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/Admin/class-rest-cache.php:193
+#: includes/Admin/class-rest-cache.php:195
 #, php-format
 msgid "Object cache does not support flush_group for %s — no action taken"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:197
+#: includes/Admin/class-rest-cache.php:199
 msgid "Object cache does not support flush_group — no action taken"
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/Admin/class-rest-cache.php:203
+#: includes/Admin/class-rest-cache.php:205
 #, php-format
 msgid "Failed to flush cache group: %s"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:207
+#: includes/Admin/class-rest-cache.php:209
 msgid "Failed to flush cache group."
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/Admin/class-rest-cache.php:213
+#: includes/Admin/class-rest-cache.php:215
 #, php-format
 msgid "Flushed cache group: %s"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:239
-#: includes/Admin/class-rest-cache.php:272
-#: includes/Admin/class-rest-cache.php:330
-#: includes/Admin/class-rest-cache.php:347
+#: includes/Admin/class-rest-cache.php:241
+#: includes/Admin/class-rest-cache.php:274
+#: includes/Admin/class-rest-cache.php:332
+#: includes/Admin/class-rest-cache.php:349
 msgid "Invalid path provided."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:280
+#: includes/Admin/class-rest-cache.php:282
 msgid "Failed to clear cache: Invalid path."
 msgstr ""
 
 #. translators: %s: The URL of the page
-#: includes/Admin/class-rest-cache.php:286
+#: includes/Admin/class-rest-cache.php:288
 #, php-format
 msgid "Clear cache of <a href=\"%1$s\">%2$s</a>"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:293
+#: includes/Admin/class-rest-cache.php:295
 msgid "Clear all cache"
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:364
+#: includes/Admin/class-rest-cache.php:366
 msgid "Coupled purge failed: page cache and used CSS not purged."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:365
-#: src/components/FileOptimization.js:2475
+#: includes/Admin/class-rest-cache.php:367
+#: src/components/FileOptimization.js:2641
 msgid "Failed to purge page cache and used CSS."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:369
+#: includes/Admin/class-rest-cache.php:371
 msgid "Coupled purge: page cache and used CSS purged."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:374
-#: src/components/FileOptimization.js:2461
+#: includes/Admin/class-rest-cache.php:376
+#: src/components/FileOptimization.js:2627
 msgid "Page cache and used CSS purged."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:379
+#: includes/Admin/class-rest-cache.php:381
 msgid "Page cache purged, but used CSS purge failed."
 msgstr ""
 
-#: includes/Admin/class-rest-cache.php:380
+#: includes/Admin/class-rest-cache.php:382
 msgid "Used CSS purged, but page cache purge failed."
 msgstr ""
 
@@ -832,7 +832,7 @@ msgid "Invalid payload."
 msgstr ""
 
 #: includes/Admin/class-rest-settings.php:367
-#: includes/Admin/class-rest.php:1939
+#: includes/Admin/class-rest.php:1988
 msgid "Invalid action."
 msgstr ""
 
@@ -853,7 +853,7 @@ msgid "Settings updated successfully"
 msgstr ""
 
 #: includes/Admin/class-rest-settings.php:480
-#: src/components/FileOptimization.js:2089
+#: src/components/FileOptimization.js:2255
 #: src/components/OptimizationPresets.js:430
 #: src/components/PluginSetting.js:337
 msgid "No settings snapshot available to restore."
@@ -885,70 +885,70 @@ msgstr ""
 msgid "Could not discard sandbox settings."
 msgstr ""
 
-#: includes/Admin/class-rest.php:499
+#: includes/Admin/class-rest.php:520
 msgid "Invalid remediation mode."
 msgstr ""
 
-#: includes/Admin/class-rest.php:513
+#: includes/Admin/class-rest.php:534
 msgid "Option name is required for revert."
 msgstr ""
 
-#: includes/Admin/class-rest.php:871
+#: includes/Admin/class-rest.php:920
 msgid "Whether the request was successful."
 msgstr ""
 
-#: includes/Admin/class-rest.php:877
+#: includes/Admin/class-rest.php:926
 msgid "Response data payload."
 msgstr ""
 
-#: includes/Admin/class-rest.php:883
+#: includes/Admin/class-rest.php:932
 msgid "Response message."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1118
+#: includes/Admin/class-rest.php:1167
 msgid "Activities fetched successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1164
+#: includes/Admin/class-rest.php:1213
 msgid "You are not allowed to optimize images."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1176
-#: includes/Admin/class-rest.php:1221
-#: includes/Admin/class-rest.php:1227
-#: includes/Admin/class-rest.php:1231
-#: includes/Admin/class-rest.php:1238
-#: includes/Admin/class-rest.php:1256
+#: includes/Admin/class-rest.php:1225
+#: includes/Admin/class-rest.php:1270
+#: includes/Admin/class-rest.php:1276
+#: includes/Admin/class-rest.php:1280
+#: includes/Admin/class-rest.php:1287
+#: includes/Admin/class-rest.php:1305
 msgid "Invalid image path provided."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1203
-#: includes/Admin/class-rest.php:1207
+#: includes/Admin/class-rest.php:1252
+#: includes/Admin/class-rest.php:1256
 msgid "No pending images to optimize."
 msgstr ""
 
 #. translators: %d: Number of image jobs queued
-#: includes/Admin/class-rest.php:1410
+#: includes/Admin/class-rest.php:1459
 #, php-format
 msgid "Scheduled %d image optimization jobs for background processing."
 msgstr ""
 
 #. translators: %d: Number of jobs
-#: includes/Admin/class-rest.php:1422
+#: includes/Admin/class-rest.php:1471
 #, php-format
 msgid "%d images queued for background optimization."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1461
+#: includes/Admin/class-rest.php:1510
 #: src/components/Dashboard.js:625
 msgid "Images optimized successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1480
+#: includes/Admin/class-rest.php:1529
 msgid "You are not allowed to delete optimized images."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1485
+#: includes/Admin/class-rest.php:1534
 #: includes/Admin/class-wppo-cli-command.php:564
 #: includes/Cache/class-cache-capacity.php:73
 #: includes/Cache/class-object-cache.php:610
@@ -957,64 +957,64 @@ msgstr ""
 msgid "Unable to initialize filesystem."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1495
-#: includes/Admin/class-rest.php:1503
+#: includes/Admin/class-rest.php:1544
+#: includes/Admin/class-rest.php:1552
 msgid "Invalid optimized images folder."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1509
+#: includes/Admin/class-rest.php:1558
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1513
+#: includes/Admin/class-rest.php:1562
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1519
+#: includes/Admin/class-rest.php:1568
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1585
-#: includes/Admin/class-rest.php:1628
+#: includes/Admin/class-rest.php:1634
+#: includes/Admin/class-rest.php:1677
 msgid "Invalid preset name."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1633
+#: includes/Admin/class-rest.php:1682
 #: src/components/OptimizationPresets.js:368
 #: src/components/OptimizationPresets.js:385
 msgid "Failed to apply the preset. Your settings were left unchanged."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1651
+#: includes/Admin/class-rest.php:1700
 msgid "Preset applied successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1683
+#: includes/Admin/class-rest.php:1732
 msgid "Invalid cleanup type."
 msgstr ""
 
 #. translators: %s: Cleanup type
-#: includes/Admin/class-rest.php:1692
+#: includes/Admin/class-rest.php:1741
 #, php-format
 msgid "Failed to clean %s."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1703
+#: includes/Admin/class-rest.php:1752
 msgid "Partial or total failure during database cleanup."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1716
-#: includes/Database/class-database-cleanup.php:3069
+#: includes/Admin/class-rest.php:1765
+#: includes/Database/class-database-cleanup.php:3126
 msgid "Database cleanup failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1727
+#: includes/Admin/class-rest.php:1776
 msgid "Action Scheduler is not available or cleanup is disabled; nothing was purged."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1864
-#: includes/Admin/class-rest.php:1876
-#: includes/Admin/class-rest.php:2084
+#: includes/Admin/class-rest.php:1913
+#: includes/Admin/class-rest.php:1925
+#: includes/Admin/class-rest.php:2133
 #: includes/Cache/class-object-cache.php:1194
 #: includes/Cache/class-object-cache.php:1465
 #: includes/Cache/class-object-cache.php:1761
@@ -1023,279 +1023,279 @@ msgstr ""
 msgid "Redis connection failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1879
+#: includes/Admin/class-rest.php:1928
 msgid "Object Cache enabled."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1880
+#: includes/Admin/class-rest.php:1929
 msgid "Object Cache enabled successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1887
+#: includes/Admin/class-rest.php:1936
 msgid "Redis connection disable failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1888
+#: includes/Admin/class-rest.php:1937
 msgid "Failed to disable object cache."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1891
-#: includes/Admin/class-rest.php:1892
+#: includes/Admin/class-rest.php:1940
+#: includes/Admin/class-rest.php:1941
 msgid "Object Cache disabled."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1906
+#: includes/Admin/class-rest.php:1955
 msgid "Redis is still unreachable. The circuit breaker stays open."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1915
+#: includes/Admin/class-rest.php:1964
 msgid "Object Cache circuit breaker recovered — drop-in re-enabled manually."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1916
+#: includes/Admin/class-rest.php:1965
 msgid "Object Cache recovered successfully."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1924
-#: includes/Admin/class-rest.php:1925
+#: includes/Admin/class-rest.php:1973
+#: includes/Admin/class-rest.php:1974
 msgid "Object Cache flushed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:1936
+#: includes/Admin/class-rest.php:1985
 msgid "Failed to flush object cache."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2121
+#: includes/Admin/class-rest.php:2170
 msgid "Unauthorized."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2125
+#: includes/Admin/class-rest.php:2174
 msgid "Nonce verification failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2166
-#: includes/Admin/class-rest.php:2236
-#: includes/Admin/class-rest.php:2311
-#: includes/Admin/class-rest.php:2422
+#: includes/Admin/class-rest.php:2215
+#: includes/Admin/class-rest.php:2285
+#: includes/Admin/class-rest.php:2360
+#: includes/Admin/class-rest.php:2471
 msgid "Invalid URL parameter."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2171
-#: includes/Admin/class-rest.php:2242
+#: includes/Admin/class-rest.php:2220
+#: includes/Admin/class-rest.php:2291
 msgid "A valid URL is required."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2177
-#: includes/Admin/class-rest.php:2184
-#: includes/Admin/class-rest.php:2249
+#: includes/Admin/class-rest.php:2226
+#: includes/Admin/class-rest.php:2233
+#: includes/Admin/class-rest.php:2298
 msgid "A valid, allowed URL is required."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2190
-#: includes/Admin/class-rest.php:2255
+#: includes/Admin/class-rest.php:2239
+#: includes/Admin/class-rest.php:2304
 #: includes/Insight/class-telemetry.php:114
 msgid "You can only scan URLs belonging to this website."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2207
+#: includes/Admin/class-rest.php:2256
 msgid "Performance scan failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2260
+#: includes/Admin/class-rest.php:2309
 msgid "PageSpeed cannot scan local or non-public URLs."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2269
-#: includes/Admin/class-rest.php:2558
+#: includes/Admin/class-rest.php:2318
+#: includes/Admin/class-rest.php:2607
 msgid "Action Scheduler is not available."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2343
+#: includes/Admin/class-rest.php:2392
 msgid "PageSpeed scan failed. Please check your API key and try again."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2440
+#: includes/Admin/class-rest.php:2489
 msgid "No cached scan found for this URL. Run a scan first."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2554
+#: includes/Admin/class-rest.php:2603
 msgid "Rollout actions require a post ID."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2581
+#: includes/Admin/class-rest.php:2630
 msgid "Skipped: post type is excluded from used-CSS generation."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2647
+#: includes/Admin/class-rest.php:2696
 msgid "Used CSS regeneration already queued."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2659
+#: includes/Admin/class-rest.php:2708
 #: src/components/AiPanel.js:359
-#: src/components/FileOptimization.js:2399
-#: src/components/FileOptimization.js:2619
+#: src/components/FileOptimization.js:2565
+#: src/components/FileOptimization.js:2785
 msgid "Used CSS regeneration queued."
 msgstr ""
 
 #. translators: %d: Number of queued jobs
 #. translators: %d: Number of jobs
-#: includes/Admin/class-rest.php:2677
+#: includes/Admin/class-rest.php:2726
 #: includes/CSS/class-used-css.php:3666
 #, php-format
 msgid "Queued %d used-CSS regeneration jobs."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2706
+#: includes/Admin/class-rest.php:2755
 msgid "Used CSS is not available."
 msgstr ""
 
 #. translators: %s: machine-readable failure reason.
-#: includes/Admin/class-rest.php:2719
+#: includes/Admin/class-rest.php:2768
 #, php-format
 msgid "Used-CSS preview failed (%s). Live output untouched."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2729
-#: includes/Admin/class-rest.php:2822
+#: includes/Admin/class-rest.php:2778
+#: includes/Admin/class-rest.php:2871
 msgid "Preview staged: output differs from live. Promote to apply."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2730
-#: includes/Admin/class-rest.php:2823
+#: includes/Admin/class-rest.php:2779
+#: includes/Admin/class-rest.php:2872
 msgid "Preview staged: output matches live."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2740
-#: includes/Admin/class-rest.php:2833
+#: includes/Admin/class-rest.php:2789
+#: includes/Admin/class-rest.php:2882
 msgid "Nothing staged to promote: run a dry-run preview first."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2742
-#: src/components/FileOptimization.js:2734
+#: includes/Admin/class-rest.php:2791
+#: src/components/FileOptimization.js:2900
 msgid "Staged used-CSS promoted."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2755
-#: src/components/FileOptimization.js:2744
+#: includes/Admin/class-rest.php:2804
+#: src/components/FileOptimization.js:2910
 msgid "Last-good used-CSS restored."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2756
-#: includes/Admin/class-rest.php:2849
+#: includes/Admin/class-rest.php:2805
+#: includes/Admin/class-rest.php:2898
 msgid "No last-good fallback available: live output unchanged."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2763
+#: includes/Admin/class-rest.php:2812
 msgid "Used CSS is healthy: live file serves."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2766
+#: includes/Admin/class-rest.php:2815
 msgid "Used CSS was broken and has been restored from last-good."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2768
+#: includes/Admin/class-rest.php:2817
 msgid "Used CSS is degraded with no fallback available."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2771
-#: includes/Admin/class-rest.php:2864
+#: includes/Admin/class-rest.php:2820
+#: includes/Admin/class-rest.php:2913
 msgid "Rollout action failed."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2793
+#: includes/Admin/class-rest.php:2842
 msgid "Critical CSS is not available."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2799
-#: includes/Admin/class-rest.php:3089
+#: includes/Admin/class-rest.php:2848
+#: includes/Admin/class-rest.php:3138
 msgid "Unknown template: nothing queued."
 msgstr ""
 
 #. translators: %s: machine-readable failure reason.
-#: includes/Admin/class-rest.php:2812
+#: includes/Admin/class-rest.php:2861
 #, php-format
 msgid "Critical-CSS preview failed (%s). Live output untouched."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2835
-#: src/components/FileOptimization.js:2831
+#: includes/Admin/class-rest.php:2884
+#: src/components/FileOptimization.js:2997
 msgid "Staged critical-CSS promoted."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2848
-#: src/components/FileOptimization.js:2842
+#: includes/Admin/class-rest.php:2897
+#: src/components/FileOptimization.js:3008
 msgid "Last-good critical-CSS restored."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2856
+#: includes/Admin/class-rest.php:2905
 msgid "Critical CSS is healthy: live file serves."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2859
+#: includes/Admin/class-rest.php:2908
 msgid "Critical CSS was broken and has been restored from last-good."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2861
+#: includes/Admin/class-rest.php:2910
 msgid "Critical CSS is degraded with no fallback available."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2928
+#: includes/Admin/class-rest.php:2977
 msgid "Manual purge: page cache, used-CSS and critical-CSS purged; combined assets version-bumped."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2934
+#: includes/Admin/class-rest.php:2983
 msgid "Page cache and used CSS purged (degraded mode: version tracking unavailable)."
 msgstr ""
 
-#: includes/Admin/class-rest.php:2935
-#: src/components/FileOptimization.js:1073
+#: includes/Admin/class-rest.php:2984
+#: src/components/FileOptimization.js:1227
 msgid "Page cache, used CSS and critical CSS purged."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3037
+#: includes/Admin/class-rest.php:3086
 msgid "Rollout actions require a template."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3054
+#: includes/Admin/class-rest.php:3103
 msgid "Invalid template: nothing queued."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3102
-#: includes/Admin/class-rest.php:3169
+#: includes/Admin/class-rest.php:3151
+#: includes/Admin/class-rest.php:3218
 msgid "Critical CSS generation is suspended while deferred or delayed JavaScript is enabled."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3129
+#: includes/Admin/class-rest.php:3178
 msgid "Scheduler unavailable: nothing queued."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3141
-#: src/components/FileOptimization.js:2544
+#: includes/Admin/class-rest.php:3190
+#: src/components/FileOptimization.js:2710
 msgid "Critical CSS regeneration queued for template."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3152
-#: src/components/FileOptimization.js:2555
+#: includes/Admin/class-rest.php:3201
+#: src/components/FileOptimization.js:2721
 msgid "Template skipped: nothing queued."
 msgstr ""
 
 #. translators: %d: Number of regeneration jobs queued
 #. translators: %d: Number of jobs queued
-#: includes/Admin/class-rest.php:3179
+#: includes/Admin/class-rest.php:3228
 #: includes/CSS/class-critical-css.php:6091
 #, php-format
 msgid "Critical CSS regeneration: %d jobs queued."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3545
+#: includes/Admin/class-rest.php:3594
 msgid "Invalid safe-mode action."
 msgstr ""
 
-#: includes/Admin/class-rest.php:3587
+#: includes/Admin/class-rest.php:3636
 msgid "Failed to update safe mode settings"
 msgstr ""
 
-#: includes/Admin/class-rest.php:3626
+#: includes/Admin/class-rest.php:3675
 msgid "Could not toggle safe mode."
 msgstr ""
 
@@ -1795,7 +1795,7 @@ msgid "Cache directory does not exist."
 msgstr ""
 
 #: includes/Cache/class-cache-capacity.php:96
-#: includes/Core/class-main.php:3178
+#: includes/Core/class-main.php:3197
 #: src/components/ObjectCache.js:826
 msgid "N/A"
 msgstr ""
@@ -1808,7 +1808,7 @@ msgstr ""
 msgid "Purge fallback: snapshot cap reached; some fallbacks not restored after full wipe."
 msgstr ""
 
-#: includes/Cache/class-cache.php:4197
+#: includes/Cache/class-cache.php:4209
 msgid "Blocked cache path traversal probe."
 msgstr ""
 
@@ -1978,59 +1978,59 @@ msgstr ""
 msgid "Plugin deactivated"
 msgstr ""
 
-#: includes/Core/class-main.php:2330
-#: includes/Core/class-main.php:2350
+#: includes/Core/class-main.php:2349
+#: includes/Core/class-main.php:2369
 msgid "Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately."
 msgstr ""
 
-#: includes/Core/class-main.php:2385
+#: includes/Core/class-main.php:2404
 msgid "Performance Optimisation: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
-#: includes/Core/class-main.php:3367
+#: includes/Core/class-main.php:3386
 msgid "Video player"
 msgstr ""
 
-#: includes/Core/class-main.php:3850
+#: includes/Core/class-main.php:3869
 msgid "Go to Performance Optimisation Setting"
 msgstr ""
 
-#: includes/Core/class-main.php:3860
+#: includes/Core/class-main.php:3879
 msgid "Clear All Cache"
 msgstr ""
 
-#: includes/Core/class-main.php:3872
+#: includes/Core/class-main.php:3891
 msgid "Clear This Page Cache"
 msgstr ""
 
-#: includes/Core/class-main.php:3875
+#: includes/Core/class-main.php:3894
 msgid "Clear cache for this specific page or post"
 msgstr ""
 
-#: includes/Core/class-main.php:10188
+#: includes/Core/class-main.php:10263
 #: src/components/Dashboard.js:531
 msgid "Cache cleared successfully."
 msgstr ""
 
-#: includes/Core/class-main.php:10189
+#: includes/Core/class-main.php:10264
 #: src/components/Dashboard.js:549
 #: src/components/Dashboard.js:568
 msgid "Failed to clear cache."
 msgstr ""
 
-#: includes/Core/class-main.php:10190
+#: includes/Core/class-main.php:10265
 msgid "Failed to clear cache. Please try again."
 msgstr ""
 
-#: includes/Core/class-main.php:10191
+#: includes/Core/class-main.php:10266
 msgid "Page cache cleared successfully."
 msgstr ""
 
-#: includes/Core/class-main.php:10192
+#: includes/Core/class-main.php:10267
 msgid "Failed to clear page cache."
 msgstr ""
 
-#: includes/Core/class-main.php:10193
+#: includes/Core/class-main.php:10268
 msgid "Failed to clear page cache. Please try again."
 msgstr ""
 
@@ -2130,133 +2130,133 @@ msgid "Database cleanup (%1$s): %2$d items removed"
 msgstr ""
 
 #. translators: %d: Number of options remediated
-#: includes/Database/class-database-cleanup.php:1810
+#: includes/Database/class-database-cleanup.php:1867
 #, php-format
 msgid "Autoload remediation: %d options set to autoload off."
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:1829
+#: includes/Database/class-database-cleanup.php:1886
 msgid "Invalid option name."
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:1833
+#: includes/Database/class-database-cleanup.php:1890
 msgid "Option was not remediated by this plugin."
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:1837
+#: includes/Database/class-database-cleanup.php:1894
 msgid "Failed to restore autoload value."
 msgstr ""
 
 #. translators: %s: Option name
-#: includes/Database/class-database-cleanup.php:1845
+#: includes/Database/class-database-cleanup.php:1902
 #, php-format
 msgid "Autoload remediation reverted for %s."
 msgstr ""
 
 #. translators: %d: Number of options reverted
-#: includes/Database/class-database-cleanup.php:1888
+#: includes/Database/class-database-cleanup.php:1945
 #, php-format
 msgid "Autoload remediation reverted for %d options."
 msgstr ""
 
 #. translators: 1: Number of failed Action Scheduler actions purged 2: Retention bound in days
-#: includes/Database/class-database-cleanup.php:2543
+#: includes/Database/class-database-cleanup.php:2600
 #, php-format
 msgid "Action Scheduler cleanup: %1$d failed actions past retention (%2$d days) purged."
 msgstr ""
 
 #. translators: %d: Number of Action Scheduler actions purged
-#: includes/Database/class-database-cleanup.php:2650
+#: includes/Database/class-database-cleanup.php:2707
 #, php-format
 msgid "Action Scheduler cleanup: %d actions purged (terminal retention plus opt-in failed-action purge)."
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2781
+#: includes/Database/class-database-cleanup.php:2838
 msgid "Revisions"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2782
+#: includes/Database/class-database-cleanup.php:2839
 #: src/components/DatabaseCleanup.js:79
 msgid "Auto Drafts"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2783
+#: includes/Database/class-database-cleanup.php:2840
 #: src/components/DatabaseCleanup.js:87
 msgid "Trashed Posts"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2784
+#: includes/Database/class-database-cleanup.php:2841
 #: src/components/DatabaseCleanup.js:95
 msgid "Spam Comments"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2785
+#: includes/Database/class-database-cleanup.php:2842
 #: src/components/DatabaseCleanup.js:103
 msgid "Trashed Comments"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2786
+#: includes/Database/class-database-cleanup.php:2843
 #: src/components/DatabaseCleanup.js:111
 msgid "Expired Transients"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2787
+#: includes/Database/class-database-cleanup.php:2844
 msgid "Orphan Post Meta"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2788
+#: includes/Database/class-database-cleanup.php:2845
 #: src/components/DatabaseCleanup.js:127
 msgid "Unattached Media"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:2789
+#: includes/Database/class-database-cleanup.php:2846
 #: src/components/DatabaseCleanup.js:135
 msgid "oEmbed Cache"
 msgstr ""
 
 #. Translators: %s is the cleanup type label.
-#: includes/Database/class-database-cleanup.php:2793
+#: includes/Database/class-database-cleanup.php:2850
 #, php-format
 msgid "Auto cleanup failed: %s"
 msgstr ""
 
 #. translators: %s: cleanup method name.
-#: includes/Database/class-database-cleanup.php:3062
+#: includes/Database/class-database-cleanup.php:3119
 #, php-format
 msgid "Invalid database cleanup method: %s"
 msgstr ""
 
-#: includes/Database/class-database-cleanup.php:3264
+#: includes/Database/class-database-cleanup.php:3321
 msgid "Invalid table identifier passed to optimize_table."
 msgstr ""
 
 #. translators: %s: Table name
-#: includes/Database/class-database-cleanup.php:3297
+#: includes/Database/class-database-cleanup.php:3354
 #, php-format
 msgid "Skipped OPTIMIZE TABLE for %s — table exceeds 1 GB."
 msgstr ""
 
 #. translators: %s: Table name
-#: includes/Database/class-database-cleanup.php:3323
+#: includes/Database/class-database-cleanup.php:3380
 #, php-format
 msgid "OPTIMIZE TABLE failed for %s."
 msgstr ""
 
 #. translators: %1$s: Table name, %2$d: Table size in bytes
-#: includes/Database/class-database-cleanup.php:3333
+#: includes/Database/class-database-cleanup.php:3390
 #, php-format
 msgid "Optimized table %1$s (size: %2$d bytes)."
 msgstr ""
 
-#: includes/Images/class-image-optimisation.php:5780
-#: includes/Images/class-image-optimisation.php:5942
+#: includes/Images/class-image-optimisation.php:6056
+#: includes/Images/class-image-optimisation.php:6227
 msgid "Play video"
 msgstr ""
 
 #. Translators: %s is the YouTube video ID, used to distinguish multiple embeds for screen-reader users.
 #. translators: %s: YouTube video ID, used to distinguish multiple embeds for screen-reader users.
-#: includes/Images/class-image-optimisation.php:5823
-#: includes/Images/class-image-optimisation.php:5875
+#: includes/Images/class-image-optimisation.php:6108
+#: includes/Images/class-image-optimisation.php:6160
 #, php-format
 msgid "Video thumbnail (%s)"
 msgstr ""
@@ -2270,89 +2270,89 @@ msgstr ""
 msgid "Image conversion failed."
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2169
+#: includes/Insight/class-ai-adaptive.php:2180
 msgid "AI: Scripts to exclude (least-used)"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2185
+#: includes/Insight/class-ai-adaptive.php:2196
 msgid "AI: Styles to exclude (least-used)"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2243
+#: includes/Insight/class-ai-adaptive.php:2254
 msgid "AI: Speculation eagerness suggestion"
 msgstr ""
 
 #. translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75.
 #. translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2249
-#: includes/Insight/class-ai-adaptive.php:2569
+#: includes/Insight/class-ai-adaptive.php:2260
+#: includes/Insight/class-ai-adaptive.php:2580
 #, php-format
 msgid "%1$s · %2$s · %3$s · %4$s · p75 %5$s"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2251
+#: includes/Insight/class-ai-adaptive.php:2262
 #, php-format
 msgid "AI: Speculation eagerness suggestion (field LCP %1$s/%2$s/%3$s p75 %4$s)"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2275
+#: includes/Insight/class-ai-adaptive.php:2286
 #, php-format
 msgid "%1$s · %2$s · %3$s · p75 %4$s"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count.
-#: includes/Insight/class-ai-adaptive.php:2277
+#: includes/Insight/class-ai-adaptive.php:2288
 #, php-format
 msgid "AI: Field LCP tune for %1$s/%2$s/%3$s (p75 %4$s, %5$d samples)"
 msgstr ""
 
 #. translators: %1$d observed samples, %2$d required samples.
-#: includes/Insight/class-ai-adaptive.php:2292
+#: includes/Insight/class-ai-adaptive.php:2303
 #, php-format
 msgid "provisional (%1$d/%2$d samples)"
 msgstr ""
 
 #. translators: %1$d observed samples, %2$d required samples.
-#: includes/Insight/class-ai-adaptive.php:2294
+#: includes/Insight/class-ai-adaptive.php:2305
 #, php-format
 msgid "AI: Field LCP provisional (%1$d/%2$d samples) — collecting data"
 msgstr ""
 
 #. translators: %1$s level, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2357
+#: includes/Insight/class-ai-adaptive.php:2368
 #, php-format
 msgid "%1$s · %2$s · %3$s · %4$s · INP p75 %5$s"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count.
-#: includes/Insight/class-ai-adaptive.php:2359
+#: includes/Insight/class-ai-adaptive.php:2370
 #, php-format
 msgid "AI: Delay JavaScript suggestion for %1$s/%2$s/%3$s (INP p75 %4$s, %5$d samples)"
 msgstr ""
 
 #. translators: %1$s level, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2362
+#: includes/Insight/class-ai-adaptive.php:2373
 #, php-format
 msgid "%1$s · %2$s · %3$s · %4$s · LCP p75 %5$s"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count.
-#: includes/Insight/class-ai-adaptive.php:2364
+#: includes/Insight/class-ai-adaptive.php:2375
 #, php-format
 msgid "AI: Delay JavaScript suggestion for %1$s/%2$s/%3$s (LCP p75 %4$s, %5$d samples)"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2459
+#: includes/Insight/class-ai-adaptive.php:2470
 msgid "AI: Prefetch predicted next URLs"
 msgstr ""
 
 #. translators: %1$s LCP selector, %2$s page path.
 #. translators: %1$s preload URL, %2$s page path.
 #. translators: %1$s metric name, e.g. "Loading (LCP)"; %2$s device class.
-#: includes/Insight/class-ai-adaptive.php:2486
-#: includes/Insight/class-ai-adaptive.php:2544
+#: includes/Insight/class-ai-adaptive.php:2497
+#: includes/Insight/class-ai-adaptive.php:2555
 #: src/components/overview/detailCopy.js:343
 #, php-format,js-format
 msgid "%1$s on %2$s"
@@ -2361,156 +2361,157 @@ msgstr ""
 #. translators: %1$s LCP selector, %2$s page path.
 #. translators: %1$s preload URL, %2$s page path.
 #. translators: %1$s page path, %2$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2486
-#: includes/Insight/class-ai-adaptive.php:2488
-#: includes/Insight/class-ai-adaptive.php:2544
-#: includes/Insight/class-ai-adaptive.php:2551
+#: includes/Insight/class-ai-adaptive.php:2497
+#: includes/Insight/class-ai-adaptive.php:2499
+#: includes/Insight/class-ai-adaptive.php:2555
+#: includes/Insight/class-ai-adaptive.php:2562
 msgid "top page"
 msgstr ""
 
 #. translators: %1$s LCP selector, %2$s page path.
-#: includes/Insight/class-ai-adaptive.php:2488
+#: includes/Insight/class-ai-adaptive.php:2499
 #, php-format
 msgid "AI: Preload hero element %1$s on %2$s"
 msgstr ""
 
 #. translators: %1$s resource type, %2$s resource URL.
-#: includes/Insight/class-ai-adaptive.php:2508
+#: includes/Insight/class-ai-adaptive.php:2519
 #, php-format
 msgid "%1$s · %2$s"
 msgstr ""
 
 #. translators: %1$s resource type, %2$s resource URL.
-#: includes/Insight/class-ai-adaptive.php:2510
+#: includes/Insight/class-ai-adaptive.php:2521
 #, php-format
 msgid "AI: Preload slow resource %1$s (%2$s)"
 msgstr ""
 
 #. translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count.
-#: includes/Insight/class-ai-adaptive.php:2546
+#: includes/Insight/class-ai-adaptive.php:2557
 #, php-format
 msgid "AI: Preload hero for slow path %1$s/%2$s/%3$s (field LCP p75 %4$s, %5$d samples) — suggest-only"
 msgstr ""
 
 #. translators: %1$d observed samples, %2$d required samples.
-#: includes/Insight/class-ai-adaptive.php:2549
+#: includes/Insight/class-ai-adaptive.php:2560
 #, php-format
 msgid "manual hero wins (%1$d/%2$d samples) — set via metabox"
 msgstr ""
 
 #. translators: %1$s page path, %2$s p75 seconds.
-#: includes/Insight/class-ai-adaptive.php:2551
+#: includes/Insight/class-ai-adaptive.php:2562
 #, php-format
 msgid "AI: Slow path %1$s (field LCP p75 %2$s) — no qualified hero yet, manual metabox image wins; static defaults kept"
 msgstr ""
 
 #. translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds, %6$d sample count.
-#: includes/Insight/class-ai-adaptive.php:2571
+#: includes/Insight/class-ai-adaptive.php:2582
 #, php-format
 msgid "AI: Downgrade speculation to %1$s for slow path %2$s/%3$s/%4$s (field LCP p75 %5$s, %6$d samples) — suggest-only"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2647
+#: includes/Insight/class-ai-adaptive.php:2658
 msgid "AI: Exclude commerce/auth URLs from speculation"
 msgstr ""
 
 #. translators: %s is the recovered route.
-#: includes/Insight/class-ai-adaptive.php:2703
+#: includes/Insight/class-ai-adaptive.php:2714
 #, php-format
 msgid "AI: CLS recovered on %s — back inside the band"
 msgstr ""
 
 #. translators: %s is the recovered route.
-#: includes/Insight/class-ai-adaptive.php:2703
-#: includes/Insight/class-ai-adaptive.php:2725
+#: includes/Insight/class-ai-adaptive.php:2714
+#: includes/Insight/class-ai-adaptive.php:2736
 msgid "site"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2706
-#: includes/Insight/class-ai-adaptive.php:2728
+#: includes/Insight/class-ai-adaptive.php:2717
+#: includes/Insight/class-ai-adaptive.php:2739
 msgid "recovered"
 msgstr ""
 
 #. translators: %s is the recovered route.
-#: includes/Insight/class-ai-adaptive.php:2725
+#: includes/Insight/class-ai-adaptive.php:2736
 #, php-format
 msgid "AI: LCP recovered on %s — back inside the band"
 msgstr ""
 
 #. translators: 1: CLS absolute increase vs baseline, 2: affected path, 3: compared window.
-#: includes/Insight/class-ai-adaptive.php:2776
+#: includes/Insight/class-ai-adaptive.php:2787
 #, php-format
 msgid "CLS +%1$s on %2$s (%3$s)"
 msgstr ""
 
 #. translators: %s is the affected path.
-#: includes/Insight/class-ai-adaptive.php:2778
+#: includes/Insight/class-ai-adaptive.php:2789
 #, php-format
 msgid "AI: CLS regression detected on %s"
 msgstr ""
 
 #. translators: %s is the CLS absolute increase vs baseline.
-#: includes/Insight/class-ai-adaptive.php:2781
+#: includes/Insight/class-ai-adaptive.php:2792
 #, php-format
 msgid "CLS +%s vs baseline"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2782
+#: includes/Insight/class-ai-adaptive.php:2793
 msgid "AI: CLS regression detected"
 msgstr ""
 
 #. translators: %s is the deploy note.
-#: includes/Insight/class-ai-adaptive.php:2786
-#: includes/Insight/class-ai-adaptive.php:2860
+#: includes/Insight/class-ai-adaptive.php:2797
+#: includes/Insight/class-ai-adaptive.php:2830
+#: includes/Insight/class-ai-adaptive.php:2879
 #, php-format
 msgid " (near deploy: %s)"
 msgstr ""
 
 #. translators: 1: INP percentage increase vs baseline, 2: affected path, 3: compared window.
-#: includes/Insight/class-ai-adaptive.php:2805
+#: includes/Insight/class-ai-adaptive.php:2816
 #, php-format
 msgid "INP +%1$d%% on %2$s (%3$s)"
 msgstr ""
 
 #. translators: %s is the affected path.
-#: includes/Insight/class-ai-adaptive.php:2807
+#: includes/Insight/class-ai-adaptive.php:2818
 #, php-format
 msgid "AI: INP regression detected on %s"
 msgstr ""
 
 #. translators: %d is the INP percentage increase vs baseline.
-#: includes/Insight/class-ai-adaptive.php:2810
+#: includes/Insight/class-ai-adaptive.php:2821
 #, php-format
 msgid "INP +%d%% vs baseline"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2811
+#: includes/Insight/class-ai-adaptive.php:2822
 msgid "AI: INP regression detected"
 msgstr ""
 
 #. translators: 1: LCP percentage increase vs baseline, 2: affected path, 3: compared window.
-#: includes/Insight/class-ai-adaptive.php:2830
+#: includes/Insight/class-ai-adaptive.php:2849
 #, php-format
 msgid "LCP +%1$d%% on %2$s (%3$s)"
 msgstr ""
 
 #. translators: %s is the affected path.
-#: includes/Insight/class-ai-adaptive.php:2832
+#: includes/Insight/class-ai-adaptive.php:2851
 #, php-format
 msgid "AI: LCP regression detected on %s"
 msgstr ""
 
 #. translators: %d is the LCP percentage increase vs baseline.
-#: includes/Insight/class-ai-adaptive.php:2835
+#: includes/Insight/class-ai-adaptive.php:2854
 #, php-format
 msgid "LCP +%d%% vs baseline"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2836
+#: includes/Insight/class-ai-adaptive.php:2855
 msgid "AI: LCP regression detected"
 msgstr ""
 
-#: includes/Insight/class-ai-adaptive.php:2857
+#: includes/Insight/class-ai-adaptive.php:2876
 msgid "AI: LCP regression detected — used-CSS refresh queued"
 msgstr ""
 
@@ -2769,26 +2770,26 @@ msgstr ""
 msgid "Loading %s…"
 msgstr ""
 
-#: includes/Scheduler/class-cron.php:477
+#: includes/Scheduler/class-cron.php:541
 msgid "Every 5 Hours"
 msgstr ""
 
-#: includes/Scheduler/class-cron.php:489
+#: includes/Scheduler/class-cron.php:553
 msgid "Object Cache Recovery Probe"
 msgstr ""
 
-#: includes/Scheduler/class-cron.php:1368
+#: includes/Scheduler/class-cron.php:1432
 msgid "Cache warmup failed."
 msgstr ""
 
 #. translators: %1$s: URL, %2$s: error.
-#: includes/Scheduler/class-cron.php:1376
+#: includes/Scheduler/class-cron.php:1440
 #, php-format
 msgid "Cache warmup failed for %1$s: %2$s"
 msgstr ""
 
 #. translators: %1$d: HTTP status code, %2$s: URL.
-#: includes/Scheduler/class-cron.php:1386
+#: includes/Scheduler/class-cron.php:1450
 #, php-format
 msgid "Cache warmup failed: HTTP %1$d for %2$s."
 msgstr ""
@@ -2849,7 +2850,7 @@ msgstr ""
 msgid "Added default RUM-segmented speculation auto-tune settings (off; manual speculation settings untouched)."
 msgstr ""
 
-#: includes/Settings/class-settings-migrations.php:822
+#: includes/Settings/class-settings-migrations.php:829
 msgid "Added default anomaly detector v2 settings (band window, recovery days, deploy notes)."
 msgstr ""
 
@@ -2944,7 +2945,7 @@ msgstr ""
 msgid "Dependencies are missing (vendor/autoload.php not found). Run composer install, then re-activate the plugin."
 msgstr ""
 
-#: src/App.js:90
+#: src/App.js:91
 #: src/components/AutoloadedOptions.js:532
 #: src/components/common/MetricCard.js:31
 #: src/components/SystemInfo.js:215
@@ -2952,45 +2953,45 @@ msgstr ""
 msgid "Loading…"
 msgstr ""
 
-#: src/App.js:551
+#: src/App.js:552
 msgid "Failed to fetch activities:"
 msgstr ""
 
-#: src/App.js:656
+#: src/App.js:661
 msgid "Toggle Menu"
 msgstr ""
 
-#: src/App.js:676
+#: src/App.js:681
 msgid "Close Menu"
 msgstr ""
 
-#: src/App.js:695
+#: src/App.js:700
 #: src/components/PageSpeedPanel.js:392
 msgid "Performance"
 msgstr ""
 
-#: src/App.js:697
+#: src/App.js:702
 msgid "Optimisation"
 msgstr ""
 
-#: src/App.js:705
+#: src/App.js:710
 msgid "Main Navigation"
 msgstr ""
 
-#: src/App.js:760
+#: src/App.js:772
 msgid "Unsaved changes — Discard?"
 msgstr ""
 
-#: src/App.js:764
+#: src/App.js:776
 msgid "You have unsaved changes. Leave without saving?"
 msgstr ""
 
-#: src/App.js:768
-#: src/components/FileOptimization.js:4349
+#: src/App.js:780
+#: src/components/FileOptimization.js:4665
 msgid "Discard"
 msgstr ""
 
-#: src/App.js:769
+#: src/App.js:781
 #: src/components/common/ConfirmDialog.js:243
 msgid "Cancel"
 msgstr ""
@@ -3040,9 +3041,9 @@ msgstr ""
 
 #: src/components/AiPanel.js:363
 #: src/components/AiPanel.js:376
-#: src/components/FileOptimization.js:2375
-#: src/components/FileOptimization.js:2413
-#: src/components/FileOptimization.js:2623
+#: src/components/FileOptimization.js:2541
+#: src/components/FileOptimization.js:2579
+#: src/components/FileOptimization.js:2789
 msgid "Failed to regenerate used CSS."
 msgstr ""
 
@@ -3087,7 +3088,7 @@ msgstr ""
 #: src/components/Dashboard.js:1911
 #: src/components/dashboard/LoggedInCacheCard.js:83
 #: src/components/EdgeCachePanel.js:309
-#: src/components/LlmsPanel.js:141
+#: src/components/LlmsPanel.js:145
 #: src/components/PluginSetting.js:1297
 #: src/components/PluginSetting.js:1355
 #: src/components/PluginSetting.js:1441
@@ -3211,8 +3212,8 @@ msgid "Autoloaded data: %1$s / %2$s (Site Health limit)."
 msgstr ""
 
 #: src/components/AutoloadedOptions.js:580
-#: src/components/FileOptimization.js:3799
-#: src/components/FileOptimization.js:5460
+#: src/components/FileOptimization.js:4115
+#: src/components/FileOptimization.js:5785
 #: src/components/PluginSetting.js:1095
 #: src/components/WebVitalsRum.js:191
 #: src/components/WebVitalsTrends.js:250
@@ -3293,6 +3294,8 @@ msgid "Revert autoload for %s"
 msgstr ""
 
 #: src/components/AutoloadedOptions.js:749
+#: src/components/FileOptimization.js:3034
+#: src/components/FileOptimization.js:3152
 msgid "Revert"
 msgstr ""
 
@@ -3311,24 +3314,31 @@ msgid "This will turn autoload off for the reported options. Every change can be
 msgstr ""
 
 #: src/components/common/ConfirmDialog.js:257
-#: src/components/PluginSetting.js:1606
+#: src/components/PluginSetting.js:1646
 msgid "Confirm"
 msgstr ""
 
-#: src/components/common/ErrorBoundary.js:55
+#: src/components/common/ErrorBoundary.js:88
 msgid "Something went wrong"
 msgstr ""
 
-#: src/components/common/ErrorBoundary.js:61
+#: src/components/common/ErrorBoundary.js:94
 msgid "An unexpected error occurred. Please reload the page."
 msgstr ""
 
-#: src/components/common/ErrorBoundary.js:71
+#: src/components/common/ErrorBoundary.js:104
 msgid "Reload"
 msgstr ""
 
 #: src/components/common/LoadingSubmitButton.js:67
+#: src/components/common/NoticeBanner.js:90
 msgid "Working…"
+msgstr ""
+
+#: src/components/common/RiskBadge.js:22
+#: src/components/FileOptimization.js:4897
+#: src/components/OptimizationPresets.js:66
+msgid "Aggressive"
 msgstr ""
 
 #: src/components/common/StatusBadge.js:30
@@ -3354,7 +3364,7 @@ msgstr ""
 
 #. translators: %s: last purge reason.
 #: src/components/common/UpgradePurgeBanner.js:48
-#: src/components/FileOptimization.js:4179
+#: src/components/FileOptimization.js:4495
 #, js-format
 msgid "Last purge: %s"
 msgstr ""
@@ -3364,7 +3374,7 @@ msgid "Updates auto-purge derived caches"
 msgstr ""
 
 #: src/components/common/UpgradePurgeBanner.js:63
-#: src/components/FileOptimization.js:4224
+#: src/components/FileOptimization.js:4540
 msgid "Open safe preview (bypasses minify)"
 msgstr ""
 
@@ -3457,7 +3467,7 @@ msgid "Preview %s"
 msgstr ""
 
 #: src/components/CriticalCssPanel.js:422
-#: src/components/FileOptimization.js:3494
+#: src/components/FileOptimization.js:3810
 msgid "Preview"
 msgstr ""
 
@@ -3468,7 +3478,7 @@ msgid "Promote staged %s"
 msgstr ""
 
 #: src/components/CriticalCssPanel.js:455
-#: src/components/FileOptimization.js:3513
+#: src/components/FileOptimization.js:3829
 msgid "Promote staged"
 msgstr ""
 
@@ -3479,7 +3489,7 @@ msgid "Restore last-good %s"
 msgstr ""
 
 #: src/components/CriticalCssPanel.js:488
-#: src/components/FileOptimization.js:3532
+#: src/components/FileOptimization.js:3848
 msgid "Restore last-good"
 msgstr ""
 
@@ -3635,17 +3645,17 @@ msgid "Server is LiteSpeed / OpenLiteSpeed."
 msgstr ""
 
 #: src/components/Dashboard.js:1196
-#: src/components/FileOptimization.js:5281
+#: src/components/FileOptimization.js:5606
 msgid "Effective:"
 msgstr ""
 
 #: src/components/Dashboard.js:1207
-#: src/components/FileOptimization.js:5263
+#: src/components/FileOptimization.js:5588
 msgid "LSCache Active"
 msgstr ""
 
 #: src/components/Dashboard.js:1211
-#: src/components/FileOptimization.js:5267
+#: src/components/FileOptimization.js:5592
 msgid "LSCache Inactive"
 msgstr ""
 
@@ -3902,39 +3912,39 @@ msgstr ""
 msgid "Save CDN Purge"
 msgstr ""
 
-#: src/components/Dashboard.js:1935
+#: src/components/Dashboard.js:1938
 msgid "How your site is doing"
 msgstr ""
 
-#: src/components/Dashboard.js:1939
+#: src/components/Dashboard.js:1942
 msgid "Lab scans, real-user data, and what to do next."
 msgstr ""
 
-#: src/components/Dashboard.js:1977
+#: src/components/Dashboard.js:1980
 msgid "Advanced tuning"
 msgstr ""
 
-#: src/components/Dashboard.js:1978
+#: src/components/Dashboard.js:1984
 msgid "Option bloat, edge caching, adaptive AI, and llms.txt."
 msgstr ""
 
-#: src/components/Dashboard.js:2006
+#: src/components/Dashboard.js:2012
 msgid "Server, images and activity"
 msgstr ""
 
-#: src/components/Dashboard.js:2010
+#: src/components/Dashboard.js:2016
 msgid "System information, image conversion, and what changed."
 msgstr ""
 
-#: src/components/Dashboard.js:2043
+#: src/components/Dashboard.js:2050
 msgid "Remove Optimized Images"
 msgstr ""
 
-#: src/components/Dashboard.js:2047
+#: src/components/Dashboard.js:2054
 msgid "This will delete all optimized WebP and AVIF copies. Original images will not be affected."
 msgstr ""
 
-#: src/components/Dashboard.js:2051
+#: src/components/Dashboard.js:2058
 #: src/components/DatabaseCleanup.js:965
 msgid "Delete"
 msgstr ""
@@ -3964,7 +3974,7 @@ msgstr ""
 
 #: src/components/dashboard/LoggedInCacheCard.js:82
 #: src/components/DatabaseCleanup.js:534
-#: src/components/FileOptimization.js:2985
+#: src/components/FileOptimization.js:3276
 #: src/components/ImageOptimization.js:637
 #: src/components/PluginSetting.js:1293
 #: src/components/PreloadSettings.js:337
@@ -3976,7 +3986,7 @@ msgstr ""
 #: src/components/DatabaseCleanup.js:36
 #: src/components/DatabaseCleanup.js:64
 #: src/components/FeatureTaskLinks.js:53
-#: src/components/FileOptimization.js:4560
+#: src/components/FileOptimization.js:4885
 #: src/components/OptimizationPresets.js:48
 msgid "Safe"
 msgstr ""
@@ -4457,6 +4467,7 @@ msgid "Aggressive mode drops the builder, jQuery and WooCommerce exclusions and 
 msgstr ""
 
 #: src/components/file-optimization/PresetsCard.js:111
+#: src/components/FileOptimization.js:3310
 msgid "Enable Anyway"
 msgstr ""
 
@@ -4468,1357 +4479,1398 @@ msgstr ""
 msgid "Safe preset is active: minify + defer + delay with builder, jQuery and WooCommerce exclusions."
 msgstr ""
 
-#: src/components/FileOptimization.js:999
+#: src/components/FileOptimization.js:366
+msgid "Aggressive: delays scripts until user interaction — can break menus, carts and sliders. Delay-JS safe mode and the exclusion presets stay on; test in incognito after enabling."
+msgstr ""
+
+#: src/components/FileOptimization.js:370
+msgid "Enable Delay JavaScript?"
+msgstr ""
+
+#: src/components/FileOptimization.js:374
+msgid "Delaying JavaScript can break interactive features (menus, carts, sliders). Your change stays staged until you press Save, and you can revert in one click from the success notice. Enable anyway?"
+msgstr ""
+
+#: src/components/FileOptimization.js:381
+msgid "Aggressive: defers scripts until the page renders — can break jQuery-dependent features. Built-in exclusions cover jQuery, Elementor and WooCommerce; add handles under Exclude from Deferring if anything breaks."
+msgstr ""
+
+#: src/components/FileOptimization.js:385
+msgid "Enable Defer JavaScript?"
+msgstr ""
+
+#: src/components/FileOptimization.js:389
+msgid "Deferring JavaScript can break jQuery-dependent features. Built-in exclusions cover jQuery, Elementor and WooCommerce, and you can revert in one click from the success notice after saving. Enable anyway?"
+msgstr ""
+
+#: src/components/FileOptimization.js:396
+msgid "Aggressive: removes page-level unused CSS — can strip builder or JS-injected styles. Safe mode plus the safelists stay on; add selectors to the safelist if styles go missing."
+msgstr ""
+
+#: src/components/FileOptimization.js:400
+msgid "Enable Remove Unused CSS?"
+msgstr ""
+
+#: src/components/FileOptimization.js:404
+msgid "Removing unused CSS can strip styles needed by builders or dynamic content. Safe mode and the safelists stay on, and you can revert in one click from the success notice after saving. Enable anyway?"
+msgstr ""
+
+#: src/components/FileOptimization.js:1153
 msgid "Staged preview differs from live — promote to apply."
 msgstr ""
 
-#: src/components/FileOptimization.js:1006
+#: src/components/FileOptimization.js:1160
 msgid "Staged preview matches live."
 msgstr ""
 
-#: src/components/FileOptimization.js:1016
+#: src/components/FileOptimization.js:1170
 msgid "Live output is broken but restorable from last-good."
 msgstr ""
 
-#: src/components/FileOptimization.js:1023
+#: src/components/FileOptimization.js:1177
 msgid "Live output is degraded with no fallback."
 msgstr ""
 
-#: src/components/FileOptimization.js:1088
+#: src/components/FileOptimization.js:1242
 msgid "Failed to purge derived caches."
 msgstr ""
 
-#: src/components/FileOptimization.js:1102
-#: src/components/FileOptimization.js:2238
-#: src/components/FileOptimization.js:2282
-#: src/components/FileOptimization.js:2430
-#: src/components/FileOptimization.js:2489
-#: src/components/FileOptimization.js:2584
-#: src/components/FileOptimization.js:2639
-#: src/components/FileOptimization.js:2710
+#: src/components/FileOptimization.js:1256
+#: src/components/FileOptimization.js:2404
+#: src/components/FileOptimization.js:2448
+#: src/components/FileOptimization.js:2596
+#: src/components/FileOptimization.js:2655
+#: src/components/FileOptimization.js:2750
 #: src/components/FileOptimization.js:2805
-#: src/components/FileOptimization.js:2900
+#: src/components/FileOptimization.js:2876
+#: src/components/FileOptimization.js:2971
+#: src/components/FileOptimization.js:3191
 #: src/components/PreloadSettings.js:221
 #: src/components/PreloadSettings.js:310
 msgid "An unexpected error occurred."
 msgstr ""
 
-#: src/components/FileOptimization.js:1261
+#: src/components/FileOptimization.js:1415
 msgid "Preview staged. Open the preview link as admin — visitors still see production markup."
 msgstr ""
 
-#: src/components/FileOptimization.js:1269
-#: src/components/FileOptimization.js:1285
+#: src/components/FileOptimization.js:1423
+#: src/components/FileOptimization.js:1439
 msgid "Could not stage the preview."
 msgstr ""
 
-#: src/components/FileOptimization.js:1367
+#: src/components/FileOptimization.js:1521
 msgid "Preview promoted to production."
 msgstr ""
 
-#: src/components/FileOptimization.js:1383
-#: src/components/FileOptimization.js:1399
+#: src/components/FileOptimization.js:1537
+#: src/components/FileOptimization.js:1553
 msgid "Could not promote."
 msgstr ""
 
-#: src/components/FileOptimization.js:1434
+#: src/components/FileOptimization.js:1588
 msgid "Preview discarded. Production settings unchanged."
 msgstr ""
 
-#: src/components/FileOptimization.js:1442
-#: src/components/FileOptimization.js:1458
+#: src/components/FileOptimization.js:1596
+#: src/components/FileOptimization.js:1612
 msgid "Could not discard."
 msgstr ""
 
-#: src/components/FileOptimization.js:1483
+#: src/components/FileOptimization.js:1637
 msgid "Perf test blocked: the preview URL is not a valid same-origin http(s) URL."
 msgstr ""
 
-#: src/components/FileOptimization.js:1496
+#: src/components/FileOptimization.js:1650
 msgid "Perf test finished on the production URL. Server-side scans cannot use the admin preview session, so staged settings were not measured — open the admin preview link to verify visually."
 msgstr ""
 
-#: src/components/FileOptimization.js:1504
-#: src/components/FileOptimization.js:1513
+#: src/components/FileOptimization.js:1658
+#: src/components/FileOptimization.js:1667
 msgid "Perf test failed."
 msgstr ""
 
-#: src/components/FileOptimization.js:1634
+#: src/components/FileOptimization.js:1788
 msgid "No fragile handles detected — the stack applies cleanly."
 msgstr ""
 
 #. translators: %s: fragile handle name.
-#: src/components/FileOptimization.js:1646
+#: src/components/FileOptimization.js:1800
 #, js-format
 msgid "Fragile handle detected: exclude \"%s\" before enabling the stack."
 msgstr ""
 
-#: src/components/FileOptimization.js:1657
-#: src/components/FileOptimization.js:1666
+#: src/components/FileOptimization.js:1811
+#: src/components/FileOptimization.js:1820
 msgid "Could not run the exclude detector."
 msgstr ""
 
-#: src/components/FileOptimization.js:1727
+#: src/components/FileOptimization.js:1881
 msgid "Suggested handles added to the exclude lists. Save settings to apply."
 msgstr ""
 
-#: src/components/FileOptimization.js:1771
+#: src/components/FileOptimization.js:1925
 msgid "Safe mode enabled — Delay, Defer, Combine and Used CSS are paused. Your settings are preserved."
 msgstr ""
 
-#: src/components/FileOptimization.js:1775
+#: src/components/FileOptimization.js:1929
 msgid "Safe mode disabled — your previous configuration is restored."
 msgstr ""
 
-#: src/components/FileOptimization.js:1788
-#: src/components/FileOptimization.js:1802
+#: src/components/FileOptimization.js:1942
+#: src/components/FileOptimization.js:1956
 msgid "Could not enable safe mode."
 msgstr ""
 
-#: src/components/FileOptimization.js:1792
-#: src/components/FileOptimization.js:1806
+#: src/components/FileOptimization.js:1946
+#: src/components/FileOptimization.js:1960
 msgid "Could not disable safe mode."
 msgstr ""
 
-#: src/components/FileOptimization.js:1970
-#: src/components/FileOptimization.js:1984
+#: src/components/FileOptimization.js:2136
+#: src/components/FileOptimization.js:2150
 msgid "Preset could not be applied — settings left unchanged."
 msgstr ""
 
-#: src/components/FileOptimization.js:2000
+#: src/components/FileOptimization.js:2166
 msgid "Safe preset applied: minify + defer + delay with builder, jQuery and WooCommerce exclusions."
 msgstr ""
 
-#: src/components/FileOptimization.js:2026
+#: src/components/FileOptimization.js:2192
 msgid "Aggressive mode enabled: safe presets are off — use Revert if anything breaks."
 msgstr ""
 
-#: src/components/FileOptimization.js:2055
+#: src/components/FileOptimization.js:2221
 msgid "No file optimisation settings found in the snapshot — settings left unchanged."
 msgstr ""
 
-#: src/components/FileOptimization.js:2078
+#: src/components/FileOptimization.js:2244
 #: src/components/OptimizationPresets.js:419
 #: src/components/PluginSetting.js:327
 msgid "Settings restored to the previous snapshot."
 msgstr ""
 
-#: src/components/FileOptimization.js:2103
+#: src/components/FileOptimization.js:2269
 #: src/components/OptimizationPresets.js:447
 #: src/components/PluginSetting.js:356
 msgid "Error restoring settings."
 msgstr ""
 
-#: src/components/FileOptimization.js:2187
+#: src/components/FileOptimization.js:2353
 msgid "Paused — LiteSpeed Cache owns optimisation (change in Network → LiteSpeed)"
 msgstr ""
 
-#: src/components/FileOptimization.js:2198
+#: src/components/FileOptimization.js:2364
 msgid "none"
 msgstr ""
 
-#: src/components/FileOptimization.js:2212
+#: src/components/FileOptimization.js:2378
 msgid "LiteSpeed settings saved."
 msgstr ""
 
-#: src/components/FileOptimization.js:2227
+#: src/components/FileOptimization.js:2393
 msgid "Failed to save LiteSpeed settings."
 msgstr ""
 
-#: src/components/FileOptimization.js:2328
+#: src/components/FileOptimization.js:2494
 msgid "Critical CSS regeneration queued."
 msgstr ""
 
-#: src/components/FileOptimization.js:2332
+#: src/components/FileOptimization.js:2498
 msgid "Failed to regenerate critical CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:2513
-#: src/components/FileOptimization.js:2773
+#: src/components/FileOptimization.js:2679
+#: src/components/FileOptimization.js:2939
 msgid "Enter a template to regenerate."
 msgstr ""
 
-#: src/components/FileOptimization.js:2566
+#: src/components/FileOptimization.js:2732
 msgid "Failed to regenerate critical CSS for template."
 msgstr ""
 
-#: src/components/FileOptimization.js:2600
-#: src/components/FileOptimization.js:2679
+#: src/components/FileOptimization.js:2766
+#: src/components/FileOptimization.js:2845
 msgid "Enter a valid post ID to regenerate."
 msgstr ""
 
-#: src/components/FileOptimization.js:2724
-#: src/components/FileOptimization.js:2820
+#: src/components/FileOptimization.js:2890
+#: src/components/FileOptimization.js:2986
 msgid "Preview staged."
 msgstr ""
 
-#: src/components/FileOptimization.js:2725
+#: src/components/FileOptimization.js:2891
 msgid "Failed to stage used-CSS preview."
 msgstr ""
 
-#: src/components/FileOptimization.js:2735
+#: src/components/FileOptimization.js:2901
 msgid "Failed to promote staged used CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:2745
+#: src/components/FileOptimization.js:2911
 msgid "Failed to restore used CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:2821
+#: src/components/FileOptimization.js:2987
 msgid "Failed to stage critical-CSS preview."
 msgstr ""
 
-#: src/components/FileOptimization.js:2832
+#: src/components/FileOptimization.js:2998
 msgid "Failed to promote staged critical CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:2846
+#: src/components/FileOptimization.js:3012
 msgid "Failed to restore critical CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:2875
+#: src/components/FileOptimization.js:3029
+msgid "Reverting aggressive setting…"
+msgstr ""
+
+#: src/components/FileOptimization.js:3070
+msgid "Aggressive setting reverted."
+msgstr ""
+
+#: src/components/FileOptimization.js:3081
+#: src/components/FileOptimization.js:3095
+msgid "Revert failed — turn the toggle off manually and press Save."
+msgstr ""
+
+#: src/components/FileOptimization.js:3147
+#: src/components/FileOptimization.js:3165
 #: src/components/PreloadSettings.js:279
 msgid "Settings updated successfully."
 msgstr ""
 
-#: src/components/FileOptimization.js:2886
+#: src/components/FileOptimization.js:3177
 #: src/components/PreloadSettings.js:290
 msgid "Failed to update settings."
 msgstr ""
 
-#: src/components/FileOptimization.js:2915
+#: src/components/FileOptimization.js:3206
 msgid "Assets"
 msgstr ""
 
-#: src/components/FileOptimization.js:2925
+#: src/components/FileOptimization.js:3216
 msgid "E-Commerce"
 msgstr ""
 
-#: src/components/FileOptimization.js:2930
+#: src/components/FileOptimization.js:3221
 msgid "Network"
 msgstr ""
 
-#: src/components/FileOptimization.js:2935
+#: src/components/FileOptimization.js:3226
 msgid "Core"
 msgstr ""
 
-#: src/components/FileOptimization.js:2975
+#: src/components/FileOptimization.js:3266
 msgid "File Optimisation"
 msgstr ""
 
-#: src/components/FileOptimization.js:2976
+#: src/components/FileOptimization.js:3267
 msgid "Fine-tune how your site delivers CSS, JS, and HTML for maximum performance."
 msgstr ""
 
-#: src/components/FileOptimization.js:3041
+#: src/components/FileOptimization.js:3357
 msgid "CSS Optimisation"
 msgstr ""
 
-#: src/components/FileOptimization.js:3052
+#: src/components/FileOptimization.js:3368
 msgid "Optimisation paused — LiteSpeed Cache owns CSS/JS optimisation (change in Network → LiteSpeed)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3065
+#: src/components/FileOptimization.js:3381
 msgid "Minify CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3069
+#: src/components/FileOptimization.js:3385
 msgid "Remove whitespace and comments from stylesheets to reduce file size."
 msgstr ""
 
-#: src/components/FileOptimization.js:3085
+#: src/components/FileOptimization.js:3401
 msgid "Combine CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3089
+#: src/components/FileOptimization.js:3405
 msgid "Merge all CSS files into a single file to reduce the number of HTTP requests."
 msgstr ""
 
-#: src/components/FileOptimization.js:3104
+#: src/components/FileOptimization.js:3420
 msgid "May cause FOUC — test in incognito and exclude problematic files above."
 msgstr ""
 
-#: src/components/FileOptimization.js:3116
+#: src/components/FileOptimization.js:3432
 msgid "Exclude from Combining"
 msgstr ""
 
-#: src/components/FileOptimization.js:3126
+#: src/components/FileOptimization.js:3442
 msgid "e.g. handle-name or /wp-content/…/style.css"
 msgstr ""
 
-#: src/components/FileOptimization.js:3138
+#: src/components/FileOptimization.js:3454
 msgid "One handle or partial URL per line. Fix FOUC by excluding problematic files."
 msgstr ""
 
-#: src/components/FileOptimization.js:3149
-msgid "Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly."
-msgstr ""
-
-#: src/components/FileOptimization.js:3156
+#: src/components/FileOptimization.js:3471
 msgid "Remove Unused CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3160
+#: src/components/FileOptimization.js:3476
 msgid "Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits."
 msgstr ""
 
-#: src/components/FileOptimization.js:3176
+#: src/components/FileOptimization.js:3492
 msgid "Safelist Selectors"
 msgstr ""
 
-#: src/components/FileOptimization.js:3186
+#: src/components/FileOptimization.js:3502
 msgid "e.g. .my-dynamic-class"
 msgstr ""
 
-#: src/components/FileOptimization.js:3198
+#: src/components/FileOptimization.js:3514
 msgid "One selector per line — kept even if unused. Use to fix missing styles."
 msgstr ""
 
-#: src/components/FileOptimization.js:3207
+#: src/components/FileOptimization.js:3523
 msgid "Extra Safelist (builders / dynamic)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3217
+#: src/components/FileOptimization.js:3533
 msgid "e.g. .elementor-widget-container"
 msgstr ""
 
-#: src/components/FileOptimization.js:3231
+#: src/components/FileOptimization.js:3547
 msgid "Additional selectors always preserved — use for builder or JS-injected classes."
 msgstr ""
 
-#: src/components/FileOptimization.js:3240
+#: src/components/FileOptimization.js:3556
 msgid "Disable Used CSS on these URLs"
 msgstr ""
 
-#: src/components/FileOptimization.js:3250
-#: src/components/FileOptimization.js:4886
+#: src/components/FileOptimization.js:3566
+#: src/components/FileOptimization.js:5211
 msgid "e.g. /checkout/"
 msgstr ""
 
-#: src/components/FileOptimization.js:3264
+#: src/components/FileOptimization.js:3580
 msgid "One per line — URL substring or #regex#. Used CSS is skipped on matching URLs only."
 msgstr ""
 
-#: src/components/FileOptimization.js:3271
+#: src/components/FileOptimization.js:3587
 msgid "Visual regression guard"
 msgstr ""
 
-#: src/components/FileOptimization.js:3275
+#: src/components/FileOptimization.js:3591
 msgid "Fall back to the full stylesheet when trimming keeps too little CSS (over-aggressive purge)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3293
+#: src/components/FileOptimization.js:3609
 msgid "Minimum Retained CSS (%)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3317
+#: src/components/FileOptimization.js:3633
 msgid "Below this retained percentage the full stylesheet is served instead (5–50, default: 20)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3328
+#: src/components/FileOptimization.js:3644
 msgid "Used CSS Delivery Mode"
 msgstr ""
 
-#: src/components/FileOptimization.js:3345
+#: src/components/FileOptimization.js:3661
 msgid "File (render-blocking used CSS)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3351
+#: src/components/FileOptimization.js:3667
 msgid "Delay (full CSS on interaction)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3357
+#: src/components/FileOptimization.js:3673
 msgid "Async (preload + swap)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3363
+#: src/components/FileOptimization.js:3679
 msgid "Remove (strip full CSS, auto-downgrades on builders)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3373
+#: src/components/FileOptimization.js:3689
 msgid "File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages."
 msgstr ""
 
 #. translators: %s: last used-CSS regeneration time.
-#: src/components/FileOptimization.js:3387
+#: src/components/FileOptimization.js:3703
 #, js-format
 msgid "Used CSS looks stale — last regenerated at %s. Builder or theme updates may have outrun regeneration; use Regenerate Used CSS below."
 msgstr ""
 
-#: src/components/FileOptimization.js:3393
+#: src/components/FileOptimization.js:3709
 msgid "Used CSS looks stale — it has never been regenerated. Use Regenerate Used CSS below."
 msgstr ""
 
-#: src/components/FileOptimization.js:3403
+#: src/components/FileOptimization.js:3719
 msgid "Smoke test: verify key pages in a logged-out (incognito) window after enabling — used CSS is generated from the logged-out view."
 msgstr ""
 
-#: src/components/FileOptimization.js:3432
+#: src/components/FileOptimization.js:3748
 msgid "Purge Page Cache + Used CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3442
+#: src/components/FileOptimization.js:3758
 msgid "Regenerate Used CSS for Post ID"
 msgstr ""
 
-#: src/components/FileOptimization.js:3471
+#: src/components/FileOptimization.js:3787
 msgid "Regenerate Post"
 msgstr ""
 
-#: src/components/FileOptimization.js:3539
+#: src/components/FileOptimization.js:3855
 msgid "Builder-template post types are skipped automatically."
 msgstr ""
 
-#: src/components/FileOptimization.js:3553
+#: src/components/FileOptimization.js:3869
 msgid "Exclude CSS from Minification"
 msgstr ""
 
-#: src/components/FileOptimization.js:3563
+#: src/components/FileOptimization.js:3879
 msgid "e.g. handle-name or /wp-content/…/critical.css"
 msgstr ""
 
-#: src/components/FileOptimization.js:3575
-#: src/components/FileOptimization.js:4506
+#: src/components/FileOptimization.js:3891
+#: src/components/FileOptimization.js:4831
 msgid "One handle or partial URL per line."
 msgstr ""
 
-#: src/components/FileOptimization.js:3588
+#: src/components/FileOptimization.js:3904
 msgid "Critical CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3592
+#: src/components/FileOptimization.js:3908
 msgid "Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:3609
+#: src/components/FileOptimization.js:3925
 msgid "Critical CSS Max Size (bytes)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3631
+#: src/components/FileOptimization.js:3947
 msgid "Inline output above this size is served from a per-template file with cache busting instead (default: 20480)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3642
+#: src/components/FileOptimization.js:3958
 msgid "Critical CSS Safelist"
 msgstr ""
 
-#: src/components/FileOptimization.js:3652
+#: src/components/FileOptimization.js:3968
 msgid "e.g. .modal-open"
 msgstr ""
 
-#: src/components/FileOptimization.js:3669
+#: src/components/FileOptimization.js:3985
 msgid "One selector per line — always kept in Critical CSS, even when not above the fold. Use for hidden or JS-injected selectors. Empty keeps current behaviour."
 msgstr ""
 
-#: src/components/FileOptimization.js:3680
+#: src/components/FileOptimization.js:3996
 msgid "Excluded Post Types (Critical / Used CSS)"
 msgstr ""
 
-#: src/components/FileOptimization.js:3690
+#: src/components/FileOptimization.js:4006
 msgid "fl-builder-template, elementor_library"
 msgstr ""
 
-#: src/components/FileOptimization.js:3707
+#: src/components/FileOptimization.js:4023
 msgid "One post type per line or comma-separated — builder templates are skipped, never error-looped. Empty keeps the builder defaults."
 msgstr ""
 
-#: src/components/FileOptimization.js:3718
+#: src/components/FileOptimization.js:4034
 msgid "Critical CSS Max Retries"
 msgstr ""
 
-#: src/components/FileOptimization.js:3742
+#: src/components/FileOptimization.js:4058
 msgid "Consecutive failures before a template is marked failed (0–5, default 5)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3753
+#: src/components/FileOptimization.js:4069
 msgid "Regenerate Critical CSS for Template"
 msgstr ""
 
-#: src/components/FileOptimization.js:3779
+#: src/components/FileOptimization.js:4095
 msgid "Regenerate Template"
 msgstr ""
 
-#: src/components/FileOptimization.js:3789
+#: src/components/FileOptimization.js:4105
 msgid "Unable to load Critical CSS status."
 msgstr ""
 
-#: src/components/FileOptimization.js:3831
+#: src/components/FileOptimization.js:4147
 msgid "Host Google Fonts Locally"
 msgstr ""
 
-#: src/components/FileOptimization.js:3835
+#: src/components/FileOptimization.js:4151
 msgid "Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap."
 msgstr ""
 
-#: src/components/FileOptimization.js:3853
+#: src/components/FileOptimization.js:4169
 msgid "Font Metric Fallback"
 msgstr ""
 
-#: src/components/FileOptimization.js:3857
+#: src/components/FileOptimization.js:4173
 msgid "Inject metric-matched system fallback (size-adjust/ascent-override) to reduce CLS when Google Fonts load."
 msgstr ""
 
-#: src/components/FileOptimization.js:3873
+#: src/components/FileOptimization.js:4189
 msgid "Font Subsetting"
 msgstr ""
 
-#: src/components/FileOptimization.js:3877
+#: src/components/FileOptimization.js:4193
 msgid "Keep only selected unicode subsets (default: latin) in self-hosted Google Fonts CSS to reduce font weight. Off by default."
 msgstr ""
 
-#: src/components/FileOptimization.js:3893
+#: src/components/FileOptimization.js:4209
 msgid "Font Subsets"
 msgstr ""
 
-#: src/components/FileOptimization.js:3917
+#: src/components/FileOptimization.js:4233
 msgid "Comma-separated unicode subsets to keep (e.g. latin,latin-ext)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3928
+#: src/components/FileOptimization.js:4244
 msgid "HTML Optimisation"
 msgstr ""
 
-#: src/components/FileOptimization.js:3941
+#: src/components/FileOptimization.js:4257
 msgid "Minify HTML"
 msgstr ""
 
-#: src/components/FileOptimization.js:3945
+#: src/components/FileOptimization.js:4261
 msgid "Compress the HTML output of your website by removing unnecessary whitespace and comments."
 msgstr ""
 
-#: src/components/FileOptimization.js:3956
+#: src/components/FileOptimization.js:4272
 msgid "Remove HTML Comments"
 msgstr ""
 
-#: src/components/FileOptimization.js:3960
+#: src/components/FileOptimization.js:4276
 msgid "Strip HTML comments from the output (except IE conditional comments)."
 msgstr ""
 
-#: src/components/FileOptimization.js:3974
+#: src/components/FileOptimization.js:4290
 msgid "Minify Inline CSS"
 msgstr ""
 
-#: src/components/FileOptimization.js:3978
+#: src/components/FileOptimization.js:4294
 msgid "Minify CSS within <style> tags using the PHP minifier."
 msgstr ""
 
-#: src/components/FileOptimization.js:3994
+#: src/components/FileOptimization.js:4310
 msgid "Minify Inline JavaScript"
 msgstr ""
 
-#: src/components/FileOptimization.js:3998
+#: src/components/FileOptimization.js:4314
 msgid "Minify JavaScript within <script> tags using the PHP minifier."
 msgstr ""
 
-#: src/components/FileOptimization.js:4021
+#: src/components/FileOptimization.js:4337
 msgid "JavaScript Loading"
 msgstr ""
 
-#: src/components/FileOptimization.js:4032
+#: src/components/FileOptimization.js:4348
 msgid "Optimisation paused — LiteSpeed Cache owns JS optimisation (change in Network → LiteSpeed)."
 msgstr ""
 
-#: src/components/FileOptimization.js:4040
+#: src/components/FileOptimization.js:4356
 msgid "Safe mode — one-click recovery"
 msgstr ""
 
-#: src/components/FileOptimization.js:4044
+#: src/components/FileOptimization.js:4360
 msgid "Instantly disable Delay JS, Defer JS, Combine CSS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations. Minification, image optimisation, CDN rewriting and preload are NOT affected by safe mode — turn them off individually if the breakage came from one of those."
 msgstr ""
 
-#: src/components/FileOptimization.js:4056
+#: src/components/FileOptimization.js:4372
 msgid "Safe mode is on — Delay, Defer, Combine and Used CSS are paused, and your settings are preserved. Minification, image optimisation, CDN rewriting and preload keep running, so disable any of those separately if your site is still not right."
 msgstr ""
 
-#: src/components/FileOptimization.js:4064
+#: src/components/FileOptimization.js:4380
 msgid "Auto-exclude detector — Delay / Defer / Combine"
 msgstr ""
 
-#: src/components/FileOptimization.js:4070
+#: src/components/FileOptimization.js:4386
 msgid "Enable the stack on a fragile fixture with zero console errors: the detector names the exact handle to exclude (jQuery, cart fragments and builders first). Stage the stack via Sandbox preview, then restore an unbroken render in one click when needed."
 msgstr ""
 
-#: src/components/FileOptimization.js:4109
+#: src/components/FileOptimization.js:4425
 msgid "Detect fragile handles"
 msgstr ""
 
-#: src/components/FileOptimization.js:4127
+#: src/components/FileOptimization.js:4443
 msgid "Apply suggested excludes"
 msgstr ""
 
-#: src/components/FileOptimization.js:4142
+#: src/components/FileOptimization.js:4458
 msgid "Disable safe mode (restore previous configuration)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4146
+#: src/components/FileOptimization.js:4462
 msgid "Enable safe mode (one-click restore)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4158
+#: src/components/FileOptimization.js:4474
 msgid "Upgrade safety — auto-purge on update"
 msgstr ""
 
-#: src/components/FileOptimization.js:4167
+#: src/components/FileOptimization.js:4483
 msgid "Plugin, theme and core updates auto-clear the page cache, purge used and critical CSS, and bump combined-asset versions so the first visit never shows unstyled content. Use the safe preview link to verify styled output (it bypasses minify via ?wppo_nocache=1)."
 msgstr ""
 
-#: src/components/FileOptimization.js:4206
+#: src/components/FileOptimization.js:4522
 msgid "Purge Derived Caches"
 msgstr ""
 
-#: src/components/FileOptimization.js:4233
+#: src/components/FileOptimization.js:4549
 msgid "Elementor-safe mode — builder-proof by default"
 msgstr ""
 
-#: src/components/FileOptimization.js:4237
+#: src/components/FileOptimization.js:4553
 msgid "Keep Combine CSS off on Elementor-built pages and auto-purge the page cache when Elementor regenerates its CSS. Stage risky changes via Sandbox preview before promoting."
 msgstr ""
 
-#: src/components/FileOptimization.js:4249
+#: src/components/FileOptimization.js:4565
 msgid "Elementor-safe mode is on — Combine CSS steps aside on builder pages and Elementor CSS regens auto-purge the affected page."
 msgstr ""
 
-#: src/components/FileOptimization.js:4257
+#: src/components/FileOptimization.js:4573
 msgid "Sandbox preview — test Delay / Defer / Combine / Elementor-safe safely"
 msgstr ""
 
-#: src/components/FileOptimization.js:4263
+#: src/components/FileOptimization.js:4579
 msgid "Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. The perf test below always measures the production URL; staged settings are verified visually via the admin preview link."
 msgstr ""
 
-#: src/components/FileOptimization.js:4282
+#: src/components/FileOptimization.js:4598
 msgid "Stage preview"
 msgstr ""
 
-#: src/components/FileOptimization.js:4297
-#: src/components/FileOptimization.js:4312
+#: src/components/FileOptimization.js:4613
+#: src/components/FileOptimization.js:4628
 msgid "Open admin preview"
 msgstr ""
 
-#: src/components/FileOptimization.js:4307
+#: src/components/FileOptimization.js:4623
 msgid "Stage a preview first to enable the admin preview link."
 msgstr ""
 
-#: src/components/FileOptimization.js:4327
+#: src/components/FileOptimization.js:4643
 msgid "Run perf test (production URL)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4338
+#: src/components/FileOptimization.js:4654
 msgid "Promote"
 msgstr ""
 
-#: src/components/FileOptimization.js:4359
+#: src/components/FileOptimization.js:4675
 msgid "A staged preview exists. Visitors still see production markup."
 msgstr ""
 
-#: src/components/FileOptimization.js:4366
+#: src/components/FileOptimization.js:4682
 msgid "Perf tests run server-side without your admin session, so they always measure the production URL — staged settings are previewed visually via the admin link above, not via the perf test."
 msgstr ""
 
-#: src/components/FileOptimization.js:4385
+#: src/components/FileOptimization.js:4702
 msgid "Minify JavaScript"
 msgstr ""
 
-#: src/components/FileOptimization.js:4389
+#: src/components/FileOptimization.js:4706
 msgid "Compress JS files by removing whitespace and comments to reduce execution time."
 msgstr ""
 
-#: src/components/FileOptimization.js:4405
+#: src/components/FileOptimization.js:4725
 msgid "Defer JavaScript"
 msgstr ""
 
-#: src/components/FileOptimization.js:4409
+#: src/components/FileOptimization.js:4730
 msgid "Load scripts after the page renders to prevent render-blocking and improve page speed."
 msgstr ""
 
-#: src/components/FileOptimization.js:4425
+#: src/components/FileOptimization.js:4746
 msgid "Exclude from Deferring"
 msgstr ""
 
-#: src/components/FileOptimization.js:4435
+#: src/components/FileOptimization.js:4756
 msgid "e.g. jquery or /wp-includes/…/script.js"
 msgstr ""
 
-#: src/components/FileOptimization.js:4443
+#: src/components/FileOptimization.js:4764
 msgid "One handle or partial URL per line. jQuery, Elementor and WooCommerce handles are excluded by a built-in preset (filter: wppo_defer_js_preset_exclusions)."
 msgstr ""
 
-#: src/components/FileOptimization.js:4456
+#: src/components/FileOptimization.js:4780
 msgid "Delay JavaScript Execution"
 msgstr ""
 
-#: src/components/FileOptimization.js:4460
+#: src/components/FileOptimization.js:4785
 msgid "Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully."
 msgstr ""
 
-#: src/components/FileOptimization.js:4475
+#: src/components/FileOptimization.js:4800
 msgid "Script Rules"
 msgstr ""
 
-#: src/components/FileOptimization.js:4488
+#: src/components/FileOptimization.js:4813
 msgid "Exclude from Minification"
 msgstr ""
 
-#: src/components/FileOptimization.js:4498
+#: src/components/FileOptimization.js:4823
 msgid "e.g. handle-name or /wp-content/…/critical.js"
 msgstr ""
 
-#: src/components/FileOptimization.js:4517
-#: src/components/FileOptimization.js:4525
+#: src/components/FileOptimization.js:4842
+#: src/components/FileOptimization.js:4850
 msgid "Delay-JS preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4566
+#: src/components/FileOptimization.js:4891
 #: src/components/OptimizationPresets.js:57
 msgid "Balanced"
 msgstr ""
 
-#: src/components/FileOptimization.js:4572
-#: src/components/OptimizationPresets.js:66
-msgid "Aggressive"
-msgstr ""
-
-#: src/components/FileOptimization.js:4580
+#: src/components/FileOptimization.js:4905
 msgid "One-click Delay-JS speed: Safe delays least, Aggressive delays most with auto third-party detection. Builder plus commerce exclusions stay on at every level; your manual exclusions are preserved. Replay runs non-captured handlers a second time by design, so analytics/consent beacons must be idempotent. A wppo_delay_js_preset_level_settings filter, when present, remains authoritative at render time."
 msgstr ""
 
-#: src/components/FileOptimization.js:4587
+#: src/components/FileOptimization.js:4912
 msgid "INP-first preset: idle + viewport with 60s heartbeat"
 msgstr ""
 
-#: src/components/FileOptimization.js:4591
+#: src/components/FileOptimization.js:4916
 msgid "One-click preset for better responsiveness. Cart, checkout, and builder previews stay excluded automatically."
 msgstr ""
 
-#: src/components/FileOptimization.js:4605
+#: src/components/FileOptimization.js:4930
 msgid "External scripts only"
 msgstr ""
 
-#: src/components/FileOptimization.js:4609
+#: src/components/FileOptimization.js:4934
 msgid "Delay only external scripts (with src). Inline scripts stay un-delayed — safer on builder pages."
 msgstr ""
 
-#: src/components/FileOptimization.js:4621
+#: src/components/FileOptimization.js:4946
 msgid "Delay third-party scripts only"
 msgstr ""
 
-#: src/components/FileOptimization.js:4625
+#: src/components/FileOptimization.js:4950
 msgid "One-click delay of known third-party scripts (analytics, ads, social, chat, embeds) plus any cross-origin script. First-party scripts stay eager. Cart, checkout and account stay excluded."
 msgstr ""
 
-#: src/components/FileOptimization.js:4643
+#: src/components/FileOptimization.js:4968
 msgid "Extra third-party patterns to delay"
 msgstr ""
 
-#: src/components/FileOptimization.js:4656
+#: src/components/FileOptimization.js:4981
 msgid "e.g. cdn.example.com/tracker"
 msgstr ""
 
-#: src/components/FileOptimization.js:4668
+#: src/components/FileOptimization.js:4993
 msgid "One per line — added to the curated built-in denylist. Empty uses the built-in list."
 msgstr ""
 
-#: src/components/FileOptimization.js:4679
+#: src/components/FileOptimization.js:5004
 msgid "Third-party allowlist (never delay)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4692
+#: src/components/FileOptimization.js:5017
 msgid "e.g. consent-manager.js"
 msgstr ""
 
-#: src/components/FileOptimization.js:4704
+#: src/components/FileOptimization.js:5029
 msgid "One per line — always wins over the denylist. Use for scripts that must stay eager."
 msgstr ""
 
-#: src/components/FileOptimization.js:4713
+#: src/components/FileOptimization.js:5038
 msgid "Auto-delay known third parties when idle"
 msgstr ""
 
-#: src/components/FileOptimization.js:4717
+#: src/components/FileOptimization.js:5042
 msgid "One-click deferral of known third-party vendors (analytics, ads, social, chat, embeds) until the browser is idle — same load-when-idle behavior as the idle list. Works on its own or together with the manual third-party mode above. Your allowlist and exclusions still win, and builders plus cart, checkout and account stay excluded."
 msgstr ""
 
-#: src/components/FileOptimization.js:4729
+#: src/components/FileOptimization.js:5054
 msgid "Builder safe preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4733
+#: src/components/FileOptimization.js:5058
 msgid "Keep Elementor, Divi, Bricks, WPBakery, Oxygen, block runtimes and sliders un-delayed by default. Disable only if you manage exclusions manually."
 msgstr ""
 
-#: src/components/FileOptimization.js:4745
+#: src/components/FileOptimization.js:5070
 msgid "Commerce safe preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4749
+#: src/components/FileOptimization.js:5074
 msgid "Keep jQuery and cart-fragments/checkout handles un-delayed by default. Disable only if you manage exclusions manually."
 msgstr ""
 
-#: src/components/FileOptimization.js:4761
+#: src/components/FileOptimization.js:5086
 msgid "First-click interaction preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4765
+#: src/components/FileOptimization.js:5090
 msgid "Keep Elementor popups/dialogs, mobile-menu toggles, and add-to-cart handles un-delayed so first clicks never need a second click."
 msgstr ""
 
-#: src/components/FileOptimization.js:4777
+#: src/components/FileOptimization.js:5102
 msgid "Consent compatibility preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4781
+#: src/components/FileOptimization.js:5106
 msgid "Keep consent banners and scanners (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust) un-delayed. Off by default; enable if your banner breaks."
 msgstr ""
 
-#: src/components/FileOptimization.js:4793
+#: src/components/FileOptimization.js:5118
 msgid "Analytics compatibility preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4797
+#: src/components/FileOptimization.js:5122
 msgid "Keep analytics beacons (GA4 gtag, Matomo, Plausible) un-delayed so hits are not lost before interaction. Off by default."
 msgstr ""
 
-#: src/components/FileOptimization.js:4809
+#: src/components/FileOptimization.js:5134
 msgid "Gallery compatibility preset"
 msgstr ""
 
-#: src/components/FileOptimization.js:4813
+#: src/components/FileOptimization.js:5138
 msgid "Keep galleries and lightboxes (PhotoSwipe, Fancybox, Envira, FooGallery) un-delayed so they work before interaction. Off by default."
 msgstr ""
 
-#: src/components/FileOptimization.js:4829
+#: src/components/FileOptimization.js:5154
 msgid "Keep jQuery UI and legacy jQuery plugins un-delayed for themes with jQuery-dependent widgets. Off by default; shops are already covered by the commerce preset."
 msgstr ""
 
-#: src/components/FileOptimization.js:4845
+#: src/components/FileOptimization.js:5170
 msgid "Scripts to Delay"
 msgstr ""
 
-#: src/components/FileOptimization.js:4855
+#: src/components/FileOptimization.js:5180
 msgid "e.g. googletagmanager.com/gtag"
 msgstr ""
 
-#: src/components/FileOptimization.js:4865
+#: src/components/FileOptimization.js:5190
 msgid "One per line — partial URL or keyword (e.g. gtag)."
 msgstr ""
 
-#: src/components/FileOptimization.js:4876
+#: src/components/FileOptimization.js:5201
 msgid "Disable Delay JS on these URLs"
 msgstr ""
 
-#: src/components/FileOptimization.js:4900
+#: src/components/FileOptimization.js:5225
 msgid "One per line — URL substring or #regex#. Delay is skipped on matching URLs only."
 msgstr ""
 
-#: src/components/FileOptimization.js:4912
+#: src/components/FileOptimization.js:5237
 msgid "Default Load Strategy"
 msgstr ""
 
-#: src/components/FileOptimization.js:4927
+#: src/components/FileOptimization.js:5252
 msgid "Interaction (load on user interaction)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4933
+#: src/components/FileOptimization.js:5258
 msgid "Idle (load during browser idle)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4939
+#: src/components/FileOptimization.js:5264
 msgid "Viewport (load when near viewport)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4946
+#: src/components/FileOptimization.js:5271
 msgid "Default strategy for delayed scripts that are not in a specific list below."
 msgstr ""
 
-#: src/components/FileOptimization.js:4961
+#: src/components/FileOptimization.js:5286
 msgid "Idle Timeout (ms)"
 msgstr ""
 
-#: src/components/FileOptimization.js:4987
+#: src/components/FileOptimization.js:5312
 msgid "Maximum time (ms) to wait before loading idle scripts (default: 3000)."
 msgstr ""
 
-#: src/components/FileOptimization.js:5000
+#: src/components/FileOptimization.js:5325
 msgid "Scripts to Load When Idle"
 msgstr ""
 
-#: src/components/FileOptimization.js:5010
+#: src/components/FileOptimization.js:5335
 msgid "e.g. analytics.js"
 msgstr ""
 
-#: src/components/FileOptimization.js:5020
+#: src/components/FileOptimization.js:5345
 msgid "One per line — loads via requestIdleCallback during browser idle."
 msgstr ""
 
-#: src/components/FileOptimization.js:5032
+#: src/components/FileOptimization.js:5357
 msgid "Scripts to Load in Viewport"
 msgstr ""
 
-#: src/components/FileOptimization.js:5042
+#: src/components/FileOptimization.js:5367
 msgid "e.g. chat-widget.js"
 msgstr ""
 
-#: src/components/FileOptimization.js:5052
+#: src/components/FileOptimization.js:5377
 msgid "One per line — loads when near viewport."
 msgstr ""
 
-#: src/components/FileOptimization.js:5064
+#: src/components/FileOptimization.js:5389
 msgid "Script Priority"
 msgstr ""
 
-#: src/components/FileOptimization.js:5074
+#: src/components/FileOptimization.js:5399
 msgid "e.g. critical:high"
 msgstr ""
 
-#: src/components/FileOptimization.js:5084
+#: src/components/FileOptimization.js:5409
 msgid "One per line — handle:priority (high, normal, low). High loads first."
 msgstr ""
 
-#: src/components/FileOptimization.js:5098
+#: src/components/FileOptimization.js:5423
 msgid "Delaying scripts can break immediate functionality. Test carefully."
 msgstr ""
 
-#: src/components/FileOptimization.js:5107
+#: src/components/FileOptimization.js:5432
 msgid "Aggressive mode: a safe preset is off — jQuery, cart, builder or slider scripts may be delayed. Re-enable presets unless you manage exclusions manually."
 msgstr ""
 
-#: src/components/FileOptimization.js:5115
+#: src/components/FileOptimization.js:5440
 msgid "Safe mode: WooCommerce, Elementor and form scripts are auto-excluded, localised inline scripts are preserved, and Delay-JS is skipped on cart, checkout and form pages. Exclude single URLs above or disable Delay JS per page via the post editor Asset Manager. Customize via the wppo_delay_js_exclusions filter."
 msgstr ""
 
-#: src/components/FileOptimization.js:5137
+#: src/components/FileOptimization.js:5462
 msgid "WooCommerce Core"
 msgstr ""
 
-#: src/components/FileOptimization.js:5145
+#: src/components/FileOptimization.js:5470
 msgid "Optimize WooCommerce Assets"
 msgstr ""
 
-#: src/components/FileOptimization.js:5149
+#: src/components/FileOptimization.js:5474
 msgid "Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
 msgstr ""
 
-#: src/components/FileOptimization.js:5165
+#: src/components/FileOptimization.js:5490
 msgid "This may break carts on custom pages. Verify your checkout flow."
 msgstr ""
 
-#: src/components/FileOptimization.js:5176
+#: src/components/FileOptimization.js:5501
 msgid "Keep Assets on These URLs"
 msgstr ""
 
-#: src/components/FileOptimization.js:5186
+#: src/components/FileOptimization.js:5511
 msgid "e.g. shop/.* (regex supported)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5196
+#: src/components/FileOptimization.js:5521
 msgid "One pattern per line — regex supported."
 msgstr ""
 
-#: src/components/FileOptimization.js:5207
+#: src/components/FileOptimization.js:5532
 msgid "Remove Specific CSS/JS Handles"
 msgstr ""
 
-#: src/components/FileOptimization.js:5217
+#: src/components/FileOptimization.js:5542
 msgid "e.g. woocommerce-smallscreen"
 msgstr ""
 
-#: src/components/FileOptimization.js:5227
+#: src/components/FileOptimization.js:5552
 msgid "One handle per line."
 msgstr ""
 
-#: src/components/FileOptimization.js:5249
+#: src/components/FileOptimization.js:5574
 msgid "LiteSpeed Integration"
 msgstr ""
 
-#: src/components/FileOptimization.js:5273
+#: src/components/FileOptimization.js:5598
 msgid "Detected: LiteSpeed"
 msgstr ""
 
-#: src/components/FileOptimization.js:5292
+#: src/components/FileOptimization.js:5617
 msgid "LiteSpeed Cache owns page cache & optimisation in the current mode — WPPO combiners/minifiers are paused to prevent double processing."
 msgstr ""
 
-#: src/components/FileOptimization.js:5304
+#: src/components/FileOptimization.js:5629
 msgid "Both plugins are active in Auto mode. Choose the cache owner below."
 msgstr ""
 
-#: src/components/FileOptimization.js:5316
+#: src/components/FileOptimization.js:5641
 msgid "Cache Owner"
 msgstr ""
 
-#: src/components/FileOptimization.js:5332
+#: src/components/FileOptimization.js:5657
 msgid "Auto — Detect (recommended)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5338
+#: src/components/FileOptimization.js:5663
 msgid "WPPO owns cache"
 msgstr ""
 
-#: src/components/FileOptimization.js:5344
+#: src/components/FileOptimization.js:5669
 msgid "LiteSpeed owns cache"
 msgstr ""
 
-#: src/components/FileOptimization.js:5350
+#: src/components/FileOptimization.js:5675
 msgid "Standalone — Ignore LiteSpeed"
 msgstr ""
 
-#: src/components/FileOptimization.js:5357
+#: src/components/FileOptimization.js:5682
 msgid "In Auto, WPPO owns cache when LiteSpeed Cache is not active; otherwise LiteSpeed owns it."
 msgstr ""
 
-#: src/components/FileOptimization.js:5367
+#: src/components/FileOptimization.js:5692
 msgid "Save LiteSpeed Mode"
 msgstr ""
 
-#: src/components/FileOptimization.js:5376
+#: src/components/FileOptimization.js:5701
 msgid "Drop-in status:"
 msgstr ""
 
-#: src/components/FileOptimization.js:5381
+#: src/components/FileOptimization.js:5706
 msgid "Page cache:"
 msgstr ""
 
-#: src/components/FileOptimization.js:5391
+#: src/components/FileOptimization.js:5716
 msgid "Object cache:"
 msgstr ""
 
-#: src/components/FileOptimization.js:5418
+#: src/components/FileOptimization.js:5743
 msgid "Only one object-cache.php / advanced-cache.php can exist. Choose the handler in Tools → Object Cache."
 msgstr ""
 
-#: src/components/FileOptimization.js:5428
+#: src/components/FileOptimization.js:5753
 msgid "Page cache drop-in is owned by LiteSpeed — WPPO file cache is bypassed in this mode."
 msgstr ""
 
-#: src/components/FileOptimization.js:5440
+#: src/components/FileOptimization.js:5765
 msgid "Server Rules"
 msgstr ""
 
-#: src/components/FileOptimization.js:5450
+#: src/components/FileOptimization.js:5775
 msgid "Unable to load server configuration. Check your server setup."
 msgstr ""
 
-#: src/components/FileOptimization.js:5475
+#: src/components/FileOptimization.js:5800
 msgid "Loading server configuration…"
 msgstr ""
 
-#: src/components/FileOptimization.js:5490
+#: src/components/FileOptimization.js:5815
 msgid "Server rules require Apache or LiteSpeed."
 msgstr ""
 
-#: src/components/FileOptimization.js:5498
+#: src/components/FileOptimization.js:5823
 msgid "Enable Server Rules (.htaccess)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5505
+#: src/components/FileOptimization.js:5830
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
-#: src/components/FileOptimization.js:5509
+#: src/components/FileOptimization.js:5834
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
-#: src/components/FileOptimization.js:5546
+#: src/components/FileOptimization.js:5871
 msgid "This modifies your .htaccess. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery."
 msgstr ""
 
-#: src/components/FileOptimization.js:5550
+#: src/components/FileOptimization.js:5875
 msgid "This modifies your .htaccess. Ensure you have FTP access for recovery."
 msgstr ""
 
-#: src/components/FileOptimization.js:5566
+#: src/components/FileOptimization.js:5891
 msgid "LiteSpeed Detected:"
 msgstr ""
 
-#: src/components/FileOptimization.js:5571
+#: src/components/FileOptimization.js:5896
 msgid "LiteSpeed is Apache-compatible. Server rules use the same .htaccess as Apache — restart OpenLiteSpeed after changes."
 msgstr ""
 
-#: src/components/FileOptimization.js:5588
+#: src/components/FileOptimization.js:5913
 msgid "Nginx Detected:"
 msgstr ""
 
-#: src/components/FileOptimization.js:5593
+#: src/components/FileOptimization.js:5918
 msgid "Server rules cannot be applied automatically on Nginx. Please copy the rules below into your server configuration."
 msgstr ""
 
-#: src/components/FileOptimization.js:5600
+#: src/components/FileOptimization.js:5925
 msgid "Nginx Configuration"
 msgstr ""
 
-#: src/components/FileOptimization.js:5611
+#: src/components/FileOptimization.js:5936
 msgid "Add these rules inside your"
 msgstr ""
 
-#: src/components/FileOptimization.js:5619
+#: src/components/FileOptimization.js:5944
 msgid "block, then restart Nginx."
 msgstr ""
 
-#: src/components/FileOptimization.js:5636
+#: src/components/FileOptimization.js:5961
 msgid "Unrecognised server software. Automatic rules are only available for Apache (.htaccess)."
 msgstr ""
 
-#: src/components/FileOptimization.js:5649
+#: src/components/FileOptimization.js:5974
 msgid "CDN Settings"
 msgstr ""
 
-#: src/components/FileOptimization.js:5660
+#: src/components/FileOptimization.js:5985
 msgid "CDN Hostname"
 msgstr ""
 
-#: src/components/FileOptimization.js:5679
+#: src/components/FileOptimization.js:6004
 msgid "Enter your CDN hostname. All static asset URLs (JS, CSS, images) will be rewritten to load from this domain, reducing latency for global visitors."
 msgstr ""
 
-#: src/components/FileOptimization.js:5688
+#: src/components/FileOptimization.js:6013
 msgid "Migrated to mapping #0 — cdnURL kept for backward compatibility."
 msgstr ""
 
-#: src/components/FileOptimization.js:5697
+#: src/components/FileOptimization.js:6022
 msgid "CDN Mapping (parity with LSCWP)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5703
+#: src/components/FileOptimization.js:6028
 msgid "One-to-many mapping by origin/dir/filetype. Up to 5 entries. Use * wildcard in Origin Dir (e.g. wp-content/*)."
 msgstr ""
 
-#: src/components/FileOptimization.js:5726
+#: src/components/FileOptimization.js:6051
 msgid "CDN URL"
 msgstr ""
 
-#: src/components/FileOptimization.js:5753
+#: src/components/FileOptimization.js:6078
 msgid "Origin URL (ori)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5778
+#: src/components/FileOptimization.js:6103
 msgid "Origin Dir (ori_dir) — wildcard * allowed, pipe-separated"
 msgstr ""
 
-#: src/components/FileOptimization.js:5805
+#: src/components/FileOptimization.js:6130
 msgid "Include Dirs"
 msgstr ""
 
-#: src/components/FileOptimization.js:5832
+#: src/components/FileOptimization.js:6157
 msgid "Include Filetypes (comma-separated)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5860
+#: src/components/FileOptimization.js:6185
 msgid "CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset"
 msgstr ""
 
-#: src/components/FileOptimization.js:5899
+#: src/components/FileOptimization.js:6224
 msgid "Remove"
 msgstr ""
 
-#: src/components/FileOptimization.js:5933
+#: src/components/FileOptimization.js:6258
 msgid "Add Mapping"
 msgstr ""
 
-#: src/components/FileOptimization.js:5952
+#: src/components/FileOptimization.js:6277
 msgid "Cleanup Core Bloat"
 msgstr ""
 
-#: src/components/FileOptimization.js:5960
+#: src/components/FileOptimization.js:6285
 msgid "Disable Emojis"
 msgstr ""
 
-#: src/components/FileOptimization.js:5964
+#: src/components/FileOptimization.js:6289
 msgid "Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
 msgstr ""
 
-#: src/components/FileOptimization.js:5973
+#: src/components/FileOptimization.js:6298
 msgid "Disable Embeds"
 msgstr ""
 
-#: src/components/FileOptimization.js:5977
+#: src/components/FileOptimization.js:6302
 msgid "Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you do not embed tweets, YouTube videos, etc."
 msgstr ""
 
-#: src/components/FileOptimization.js:5986
+#: src/components/FileOptimization.js:6311
 msgid "Disable Dashicons (Frontend)"
 msgstr ""
 
-#: src/components/FileOptimization.js:5990
+#: src/components/FileOptimization.js:6315
 msgid "Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme does not use Dashicons."
 msgstr ""
 
-#: src/components/FileOptimization.js:5999
+#: src/components/FileOptimization.js:6324
 msgid "Disable XML-RPC"
 msgstr ""
 
-#: src/components/FileOptimization.js:6003
+#: src/components/FileOptimization.js:6328
 msgid "Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you do not use Jetpack, mobile apps, or remote publishing."
 msgstr ""
 
-#: src/components/FileOptimization.js:6012
+#: src/components/FileOptimization.js:6337
 msgid "Remove REST API Links"
 msgstr ""
 
-#: src/components/FileOptimization.js:6016
+#: src/components/FileOptimization.js:6341
 msgid "Remove the REST API discovery link and oEmbed links from the front end. The REST API itself stays active."
 msgstr ""
 
-#: src/components/FileOptimization.js:6025
+#: src/components/FileOptimization.js:6350
 msgid "Disable RSS Feeds"
 msgstr ""
 
-#: src/components/FileOptimization.js:6029
+#: src/components/FileOptimization.js:6354
 msgid "Redirect all feed requests to the home page and remove feed discovery links. Only for sites that do not use feeds."
 msgstr ""
 
-#: src/components/FileOptimization.js:6038
+#: src/components/FileOptimization.js:6363
 msgid "Remove Shortlinks"
 msgstr ""
 
-#: src/components/FileOptimization.js:6042
+#: src/components/FileOptimization.js:6367
 msgid "Remove the rel=shortlink tag from page output."
 msgstr ""
 
-#: src/components/FileOptimization.js:6051
+#: src/components/FileOptimization.js:6376
 msgid "Remove Generator Meta Tag"
 msgstr ""
 
-#: src/components/FileOptimization.js:6055
+#: src/components/FileOptimization.js:6380
 msgid "Hide the WordPress version meta generator tag."
 msgstr ""
 
-#: src/components/FileOptimization.js:6064
+#: src/components/FileOptimization.js:6389
 msgid "Remove jQuery Migrate"
 msgstr ""
 
-#: src/components/FileOptimization.js:6068
+#: src/components/FileOptimization.js:6393
 msgid "Drop the jquery-migrate dependency to save a request. Only disable if your theme/plugins do not rely on deprecated jQuery APIs."
 msgstr ""
 
-#: src/components/FileOptimization.js:6077
+#: src/components/FileOptimization.js:6402
 msgid "Remove Password Strength Meter"
 msgstr ""
 
-#: src/components/FileOptimization.js:6081
+#: src/components/FileOptimization.js:6406
 msgid "Prevent the password strength meter script from loading on the front end."
 msgstr ""
 
-#: src/components/FileOptimization.js:6090
+#: src/components/FileOptimization.js:6415
 msgid "Disable Self-pingbacks"
 msgstr ""
 
-#: src/components/FileOptimization.js:6094
+#: src/components/FileOptimization.js:6419
 msgid "Stop posts from pinging themselves when linking to their own site."
 msgstr ""
 
-#: src/components/FileOptimization.js:6103
+#: src/components/FileOptimization.js:6428
 msgid "Disable RSD Link"
 msgstr ""
 
-#: src/components/FileOptimization.js:6107
+#: src/components/FileOptimization.js:6432
 msgid "Remove the EditURI (RSD) link used by remote clients."
 msgstr ""
 
-#: src/components/FileOptimization.js:6116
+#: src/components/FileOptimization.js:6441
 msgid "Disable WLW Manifest"
 msgstr ""
 
-#: src/components/FileOptimization.js:6120
+#: src/components/FileOptimization.js:6445
 msgid "Remove the Windows Live Writer manifest link."
 msgstr ""
 
-#: src/components/FileOptimization.js:6129
+#: src/components/FileOptimization.js:6454
 msgid "Disable Global Styles"
 msgstr ""
 
-#: src/components/FileOptimization.js:6133
+#: src/components/FileOptimization.js:6458
 msgid "Remove WordPress global styles and SVG filters."
 msgstr ""
 
-#: src/components/FileOptimization.js:6142
+#: src/components/FileOptimization.js:6467
 msgid "Disable Classic Theme Styles"
 msgstr ""
 
-#: src/components/FileOptimization.js:6146
+#: src/components/FileOptimization.js:6471
 msgid "Remove classic theme stylesheet."
 msgstr ""
 
-#: src/components/FileOptimization.js:6157
+#: src/components/FileOptimization.js:6482
 msgid "Disable Woo Cart Fragments"
 msgstr ""
 
-#: src/components/FileOptimization.js:6161
+#: src/components/FileOptimization.js:6486
 msgid "Prevent WooCommerce cart fragments AJAX polling."
 msgstr ""
 
-#: src/components/FileOptimization.js:6170
+#: src/components/FileOptimization.js:6495
 msgid "Disable Recent Comments Style"
 msgstr ""
 
-#: src/components/FileOptimization.js:6174
+#: src/components/FileOptimization.js:6499
 msgid "Remove recent comments widget inline CSS."
 msgstr ""
 
-#: src/components/FileOptimization.js:6185
+#: src/components/FileOptimization.js:6510
 msgid "Disable Comment Reply JS"
 msgstr ""
 
-#: src/components/FileOptimization.js:6189
+#: src/components/FileOptimization.js:6514
 msgid "Remove comment-reply script."
 msgstr ""
 
-#: src/components/FileOptimization.js:6198
+#: src/components/FileOptimization.js:6523
 msgid "Disable oEmbed Discovery"
 msgstr ""
 
-#: src/components/FileOptimization.js:6202
+#: src/components/FileOptimization.js:6527
 msgid "Remove oEmbed discovery links from head."
 msgstr ""
 
-#: src/components/FileOptimization.js:6211
+#: src/components/FileOptimization.js:6536
 msgid "Disable Block Widgets"
 msgstr ""
 
-#: src/components/FileOptimization.js:6215
+#: src/components/FileOptimization.js:6540
 msgid "Disable block-based widgets editor."
 msgstr ""
 
-#: src/components/FileOptimization.js:6224
+#: src/components/FileOptimization.js:6549
 msgid "Load Block Assets On Demand"
 msgstr ""
 
-#: src/components/FileOptimization.js:6228
+#: src/components/FileOptimization.js:6553
 msgid "Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.8 you must enable this toggle; on WordPress 6.9 and later classic themes load block assets on demand by default."
 msgstr ""
 
-#: src/components/FileOptimization.js:6237
+#: src/components/FileOptimization.js:6562
 msgid "Load Combined Core Block Styles"
 msgstr ""
 
-#: src/components/FileOptimization.js:6241
+#: src/components/FileOptimization.js:6566
 msgid "Load the combined core block stylesheet (wp-block-library) for compatibility with shortcodes or widgets that enqueue styles while content renders. Overrides on-demand block assets. Requires WordPress 6.9+."
 msgstr ""
 
-#: src/components/FileOptimization.js:6253
+#: src/components/FileOptimization.js:6578
 msgid "Heartbeat Control"
 msgstr ""
 
-#: src/components/FileOptimization.js:6264
+#: src/components/FileOptimization.js:6589
 msgid "API Frequency"
 msgstr ""
 
-#: src/components/FileOptimization.js:6278
+#: src/components/FileOptimization.js:6603
 msgid "Default Mode"
 msgstr ""
 
-#: src/components/FileOptimization.js:6284
+#: src/components/FileOptimization.js:6609
 msgid "Reduce Frequency (60s)"
 msgstr ""
 
-#: src/components/FileOptimization.js:6290
+#: src/components/FileOptimization.js:6615
 msgid "Disable on Frontend"
 msgstr ""
 
-#: src/components/FileOptimization.js:6296
+#: src/components/FileOptimization.js:6621
 msgid "Disable Everywhere"
 msgstr ""
 
-#: src/components/FileOptimization.js:6306
+#: src/components/FileOptimization.js:6631
 msgid "Restricting the Heartbeat API reduces server CPU usage by limiting polling."
 msgstr ""
 
@@ -6294,35 +6346,35 @@ msgstr ""
 msgid "Failed to save LLMs.txt settings."
 msgstr ""
 
-#: src/components/LlmsPanel.js:69
+#: src/components/LlmsPanel.js:73
 msgid "LLMs.txt"
 msgstr ""
 
-#: src/components/LlmsPanel.js:80
+#: src/components/LlmsPanel.js:84
 msgid "Enable LLMs.txt"
 msgstr ""
 
-#: src/components/LlmsPanel.js:81
+#: src/components/LlmsPanel.js:85
 msgid "Generate /llms.txt and /llms-full.txt for AI crawlers from top URLs (trends + sitemap). Opt-in, local file only."
 msgstr ""
 
-#: src/components/LlmsPanel.js:100
+#: src/components/LlmsPanel.js:104
 msgid "Both (Trends + Sitemap)"
 msgstr ""
 
-#: src/components/LlmsPanel.js:106
+#: src/components/LlmsPanel.js:110
 msgid "Trends only"
 msgstr ""
 
-#: src/components/LlmsPanel.js:109
+#: src/components/LlmsPanel.js:113
 msgid "Sitemap only"
 msgstr ""
 
-#: src/components/LlmsPanel.js:115
+#: src/components/LlmsPanel.js:119
 msgid "File will be available at:"
 msgstr ""
 
-#: src/components/LlmsPanel.js:137
+#: src/components/LlmsPanel.js:141
 msgid "Save LLMs.txt Settings"
 msgstr ""
 
@@ -7556,35 +7608,43 @@ msgstr ""
 msgid "Download JSON"
 msgstr ""
 
-#: src/components/PluginSetting.js:1528
+#: src/components/PluginSetting.js:1534
 msgid "Import Configuration"
 msgstr ""
 
-#: src/components/PluginSetting.js:1538
+#: src/components/PluginSetting.js:1544
 msgid "Upload a previously exported settings file to restore your configuration. This will overwrite all current settings."
 msgstr ""
 
-#: src/components/PluginSetting.js:1548
+#: src/components/PluginSetting.js:1554
 msgid "Select configuration file"
 msgstr ""
 
-#: src/components/PluginSetting.js:1565
+#: src/components/PluginSetting.js:1586
+msgid "Choose File"
+msgstr ""
+
+#: src/components/PluginSetting.js:1598
+msgid "No file chosen"
+msgstr ""
+
+#: src/components/PluginSetting.js:1605
 msgid "Only .json files exported from this plugin are accepted."
 msgstr ""
 
-#: src/components/PluginSetting.js:1580
+#: src/components/PluginSetting.js:1620
 msgid "Import Settings"
 msgstr ""
 
-#: src/components/PluginSetting.js:1584
+#: src/components/PluginSetting.js:1624
 msgid "Importing…"
 msgstr ""
 
-#: src/components/PluginSetting.js:1601
+#: src/components/PluginSetting.js:1641
 msgid "Confirm Import"
 msgstr ""
 
-#: src/components/PluginSetting.js:1602
+#: src/components/PluginSetting.js:1642
 msgid "Importing this file will overwrite all current plugin settings. This cannot be undone. Continue?"
 msgstr ""
 
@@ -8354,6 +8414,18 @@ msgstr ""
 #: src/esi.js:634
 #: src/esi.js:648
 msgid "WPPO ESI hydration failed; embedded content could not be loaded."
+msgstr ""
+
+#: src/lib/apiRequest.js:718
+msgid "Invalid scan URL: must be a same-origin http(s) URL."
+msgstr ""
+
+#: src/lib/apiRequest.js:738
+msgid "Invalid strategy: must be 'mobile', 'desktop' or ''."
+msgstr ""
+
+#: src/lib/apiRequest.js:742
+msgid "Invalid strategy: must be 'mobile' or 'desktop'."
 msgstr ""
 
 #. translators: %d: milliseconds value.

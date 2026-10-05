@@ -1,6 +1,52 @@
+/**
+ * Shared error boundary for the admin SPA.
+ *
+ * Contains render/lifecycle crashes and renders an accessible reload fallback
+ * instead of blanking wp-admin.
+ *
+ * Three invariants, all pinned by
+ * src/components/common/__tests__/ErrorBoundary.test.js:
+ *
+ * 1. The logged message is ALWAYS redacted and never gated on a setting or
+ *    flag (audit #1776 removed the dead `wppoSettings.debug` gate).
+ * 2. `errorInfo.componentStack` is NEVER logged — it can embed props/state
+ *    fragments (settings, request payloads) that must not sit in a shared
+ *    console (audit #1493). Nothing from `errorInfo` may reach the console.
+ * 3. `componentDidCatch` must never throw. React treats a throw there as a
+ *    new commit-phase error, propagates it to the next boundary and, with no
+ *    parent boundary, unmounts the root — so a crash handler that itself
+ *    throws escalates the very failure it exists to contain. Message
+ *    extraction is therefore delegated to `getErrorLogMessage()`
+ *    (src/lib/apiRequest.js), the single tested implementation of the
+ *    log-message contract: nullish input short-circuits to a sentinel, the
+ *    `String()` coercion is guarded, and the result is redacted and then
+ *    capped at 500 chars. Never re-implement it inline here — that is how a
+ *    fifth, weaker copy of the helper appeared here in the first place.
+ *
+ * Recovery: pass `resetKey` (the routed area/view in App.js) so switching tabs
+ * clears a latched fallback instead of leaving a dead-end panel whose only
+ * escape reloads the page and discards every other tab's unsaved work.
+ *
+ * @since NEXT
+ * @param {Object}                    props            Component props.
+ * @param {import('react').ReactNode} [props.children] Content to guard.
+ * @param {*}                         [props.resetKey] Changing value clears a latched error state.
+ * @param {Function}                  [props.onReload] Reload handler (defaults to a full page reload).
+ */
 import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { redactLogSecrets } from '../../lib/logSecrets';
+import { getErrorLogMessage } from '../../lib/apiRequest';
+
+/**
+ * Reload the whole admin page. Split out so the Reload button's behaviour can
+ * be asserted without touching jsdom's non-configurable `window.location`.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+export const reloadPage = () => {
+	window.location.reload();
+};
 
 class ErrorBoundary extends Component {
 	constructor( props ) {
@@ -13,22 +59,24 @@ class ErrorBoundary extends Component {
 	}
 
 	componentDidCatch( error ) {
-		// Audit #1776: the previous `window.wppoSettings.debug` gate was dead
-		// configuration surface — wp_localize_script never emitted a `debug`
-		// key — and both of its branches logged the same thing, so the flag is
-		// gone and the redacted message is always what gets logged.
-		//
-		// Minimal logging by design: the errorInfo component stack can contain
-		// props/state fragments (settings, request payloads) that should not sit
-		// in a shared console, so it is never logged. Audit #1493 review: error
-		// messages can themselves embed request URLs or payload fragments
-		// carrying nonces/tokens, so the message is redacted too.
-		const message =
-			error instanceof Error ? error.message : String( error );
-		console.error(
-			'ErrorBoundary caught:',
-			redactLogSecrets( message ) || 'an error.'
-		);
+		// Minimal logging by design (invariants 1 and 2 in the file header).
+		// getErrorLogMessage() cannot throw for any thrown value, which is what
+		// keeps this crash handler from escalating the crash (invariant 3).
+		console.error( 'ErrorBoundary caught:', getErrorLogMessage( error ) );
+	}
+
+	componentDidUpdate( prevProps ) {
+		// A latched fallback would otherwise survive every tab switch: nothing
+		// else ever sets `hasError` back, and App.js renders one stable
+		// boundary instance. Resetting (rather than remounting via `key`) keeps
+		// each panel's own state, so a sub-tab switch that re-renders the same
+		// component does not discard its in-flight work.
+		if (
+			this.state.hasError &&
+			this.props.resetKey !== prevProps.resetKey
+		) {
+			this.setState( { hasError: false, error: null } );
+		}
 	}
 
 	render() {
@@ -51,7 +99,7 @@ class ErrorBoundary extends Component {
 					<button
 						type="button"
 						className="wppo-button wppo-button--primary"
-						onClick={ () => window.location.reload() }
+						onClick={ this.props.onReload ?? reloadPage }
 					>
 						{ __( 'Reload', 'performance-optimisation' ) }
 					</button>

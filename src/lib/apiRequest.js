@@ -2,23 +2,63 @@ import { __ } from '@wordpress/i18n';
 import { isAuthErrorCode } from './authErrors';
 import { redactLogSecrets } from './logSecrets';
 import {
-	commitSettingsResponse,
+	commitSettingsResponse as commitResponse,
 	cloneSettingsPayload,
+	isFullSettingsMap,
 } from './settingsResponse';
 
 // Audit #1354: the raw lookup Set stays module-private in
 // authErrors.js — re-export only the frozen list and the lookup.
 export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
 
-// P3-019: single response-commit contract re-exported for reuse so
-// components commit server payloads instead of patching request echoes.
-export {
-	commitSettingsResponse,
-	resolveSettingsPayload,
-	isFullSettingsMap,
-	FULL_SETTINGS_MAP_ACTIONS,
-	NESTED_SETTINGS_ACTIONS,
-} from './settingsResponse';
+// P3-019: single response-commit contract exported for reuse so components
+// commit server payloads instead of patching request echoes.
+//
+// `commitSettingsResponse` is the ONLY settingsResponse.js name re-exported
+// through this barrel (see the wrapper below). The other exports
+// (resolveSettingsPayload, isFullSettingsMap, FULL_SETTINGS_MAP_ACTIONS,
+// NESTED_SETTINGS_ACTIONS) had no consumer here — the module's own tests
+// import them from `lib/settingsResponse` directly — so re-exporting them
+// created two import paths for one module's symbols and left it unclear which
+// was canonical.
+
+/**
+ * Monotonic counter bumped every time the shared settings store is mutated.
+ *
+ * Read by the in-flight GET dedupe key below. The key used to be the bare
+ * action string, so a GET issued *before* a mutating action could be joined by
+ * a caller issued *after* it: a panel mounts and asks for `pagespeed_results`,
+ * the user saves that tab, and a component mounting in response re-requests
+ * the same action and silently joins the pre-save entry, rendering
+ * pre-mutation server data as current. Folding this counter into the key ends
+ * the previous generation the moment the store changes.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+let settingsGeneration = 0;
+
+/**
+ * Commit a settings response payload to the shared global cache.
+ *
+ * Thin wrapper over settingsResponse.js's commitSettingsResponse() that also
+ * ends the current dedupe generation. Every writer of
+ * `wppoSettings.settings` funnels through one of the three exported commits
+ * (commitSettingsResponse / commitSettingsCache / patchSettingsCache), so
+ * bumping here covers components calling this barrel directly.
+ *
+ * @since NEXT
+ * @param {string} action Response action (e.g. 'sandbox_promote').
+ * @param {*}      data   Response `data` payload (envelope `.data`).
+ * @return {boolean} True when the global cache was replaced.
+ */
+export const commitSettingsResponse = ( action, data ) => {
+	const committed = commitResponse( action, data );
+	if ( committed ) {
+		settingsGeneration += 1;
+	}
+	return committed;
+};
 
 /**
  * Safe accessor for the global wppoSettings object injected by PHP via
@@ -178,7 +218,17 @@ const refreshNonce = async () => {
  * so a full replace here is correct. If an endpoint ever echoes only the
  * saved tab slice, callers must use patchSettingsCache() instead.
  *
+ * Fails safe exactly like its sibling commitSettingsResponse(): only a
+ * non-empty plain object replaces the cache. The previous
+ * `payload && typeof payload === 'object'` gate also accepted `{}` (and
+ * arrays), so a degraded/empty response body blanked `wppoSettings.settings`
+ * and every sibling panel then read defaults as if all settings had been
+ * reset — while the sibling writer, for the same payload, correctly no-opped.
+ * The two entry points into one store must not hold opposite empty-payload
+ * policies.
+ *
  * @since 2.3.0
+ * @since NEXT Rejects empty objects and arrays instead of wiping the cache.
  * @param {*} payload Resolved settings payload (typically `data.data`).
  * @return {void}
  */
@@ -186,10 +236,11 @@ export const commitSettingsCache = ( payload ) => {
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return;
 	}
-	if ( payload && typeof payload === 'object' ) {
+	if ( isFullSettingsMap( payload ) ) {
 		wppoSettings.settings = Object.freeze(
 			cloneSettingsPayload( payload )
 		);
+		settingsGeneration += 1;
 	}
 };
 
@@ -227,6 +278,7 @@ export const patchSettingsCache = ( tab, patch ) => {
 		...current,
 		[ tab ]: Object.freeze( { ...base, ...patch } ),
 	} );
+	settingsGeneration += 1;
 };
 
 /**
@@ -250,16 +302,35 @@ export const patchSettingsCache = ( tab, patch ) => {
 const inflightGets = new Map();
 
 /**
- * Clear the in-flight GET registry (test seam).
+ * Build the in-flight GET registry key for a request.
  *
- * Production code never needs this — entries self-remove on settle. Tests
- * that intentionally leave a request pending can reset the module state.
+ * Three parts, none of which may collapse:
  *
- * @since 2.3.0
- * @return {void}
+ * - `action` — the dedupe identity itself.
+ * - `settingsGeneration` — so a GET registered before a settings commit is
+ *   never joined by one issued after it (see settingsGeneration above). A
+ *   pre-save `pagespeed_results` read joined by a post-save caller would
+ *   otherwise render pre-mutation server data as current.
+ * - the body — GETs do not forward a body today, but nothing stopped a future
+ *   one from doing so, and a key that ignored it would then silently share
+ *   responses between different requests. Unserialisable bodies degrade to
+ *   '' rather than throwing out of apiCall().
+ *
+ * @since NEXT
+ * @param {string} action REST action path.
+ * @param {*}      body   Request body (ignored for GETs today).
+ * @return {string} Registry key.
  */
-export const clearInflightGets = () => {
-	inflightGets.clear();
+const getInflightKey = ( action, body ) => {
+	let bodyKey = '';
+	if ( body !== undefined && body !== null ) {
+		try {
+			bodyKey = JSON.stringify( body ) ?? '';
+		} catch {
+			bodyKey = '';
+		}
+	}
+	return `${ action }#${ settingsGeneration }#${ bodyKey }`;
 };
 
 /**
@@ -317,14 +388,16 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		throw new Error( 'wppoSettings is not defined' );
 	}
 	const isGet = 'GET' === method;
+	const inflightKey = getInflightKey( action, isGet ? null : body );
 
 	// Share concurrent identical GETs: a second caller awaiting the same
 	// action while the first is still pending joins the same promise
 	// instead of issuing a duplicate request. Its own AbortSignal is
 	// raced locally so aborting one waiter never cancels the shared
-	// fetch for the others.
+	// fetch for the others. The key carries the settings generation and
+	// body so "identical" means identical (see getInflightKey()).
 	if ( isGet ) {
-		const shared = inflightGets.get( action );
+		const shared = inflightGets.get( inflightKey );
 		if ( shared ) {
 			if ( ! signal ) {
 				return shared;
@@ -399,6 +472,40 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			return handleResponse( retryResponse, true, fetchFn );
 		}
 
+		// A non-2xx status carrying a JSON body used to resolve like a success:
+		// `status` was inspected only for 401/403 above, so a 500/502/422 with
+		// `success: false` fulfilled the promise and every wrapper reading
+		// `res.data` (fetchSystemInfo, fetchServerRules,
+		// fetchOptimizationPresets, fetchWooCacheSelfTest) treated a
+		// server-side failure as a successful read of undefined fields — and
+		// nothing reached a catch, so not even the console saw it. Reject here
+		// so every failure mode lands in the caller's catch, alongside the
+		// existing auth/nonce and non-JSON paths.
+		//
+		// `send_response()` always sets an explicit `success` boolean
+		// (includes/Admin/class-rest.php), so an intentional non-2xx that
+		// reports success — e.g. the 202 `{ status: 'not_ready' }` poller
+		// envelope — still resolves.
+		//
+		// The server's own `message` (translated on the PHP side) is preferred
+		// over the status: it is what the caller's error notice shows, and
+		// replacing it with a status code would lose that text.
+		//
+		// `ok === false` is the explicit form: a real `Response` always carries
+		// a boolean `ok`, and a test double that omits it is treated as OK so
+		// only genuine HTTP failures reject.
+		if ( response.ok === false && ! data.success ) {
+			const detail =
+				typeof data.message === 'string' ? data.message.trim() : '';
+			throw new Error(
+				detail
+					? `${ action }: ${ detail }`
+					: `Request failed (${
+							response.status ?? 'unknown status'
+					  }): ${ action }`
+			);
+		}
+
 		// Mutates the global wppoSettings.settings so all components reading from it
 		// (e.g. WelcomePanel.STEPS.isEnabled) reflect the new state without re-rendering.
 		// This is an implicit coupling — the global serves as a shared reactive store.
@@ -418,7 +525,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				const response = await doSharedFetch( null );
 				return await handleResponse( response, false, doSharedFetch );
 			} )();
-			inflightGets.set( action, pending );
+			inflightGets.set( inflightKey, pending );
 			// The registry entry belongs to the **fetch**, not to a waiter.
 			//
 			// It used to be released in a `finally` around the waiter's own
@@ -450,8 +557,8 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			// already awaiting this. The caller awaits `pending`, not this.
 			pending
 				.finally( () => {
-					if ( inflightGets.get( action ) === pending ) {
-						inflightGets.delete( action );
+					if ( inflightGets.get( inflightKey ) === pending ) {
+						inflightGets.delete( inflightKey );
 					}
 				} )
 				.catch( () => {} );
@@ -507,17 +614,28 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
 /**
  * Validate a scan URL client-side before it reaches the resource-intensive
  * performance_scan / pagespeed_scan endpoints. Requires an absolute http(s)
- * URL and, when wppoSettings.homeUrl is available, same-origin with the site.
- * Server-side host allowlisting + per-user/IP rate limiting remains
+ * URL and, when the localised site home URL is available, same-origin with
+ * the site. Server-side host allowlisting + per-user/IP rate limiting remains
  * authoritative.
  *
- * When homeUrl is absent (e.g. a test harness or a direct mount before
- * localisation), the origin check is skipped and any absolute http(s) URL is
- * accepted: failing closed here would brick legitimate scans, and the server
- * gate remains authoritative. Callers needing a strict gate should assert
- * homeUrl presence themselves.
+ * The home URL is emitted **nested** as `performance_audit.homeUrl` by the
+ * single `wp_localize_script( 'performance-optimisation-script', 'wppoSettings',
+ * … )` call in includes/Core/class-main.php; the top-level `homeUrl` read is a
+ * back-compat fallback. Reading only the top-level key left this guard
+ * permanently disabled — `wppoSettings.homeUrl` was always `undefined`, so the
+ * origin check could never fire while the docblock advertised it. Consumers
+ * reading the URL directly should use `getWppoSettings(
+ * 'performance_audit.homeUrl' )` (see Dashboard.js), not the top-level key.
+ *
+ * When no home URL is present at all (e.g. a test harness or a direct mount
+ * before localisation), the origin check is skipped and any absolute http(s)
+ * URL is accepted: failing closed here would brick legitimate scans, and the
+ * server gate remains authoritative. Callers needing a strict gate should
+ * assert home-URL presence themselves. A home URL that is present but
+ * unparseable does fail closed.
  *
  * @since 2.0.0
+ * @since NEXT Reads the nested `performance_audit.homeUrl` emitted by PHP.
  * @param {string} url Raw scan URL.
  * @return {boolean} True when the URL is safe to forward to the server.
  */
@@ -536,21 +654,19 @@ export const isValidScanUrl = ( url ) => {
 	if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
 		return false;
 	}
+	const home =
+		getWppoSettings( 'performance_audit.homeUrl', '' ) ||
+		getWppoSettings( 'homeUrl', '' );
+	if ( ! home ) {
+		return true;
+	}
 	try {
-		if (
-			typeof wppoSettings !== 'undefined' &&
-			wppoSettings &&
-			wppoSettings.homeUrl
-		) {
-			const home = new URL( wppoSettings.homeUrl );
-			if ( parsed.origin !== home.origin ) {
-				return false;
-			}
-		}
+		return parsed.origin === new URL( home ).origin;
 	} catch {
+		// Present but unparseable (scheme-relative, bare host): fail closed
+		// rather than waving an off-site URL through.
 		return false;
 	}
-	return true;
 };
 
 /**

@@ -51,7 +51,11 @@ const LlmsPanel = () => {
 		setSource( s.source || 'both' );
 	}, [ llmsKey, saving ] );
 
-	const homeUrl = getWppoSettings( 'homeUrl', '' );
+	// `homeUrl` is emitted NESTED under `performance_audit` by PHP
+	// (includes/Core/class-main.php); the top-level key this read used to use
+	// never existed, so the panel always fell back to the root-relative path
+	// and hid the copyable absolute URL. Mirrors Dashboard.js.
+	const homeUrl = getWppoSettings( 'performance_audit.homeUrl', '' );
 	const llmsUrl = homeUrl
 		? `${ homeUrl.replace( /\/$/, '' ) }/llms.txt`
 		: '/llms.txt';

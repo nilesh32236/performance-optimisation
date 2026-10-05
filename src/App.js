@@ -754,7 +754,14 @@ const App = () => {
 						<div
 							className={ transition ? 'wppo-fadeIn' : undefined }
 						>
-							<ErrorBoundary>{ renderContent() }</ErrorBoundary>
+							{ /* resetKey: a latched crash fallback would
+						     otherwise survive every tab switch, bricking the
+						     whole content area until a full reload. */ }
+							<ErrorBoundary
+								resetKey={ `${ activeSection }:${ activeView }` }
+							>
+								{ renderContent() }
+							</ErrorBoundary>
 						</div>
 					</div>
 				</div>
