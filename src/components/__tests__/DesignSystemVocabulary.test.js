@@ -20,6 +20,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import { NOTICE_TYPES } from '../../lib/noticeConstants';
+import { NOTICE_ICONS } from '../common/NoticeBanner';
 
 const ROOT = path.join( __dirname, '../../..' );
 
@@ -85,16 +87,44 @@ describe( 'message region token bindings', () => {
 	it( 'binds the item text, surface and border to tokens', () => {
 		const scss = read( 'src/css/components/_message-region.scss' );
 
-		const anchor = '.wppo-message-region__item {';
-		const start = scss.indexOf( anchor );
-		expect( start ).toBeGreaterThan( -1 );
-		const block = scss.slice( start, scss.indexOf( '}', start ) );
+		const match = scss.match( /^\.wppo-message-region__item \{[^}]*\}/m );
+		expect( match ).not.toBeNull();
+		const block = match[ 0 ];
 
 		expect( block ).toMatch( /^\tcolor:\s*var\(--wppo-text-main\);$/m );
 		expect( block ).toMatch( /^\tbackground:\s*var\(--wppo-bg-card\);$/m );
 		expect( block ).toMatch(
 			/^\tborder:\s*1px solid var\(--wppo-border\);$/m
 		);
+	} );
+
+	it.each( NOTICE_TYPES )(
+		'has a rule and an icon for the `%s` notice type',
+		( type ) => {
+			expect( BUILD_CSS ).toContain( `.wppo-notice--${ type }{` );
+			expect( BUILD_CSS ).toContain(
+				`.wppo-message-region__item--${ type }{`
+			);
+		}
+	);
+
+	it( 'has an icon mapped for every notice type', () => {
+		expect( NOTICE_TYPES.every( ( t ) => t in NOTICE_ICONS ) ).toBe( true );
+	} );
+
+	it( 'declares every token the region references', () => {
+		const referenced = new Set(
+			[
+				...read( 'src/css/components/_message-region.scss' ).matchAll(
+					/var\((--wppo-[a-z-]+)/g
+				),
+			].map( ( m ) => m[ 1 ] )
+		);
+		const variables = read( 'src/css/abstracts/_variables.scss' );
+		for ( const token of referenced ) {
+			expect( variables ).toContain( `${ token }:` );
+		}
+		expect( referenced.size ).toBeGreaterThan( 0 );
 	} );
 
 	// Narrow on purpose: this catches a forgotten `npm run build` and nothing
@@ -104,19 +134,31 @@ describe( 'message region token bindings', () => {
 		expect( start ).toBeGreaterThanOrEqual( 0 );
 		const item = BUILD_CSS.slice( start, BUILD_CSS.indexOf( '}', start ) );
 
-		expect( item ).toMatch( /color:var\(--wppo-text-main\)/ );
-		expect( item ).toMatch( /background:var\(--wppo-bg-card\)/ );
-		expect( item ).toMatch( /border:1px solid var\(--wppo-border\)/ );
+		expect( /color:var\(--wppo-text-main\)/.test( item ) ).toBe( true );
+		expect( /background:var\(--wppo-bg-card\)/.test( item ) ).toBe( true );
+		expect( /border:1px solid var\(--wppo-border\)/.test( item ) ).toBe(
+			true
+		);
 	} );
 
 	it( 'mirrors the tone rule to the right edge in RTL', () => {
 		const rtl = read( 'build/style-index-rtl.css' );
-		expect( rtl ).toMatch(
-			/\.wppo-message-region__item\{[^}]*border-right-width:3px/
-		);
-		expect( rtl ).not.toMatch(
-			/message-region__item\{[^}]*border-left-width/
-		);
+		expect(
+			/\.wppo-message-region__item\{[^}]*border-right-width:3px/.test(
+				rtl
+			)
+		).toBe( true );
+		expect(
+			/message-region__item\{[^}]*border-left-width/.test( rtl )
+		).toBe( false );
+		expect(
+			/\.wppo-message-region__item--success\{[^}]*border-right-color/.test(
+				rtl
+			)
+		).toBe( true );
+		expect(
+			/message-region__item--\w+\{[^}]*border-left-color/.test( rtl )
+		).toBe( false );
 	} );
 } );
 

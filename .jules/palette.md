@@ -59,6 +59,5 @@
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
 ## 2026-10-05 - Refactored Message Region Colors
-
 **Learning:** Found hardcoded hex colors in SCSS components (like `_message-region.scss`) that duplicated defined app/theme variables and break consistency.
-**Action:** Reuse an existing token only when `abstracts/_variables.scss` holds one with the same value *and* role. If only a text token matches the value, minting a background token is acceptable **only** with the measured ratio recorded next to the declaration; otherwise keep the literal.
+**Action:** Reuse an existing token only when `abstracts/_variables.scss` holds one with the same value *and* role. Otherwise keep the literal.

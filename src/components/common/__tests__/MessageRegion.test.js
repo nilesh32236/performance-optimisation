@@ -67,4 +67,17 @@ describe( 'the app-level message region', () => {
 			container.querySelector( '.wppo-message-region' )
 		).toHaveAttribute( 'aria-hidden', 'true' );
 	} );
+
+	it( 'falls back to info for an unknown type', () => {
+		const { container } = render( <MessageRegion /> );
+		act( () => {
+			publish( { type: 'danger', message: 'Boom.' } );
+		} );
+		expect(
+			container.querySelector( '.wppo-message-region__item--danger' )
+		).toBeNull();
+		expect(
+			container.querySelector( '.wppo-message-region__item--info' )
+		).not.toBeNull();
+	} );
 } );
