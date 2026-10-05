@@ -183,7 +183,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 |---|---|
 | **Claim** | "There is no automated multi-WordPress-version install matrix in this plugin's CI." |
 | **Verdict** | **TRUE** |
-| **Evidence** | `grep -rn "wordpress-version\|wp-env\|playground" .github/workflows/` returns **no output** (exit 1). The widened form including `wordpress_version` and `WP_VERSION` also returns nothing. No workflow declares a `wordpress-version` input or matrix key. The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
+| **Evidence** | `grep -rnE "wordpress-version\|wp-env \(start\|run\)\|playground \(run\|cli\)\|wp core install\|wordpress-setup-action" .github/workflows/` returns **no output** (exit 1). The plain-string form `grep -rn "wordpress-version\|wp-env\|playground"` now returns three lines — all of them this repository's own reference to `docs/site/playground.html` in the CI path filter, not a version declaration. No workflow declares a `wordpress-version` input or matrix key. The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). **Re-verified 2026-10-05** after adding the blueprint-pin check, which is what changed it. |
 | **Command** | `grep -rn "wordpress-version\|wordpress_version\|WP_VERSION\|wp-env\|playground" .github/workflows/` |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
