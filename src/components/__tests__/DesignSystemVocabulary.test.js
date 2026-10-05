@@ -90,11 +90,15 @@ describe( 'message region token bindings', () => {
 
 		expect( block ).toMatch( /^\tcolor:\s*var\(--wppo-text-main\);$/m );
 		expect( block ).toMatch( /^\tbackground:\s*var\(--wppo-bg-card\);$/m );
-		expect( block ).toMatch( /^\tborder:\s*1px solid var\(--wppo-border\);$/m );
+		expect( block ).toMatch(
+			/^\tborder:\s*1px solid var\(--wppo-border\);$/m
+		);
 	} );
 
 	it( 'and the bindings ship in the built stylesheet', () => {
-		const item = BUILD_CSS.slice( BUILD_CSS.indexOf( '.wppo-message-region__item{' ) );
+		const start = BUILD_CSS.indexOf( '.wppo-message-region__item{' );
+		const item = BUILD_CSS.slice( start, BUILD_CSS.indexOf( '}', start ) );
+
 		expect( item ).toMatch( /color:var\(--wppo-text-main\)/ );
 		expect( item ).toMatch( /background:var\(--wppo-bg-card\)/ );
 		expect( item ).toMatch( /border:1px solid var\(--wppo-border\)/ );
