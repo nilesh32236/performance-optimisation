@@ -139,9 +139,26 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotEmpty( $prod, 'composer.lock must declare production packages for this guard to mean anything' );
 
 		$wrongly_excluded = array();
-		foreach ( array_keys( $prod ) as $vendor ) {
+		foreach ( $prod as $vendor => $package ) {
 			if ( in_array( '/vendor/' . $vendor, $patterns, true ) ) {
-				$wrongly_excluded[] = $prod[ $vendor ] . ' (needs /vendor/' . $vendor . ' in the release ZIP)';
+				$wrongly_excluded[] = $package . ' (needs /vendor/' . $vendor . ' in the release ZIP)';
+			}
+		}
+
+		// The loop above only compares whole-vendor strings, so it is blind to
+		// any exclusion that would drop a production package's FILES without
+		// matching the vendor directory name - `/vendor`, `vendor/*`, a glob, or
+		// a bare `/*`. composer.lock names every production install path, so
+		// assert that no pattern can match any of them.
+		foreach ( $this->production_install_paths() as $install_path ) {
+			foreach ( $patterns as $pattern ) {
+				if ( $this->pattern_matches_path( $pattern, $install_path ) ) {
+					$wrongly_excluded[] = sprintf(
+						'pattern "%s" matches production install path "%s"',
+						$pattern,
+						$install_path
+					);
+				}
 			}
 		}
 
@@ -152,5 +169,56 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 			. implode( "\n", $wrongly_excluded )
 			. "\nRemove the .distignore entry."
 		);
+	}
+
+	/**
+	 * Every path a production composer package is installed to.
+	 *
+	 * @return array
+	 */
+	private function production_install_paths(): array {
+		$lock = $this->composer_lock();
+		$out  = array();
+		foreach ( (array) ( $lock['packages'] ?? array() ) as $package ) {
+			$out[] = 'vendor/' . (string) $package['name'];
+		}
+		sort( $out );
+		return $out;
+	}
+
+	/**
+	 * Whether a .distignore pattern would exclude a given path.
+	 *
+	 * Deliberately conservative: a pattern is treated as matching if it equals
+	 * the path, is a parent directory of it, or is a glob whose fixed prefix
+	 * covers it. Over-matching here produces a FAILURE, which is the safe
+	 * direction - a false positive blocks a release; a false negative ships a
+	 * broken ZIP.
+	 *
+	 * @param string $pattern .distignore pattern, leading slash optional.
+	 * @param string $path    Repository-relative path.
+	 * @return bool
+	 */
+	private function pattern_matches_path( string $pattern, string $path ): bool {
+		$pattern = trim( $pattern, '/' );
+		$path    = trim( $path, '/' );
+		if ( '' === $pattern ) {
+			return false;
+		}
+		if ( $pattern === $path || 0 === strpos( $path, $pattern . '/' ) ) {
+			return true;
+		}
+		// A pattern with a glob matches anything under its literal prefix. A
+		// pattern whose glob starts it (`/*`, `*`) has an empty prefix and
+		// matches EVERYTHING - which is the catastrophic case and must not be
+		// mistaken for "no match". Getting that backwards let `/*` through.
+		$fixed = strtok( $pattern, '*?[' );
+		if ( $fixed !== $pattern ) {
+			if ( '' === $fixed ) {
+				return true;
+			}
+			return 0 === strpos( $path, rtrim( $fixed, '/' ) );
+		}
+		return false;
 	}
 }

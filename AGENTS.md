@@ -337,7 +337,7 @@ is not on this branch — see the note below.
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
 | `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
-| `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
+| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, `generate-class-inventory.php --check`, the Playground pin gate, GitHub Issue/PR comment | Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |
