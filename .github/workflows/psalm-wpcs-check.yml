@@ -260,6 +260,25 @@ jobs:
               except Exception as e:
                   table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
 
+            # A missing report means the scanner produced nothing to parse.
+            # That is NOT a clean result, it is an absent one. This step runs
+            # under `if: always()`, so a skipped or silent scanner used to leave
+            # has_errors False and the job posted 'All code quality checks
+            # passed!' Having proved a check can fail, also prove it can be absent.
+            wpcs_present  = os.path.exists('reports/wpcs.xml')
+            psalm_present = os.path.exists('reports/psalm.sarif')
+            if not wpcs_present and not psalm_present:
+                has_errors = True
+                table = ('| Scanner | - | - | Neither reports/wpcs.xml nor '
+                         'reports/psalm.sarif was produced. No scan ran, so no '
+                         'result can be called clean. |\n')
+            elif not wpcs_present:
+                has_errors = True
+                table += '| WPCS | - | - | reports/wpcs.xml missing; no report |\n'
+            elif not psalm_present:
+                has_errors = True
+                table += '| Psalm | - | - | reports/psalm.sarif missing; no report |\n'
+
           if not has_errors:
               table = "All checks passed! 🎉"
 
