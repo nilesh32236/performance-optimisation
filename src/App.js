@@ -674,14 +674,10 @@ const App = () => {
 
 				{ /* Sidebar Overlay */ }
 				{ mobileMenuOpen && (
-					<button
-						type="button"
+					<div
 						className="wppo-sidebar-overlay"
 						onClick={ toggleMobileMenu }
-						aria-label={ __(
-							'Close Menu',
-							'performance-optimisation'
-						) }
+						aria-hidden="true"
 					/>
 				) }
 
