@@ -32,7 +32,18 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function distignore_patterns(): array {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
-		$lines = explode( "\n", (string) file_get_contents( WPPO_PLUGIN_PATH . '.distignore' ) );
+		// Fail CLOSED. `(string) file_get_contents()` on an unreadable or missing
+		// file yields '', which explodes to one empty element and is then filtered
+		// out - leaving an empty pattern list, against which every guard below
+		// passes. Deleting .distignore entirely made this guard GREEN; only the
+		// sibling test noticed, by accident, because it asserts a pattern exists.
+		$path = WPPO_PLUGIN_PATH . '.distignore';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- repo file under test.
+		$raw = file_get_contents( $path );
+		$this->assertIsString( $raw, "{$path} must be readable for these guards to mean anything" );
+		$this->assertNotSame( '', trim( (string) $raw ), "{$path} is empty" );
+
+		$lines = explode( "\n", $raw );
 		$out   = array();
 		foreach ( $lines as $line ) {
 			$line = trim( $line );
