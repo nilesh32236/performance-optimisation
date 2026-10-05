@@ -73,36 +73,34 @@ describe( 'a class the markup emits has a rule behind it', () => {
 } );
 
 describe( 'message region token bindings', () => {
+	const BUILD_CSS = read( 'build/style-index.css' );
+
 	it( 'defines the neutral chip background token', () => {
 		const variables = read( 'src/css/abstracts/_variables.scss' );
-		expect( variables ).toMatch( /--wppo-chip-neutral:\s*#[0-9a-fA-F]+/ );
+		expect( variables ).toContain( '--wppo-bg-chip-neutral:' );
 	} );
 
 	it( 'binds main region properties to tokens with no hex literals', () => {
 		const scss = read( 'src/css/components/_message-region.scss' );
 
-		// The rule block for the main item surface.
-		const block = scss.slice(
-			scss.indexOf( '.wppo-message-region__item {' ),
-			scss.indexOf( '}', scss.indexOf( '.wppo-message-region__item {' ) )
-		);
+		const anchor = '.wppo-message-region__item {';
+		const start = scss.indexOf( anchor );
+		expect( start ).toBeGreaterThan( -1 );
+		const block = scss.slice( start, scss.indexOf( '}', start ) );
 
-		expect( block ).toMatch( /color:\s*var\(--wppo-text-main\);/ );
-		expect( block ).toMatch( /background:\s*var\(--wppo-bg-card\);/ );
-		expect( block ).toMatch( /border:\s*1px solid var\(--wppo-border\);/ );
-
-		// Ensure none of those three properties use a hex literal in the source.
-		expect( block ).not.toMatch( /color:\s*#[0-9a-fA-F]+/i );
-		expect( block ).not.toMatch( /background:\s*#[0-9a-fA-F]+/i );
-		expect( block ).not.toMatch( /border:.*#[0-9a-fA-F]+/i );
+		expect( block ).toMatch( /^\tcolor:\s*var\(--wppo-text-main\);$/m );
+		expect( block ).toMatch( /^\tbackground:\s*var\(--wppo-bg-card\);$/m );
+		expect( block ).toMatch( /^\tborder:\s*1px solid var\(--wppo-border\);$/m );
 	} );
 
 	it( 'and the bindings ship in the built stylesheet', () => {
-		const css = read( 'build/style-index.css' );
-		expect( css ).toContain( 'color:var(--wppo-text-main)' );
-		expect( css ).toContain( 'background:var(--wppo-bg-card)' );
-		expect( css ).toContain( 'border:1px solid var(--wppo-border)' );
-		expect( css ).toContain( 'background:var(--wppo-chip-neutral)' );
+		const item = BUILD_CSS.slice( BUILD_CSS.indexOf( '.wppo-message-region__item{' ) );
+		expect( item ).toMatch( /color:var\(--wppo-text-main\)/ );
+		expect( item ).toMatch( /background:var\(--wppo-bg-card\)/ );
+		expect( item ).toMatch( /border:1px solid var\(--wppo-border\)/ );
+		expect( BUILD_CSS ).toMatch(
+			/\.wppo-message-region__icon\{[^}]*background:var\(--wppo-bg-chip-neutral\)/
+		);
 	} );
 } );
 

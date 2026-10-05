@@ -46,9 +46,9 @@
 	line-height: 1;
 	color: #fff;
 	border-radius: 50%;
-	/* --wppo-chip-neutral: added to abstracts/_variables.scss; no
+	/* --wppo-bg-chip-neutral: added to abstracts/_variables.scss; no
 	   pre-existing neutral filled-chip token matched this role. */
-	background: var(--wppo-chip-neutral);
+	background: var(--wppo-bg-chip-neutral);
 }
 
 .wppo-message-region__text {
