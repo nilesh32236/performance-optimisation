@@ -80,7 +80,25 @@ jobs:
         # psalm.sarif, so without this a red gate still produced a PR comment
         # reading "All code quality checks passed!".
         id: playground_pin
-        run: php scripts/verify-playground-blueprint.php
+        run: |
+          # Gate on the PAGE, not the script. The script and the page it verifies
+          # arrive together in #1773; until then this step ran php against a file that
+          # does not exist, exited 1, and - because a failed step skips later steps
+          # carrying no if: condition - took the Psalm security scan and the SARIF
+          # upload down with it. A PR that hardens security must not be what disables it.
+          #
+          # Skipping when the SCRIPT is absent would fail open on deletion, which is
+          # exactly when the gate must still run - so a page without its script is a hard
+          # failure, not a skip.
+          if [ ! -f docs/site/playground.html ]; then
+            echo "no Playground page; pin gate not applicable"
+            exit 0
+          fi
+          if [ ! -f scripts/verify-playground-blueprint.php ]; then
+            echo "::error::Playground page exists but the verifier script is missing"
+            exit 1
+          fi
+          php scripts/verify-playground-blueprint.php
 
       - name: Restrict the Psalm scan autoloader to plugin code
         run: |
