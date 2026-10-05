@@ -46,8 +46,9 @@
 	line-height: 1;
 	color: #fff;
 	border-radius: 50%;
-	/* No neutral filled-chip background token exists in _variables.scss */
-	background: #64748b;
+	/* --wppo-chip-neutral: added to abstracts/_variables.scss; no
+	   pre-existing neutral filled-chip token matched this role. */
+	background: var(--wppo-chip-neutral);
 }
 
 .wppo-message-region__text {
