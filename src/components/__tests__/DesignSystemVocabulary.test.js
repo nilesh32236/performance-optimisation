@@ -80,7 +80,6 @@ describe( 'a class the markup emits has a rule behind it', () => {
 } );
 
 describe( 'message region token bindings', () => {
-
 	// Only the item rule is pinned. The tone literals and the icon's `color`
 	// are still hardcoded, so this is not a "no literals" claim.
 	it( 'binds the item text, surface and border to tokens', () => {
@@ -115,7 +114,9 @@ describe( 'message region token bindings', () => {
 		expect( rtl ).toMatch(
 			/\.wppo-message-region__item\{[^}]*border-right-width:3px/
 		);
-		expect( rtl ).not.toMatch( /message-region__item\{[^}]*border-left-width/ );
+		expect( rtl ).not.toMatch(
+			/message-region__item\{[^}]*border-left-width/
+		);
 	} );
 } );
 
