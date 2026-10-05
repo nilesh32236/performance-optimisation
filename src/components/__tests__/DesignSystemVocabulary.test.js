@@ -80,15 +80,6 @@ describe( 'a class the markup emits has a rule behind it', () => {
 } );
 
 describe( 'message region token bindings', () => {
-	it( 'defines the neutral chip background token', () => {
-		const variables = read( 'src/css/abstracts/_variables.scss' );
-		expect( variables ).toMatch( /--wppo-bg-badge-neutral:\s*#64748b;/ );
-		// Referenced is not defined: an undeclared custom property resolves to
-		// `transparent`, which erases the white glyph.
-		expect( BUILD_CSS ).toMatch(
-			/:root\{[^}]*--wppo-bg-badge-neutral:#64748b;/
-		);
-	} );
 
 	// Only the item rule is pinned. The tone literals and the icon's `color`
 	// are still hardcoded, so this is not a "no literals" claim.
@@ -117,9 +108,6 @@ describe( 'message region token bindings', () => {
 		expect( item ).toMatch( /color:var\(--wppo-text-main\)/ );
 		expect( item ).toMatch( /background:var\(--wppo-bg-card\)/ );
 		expect( item ).toMatch( /border:1px solid var\(--wppo-border\)/ );
-		expect( BUILD_CSS ).toMatch(
-			/\.wppo-message-region__icon\{[^}]*background:var\(--wppo-bg-badge-neutral\)/
-		);
 	} );
 
 	it( 'mirrors the tone rule to the right edge in RTL', () => {

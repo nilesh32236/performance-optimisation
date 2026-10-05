@@ -10,10 +10,8 @@
 	--wppo-bg-card: #ffffff;
 	--wppo-bg-card-surface: #fafbfc;
 	--wppo-switch-hover: #f1f5f9;
-	/* Same value as --wppo-text-light / --wppo-select-arrow, but deliberately a
-	   background role: white glyph on it measures 4.76:1. Do NOT collapse this to
-	   var(--wppo-text-light) -- see .jules/palette.md. */
-	--wppo-bg-badge-neutral: #64748b;
+
+
 	--wppo-bg-sidebar: #0f172a;
 	--wppo-bg-sidebar-hover: rgba(255, 255, 255, 0.06);
 	--wppo-bg-sidebar-active: rgba(34, 113, 177, 0.2);

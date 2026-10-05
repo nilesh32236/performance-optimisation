@@ -59,5 +59,6 @@
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
 ## 2026-10-05 - Refactored Message Region Colors
-**Learning:** Found hardcoded hex colors in SCSS components (like `_message-region.scss`) that override defined app/theme variables and break consistency.
-**Action:** Map a literal to a token only when `abstracts/_variables.scss` already holds one with the same value *and* role (text/background/border). For a tone colour on a small solid fill, keep the token and re-bind it on the component to a darker step (`components/_overview.scss:204-208`) with the measured ratio recorded alongside -- never introduce a component-local hex, and never bind a text token to a `background`. Verified here: white on `#0f7b4f` 5.29:1, `#b3261e` 6.54:1, `#8a5a00` 5.93:1, `#0b6e75` 6.00:1, `#64748b` 4.76:1 -- vs. 3.77 / 4.83 / 3.19 / 4.10:1 for `--wppo-success` / `--wppo-error` / `--wppo-warning` / `--wppo-info`. Three of the four fall below the 4.5:1 AA threshold for the 12px/700 glyph; `--wppo-error` clears it at 4.83:1.
+
+**Learning:** Found hardcoded hex colors in SCSS components (like `_message-region.scss`) that duplicated defined app/theme variables and break consistency.
+**Action:** Reuse an existing token only when `abstracts/_variables.scss` holds one with the same value *and* role. If only a text token matches the value, minting a background token is acceptable **only** with the measured ratio recorded next to the declaration; otherwise keep the literal.

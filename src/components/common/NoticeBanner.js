@@ -22,20 +22,9 @@ import {
 	faInfoCircle,
 	faTimes,
 } from '@fortawesome/free-solid-svg-icons';
+import { NOTICE_TYPES, normalizeNoticeType } from '../../lib/noticeConstants';
 
-/**
- * Allowed notice types. Unknown values fall back to 'info' so a typo never
- * emits an unstyled `.wppo-notice--foo` class.
- *
- * @since 2.3.0
- * @type {string[]}
- */
-export const NOTICE_TYPES = Object.freeze( [
-	'error',
-	'warning',
-	'info',
-	'success',
-] );
+export { NOTICE_TYPES };
 
 /**
  * Per-type icon map so info notices no longer reuse the warning triangle.
@@ -61,7 +50,7 @@ const NoticeBanner = ( {
 		return null;
 	}
 
-	const safeType = NOTICE_TYPES.includes( type ) ? type : 'info';
+	const safeType = normalizeNoticeType( type );
 	const icon = NOTICE_ICONS[ safeType ] ?? faInfoCircle;
 
 	return (

@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from '@wordpress/element';
 import { subscribe } from '../../lib/noticeBus';
-import { NOTICE_TYPES } from './NoticeBanner';
+import { normalizeNoticeType } from '../../lib/noticeConstants';
 
 const ICONS = {
 	success: '✓',
@@ -57,7 +57,7 @@ export default function MessageRegion() {
 		// banner is the accessible announcement; this is the visible one.
 		<div className="wppo-message-region" aria-hidden="true">
 			{ messages.map( ( m ) => {
-				const type = NOTICE_TYPES.includes( m.type ) ? m.type : 'info';
+				const type = normalizeNoticeType( m.type );
 				return (
 					<div
 						key={ m.key }
