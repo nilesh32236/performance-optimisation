@@ -71,6 +71,10 @@ jobs:
         run: php scripts/generate-class-inventory.php --check
 
       - name: Verify the Playground demo pin resolves
+        # id is REQUIRED: reports/status.txt is derived only from wpcs.xml and
+        # psalm.sarif, so without this a red gate still produced a PR comment
+        # reading "All code quality checks passed!".
+        id: playground_pin
         run: php scripts/verify-playground-blueprint.php
 
       - name: Restrict the Psalm scan autoloader to plugin code
@@ -298,7 +302,18 @@ jobs:
           # ref_name is branch-controlled; pass through env, never the run body.
           BRANCH: ${{ github.ref_name }}
         run: |
+          # The Playground gate reports separately from the scanners. Fold its
+          # outcome in here so a red pin can never be posted as a clean run.
+          if [[ "${{ steps.playground_pin.outcome }}" != "success" ]]; then
+            echo "playground_pin=failure" >> "$GITHUB_OUTPUT"
+          else
+            echo "playground_pin=success" >> "$GITHUB_OUTPUT"
+          fi
+
           STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
+          if [[ "${{ steps.playground_pin.outcome }}" != "success" ]]; then
+            STATUS=failure
+          fi
           EVENT_NAME="${{ github.event_name }}"
 
           if [[ "$STATUS" == "success" ]]; then
