@@ -94,6 +94,30 @@ if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
 	}
 }
 
+// Stale-pin detection. The docblock promises this script catches a STALE sha,
+// but existence alone does not: the pinned commit can exist and still hold an
+// older blueprint than this tree, which is precisely the case a visitor hits
+// after the blueprint changes and the pin is not moved with it.
+$head_blueprint = @file_get_contents( __DIR__ . '/../' . $blueprint_path );
+
+if ( ! is_string( $head_blueprint ) ) {
+	$failures[] = "cannot read {$blueprint_path} from the working tree";
+} elseif ( trim( $head_blueprint ) === trim( $contents ) ) {
+	echo "pinned blueprint matches the working tree\n";
+} else {
+	$pinned_url  = json_decode( $contents, true )['plugins'][0]['url']  ?? '(unreadable)';
+	$working_url = json_decode( $head_blueprint, true )['plugins'][0]['url'] ?? '(unreadable)';
+
+	$failures[] = sprintf(
+		'STALE PIN: %s at %s serves %s, but the working tree serves %s. '
+		. 'Move the pin in docs/site/playground.html to a commit carrying the current blueprint.',
+		$blueprint_path,
+		substr( $sha, 0, 8 ),
+		basename( (string) $pinned_url ),
+		basename( (string) $working_url )
+	);
+}
+
 // Optional: prove the published URL actually serves it.
 if ( $network ) {
 	$ctx  = stream_context_create( array( 'http' => array( 'timeout' => 20 ) ) );
