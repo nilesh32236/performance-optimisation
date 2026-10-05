@@ -11,6 +11,8 @@ on:
       - 'scripts/architecture/*.php'
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
+      - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   pull_request:
     branches: ["master"]
     paths:
@@ -21,6 +23,8 @@ on:
       - 'scripts/architecture/*.php'
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
+      - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   schedule:
     - cron: "28 13 * * 0"
   # Manual re-run. The path filters below mean a change to psalm.xml, the
@@ -29,13 +33,6 @@ on:
   # waiting for the weekly run.
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-  actions: read
-  security-events: write
-
 jobs:
   code-quality:
     name: WPCS & Psalm Security Scan
@@ -43,6 +40,18 @@ jobs:
     # 20m ceiling: single-pass WPCS checkstyle + psalm scan + SARIF upload,
     # no retries — guardrail only, far above normal runtimes.
     timeout-minutes: 20
+    # NO issues:write and NO pull-requests:write. Every step in this job runs
+    # code from the pull request — composer install, phpcs, a docker run of
+    # the Psalm image, and the Playground pin verifier — so a same-repo branch
+    # that lands a malicious composer/npm lifecycle script would otherwise
+    # execute holding comment- and issue-write scope. `permissions:` is only
+    # settable at job level or on a `uses:` step, never on a `run:` step,
+    # which is why this had to become two jobs.
+    # security-events: write is retained: upload-sarif cannot write results
+    # without it, and dropping it would silently break code scanning.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -65,6 +74,13 @@ jobs:
 
       - name: Check architecture inventory drift
         run: php scripts/generate-class-inventory.php --check
+
+      - name: Verify the Playground demo pin resolves
+        # id is REQUIRED: reports/status.txt is derived only from wpcs.xml and
+        # psalm.sarif, so without this a red gate still produced a PR comment
+        # reading "All code quality checks passed!".
+        id: playground_pin
+        run: php scripts/verify-playground-blueprint.php
 
       - name: Restrict the Psalm scan autoloader to plugin code
         run: |
@@ -228,7 +244,7 @@ jobs:
                           clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                           print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
               except Exception as e:
-                  table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
 
           # Psalm
           psalm_file = 'reports/psalm.sarif'
@@ -253,7 +269,26 @@ jobs:
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                                   print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
               except Exception as e:
-                  table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
+
+          # A missing report means the scanner produced nothing to parse.
+          # That is NOT a clean result, it is an absent one. This step runs
+          # under `if: always()`, so a skipped or silent scanner used to leave
+          # has_errors False and the job posted 'All code quality checks
+          # passed!' Having proved a check can fail, also prove it can be absent.
+          wpcs_present  = os.path.exists('reports/wpcs.xml')
+          psalm_present = os.path.exists('reports/psalm.sarif')
+          if not wpcs_present and not psalm_present:
+              has_errors = True
+              table = ('| Scanner | - | - | Neither reports/wpcs.xml nor '
+                       'reports/psalm.sarif was produced. No scan ran, so no '
+                       'result can be called clean. |\n')
+          elif not wpcs_present:
+              has_errors = True
+              table += '| WPCS | - | - | reports/wpcs.xml missing; no report |\n'
+          elif not psalm_present:
+              has_errors = True
+              table += '| Psalm | - | - | reports/psalm.sarif missing; no report |\n'
 
           if not has_errors:
               table = "All checks passed! 🎉"
@@ -264,6 +299,62 @@ jobs:
           with open('reports/status.txt', 'w') as f:
               f.write("failure" if has_errors else "success")
 
+      # The Playground gate runs outside the scanners, so its outcome has to
+      # reach the posting job somehow. Writing it into reports/ is what lets it
+      # cross the job boundary: `steps.playground_pin.outcome` is a step-scoped
+      # value and does not exist in the next job. Anything NOT written here is
+      # read as failure by the consumer, so an absent file stays fail-closed.
+      - name: Record the Playground pin outcome for the posting job
+        if: always()
+        run: |
+          if [ "${{ steps.playground_pin.outcome }}" != "success" ]; then
+            echo "failure" > reports/playground_pin.txt
+          else
+            echo "success" > reports/playground_pin.txt
+          fi
+
+      - name: Upload the scan summary for the posting job
+        # The reports directory is the ONLY thing crossing into the posting
+        # job. The posting job never re-runs a scanner and never re-parses a
+        # report; it reads a verdict this job already computed.
+        #
+        # BOTH files are required, not just status.txt: the comment body on a
+        # red gate is reports/summary.md. Shipping status.txt alone would make
+        # every failing run post an empty table.
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: code-quality-summary
+          path: |
+            reports/status.txt
+            reports/summary.md
+            reports/playground_pin.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  report:
+    name: Post the scan summary
+    needs: [code-quality]
+    # always() so a red gate still posts its comment. If job A could not start
+    # at all, there is no summary and this job posts the failure itself rather
+    # than staying silent.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # This job holds the write scopes. It checks out NOTHING and runs no code
+    # from the pull request: it downloads one artefact this workflow produced
+    # and posts a comment. That is the whole reason the split exists.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download the scan summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: code-quality-summary
+          path: reports/
+
       - name: Manage GitHub PR Comment or Issue
         id: manage_issue
         if: always()
@@ -272,7 +363,21 @@ jobs:
           # ref_name is branch-controlled; pass through env, never the run body.
           BRANCH: ${{ github.ref_name }}
         run: |
+          # The Playground gate reports separately from the scanners. Fold its
+          # outcome in here so a red pin can never be posted as a clean run.
+          # It arrives as a file because steps.playground_pin.outcome does not
+          # cross the job boundary. A missing file is a failure.
+          PIN="$(cat reports/playground_pin.txt 2>/dev/null || echo failure)"
+          if [ "$PIN" != "success" ]; then
+            echo "playground_pin=failure" >> "$GITHUB_OUTPUT"
+          else
+            echo "playground_pin=success" >> "$GITHUB_OUTPUT"
+          fi
+
           STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
+          if [ "$PIN" != "success" ]; then
+            STATUS=failure
+          fi
           EVENT_NAME="${{ github.event_name }}"
 
           if [[ "$STATUS" == "success" ]]; then
@@ -280,7 +385,7 @@ jobs:
 
           ✅ All code quality checks passed! 🎉"
           else
-            SUMMARY=$(cat reports/summary.md)
+            SUMMARY=$(cat reports/summary.md 2>/dev/null || echo "The scan job did not produce a summary; see the workflow run for details.")
             BODY="### Code Quality Issues Detected in $BRANCH
 
           $SUMMARY
