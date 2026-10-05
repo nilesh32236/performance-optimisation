@@ -48,6 +48,14 @@
     "menu_order": 70
   },
   {
+    "file": "playground.html",
+    "slug": "playground",
+    "parent_slug": "performance-optimisation",
+    "title": "Try it in WordPress Playground",
+    "excerpt": "Open Performance Optimisation in a browser tab with no server and no install step, and a plain statement of what the sandbox can and cannot prove.",
+    "menu_order": 72
+  },
+  {
     "file": "litespeed.html",
     "slug": "litespeed",
     "parent_slug": "performance-optimisation",
