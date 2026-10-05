@@ -58,3 +58,6 @@
 ## YYYY-MM-DD - [Dynamic Danger Button Shadows]
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
+## 2025-01-20 - Refactored Message Region Colors
+**Learning:** Found hardcoded hex colors in SCSS components (like `_message-region.scss`) that override defined app/theme variables and break consistency.
+**Action:** Always map local component colors to global `var(--wppo-*)` CSS variables in SCSS to allow proper dynamic adaptation to the user's WP admin color scheme.
