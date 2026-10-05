@@ -225,6 +225,20 @@ jobs:
           table = "| Tool | File | Line | Message |\n| --- | --- | --- | --- |\n"
           has_errors = False
 
+          # Sanitise PR-controlled text BEFORE it is written to summary.md. summary.md is
+          # consumed by a SEPARATE job holding issues:write and pull-requests:write that
+          # never checks out this repository, so that job posts content whose every field
+          # came from files this pull request controls. Escaping only the table pipe leaves
+          # markdown metacharacters intact. Escaping happens HERE, on the low-trust side of
+          # the boundary, so what crosses is already inert. Not a claim that this is
+          # exploitable - a hostile filename does not become a link in the comment. This is
+          # about provenance, not about a rendered payload.
+          def cell(value):
+              text = str(value).replace(chr(13), '').replace(chr(10), ' ')[:200]
+              for ch in (chr(92), '`', '*', '_', '{', '}', '[', ']', '(', ')', '<', '>', '|', '#', '+', '-', '!', '&'):
+                  text = text.replace(ch, chr(92) + ch)
+              return text
+
           # WPCS
           wpcs_file = 'reports/wpcs.xml'
           if os.path.exists(wpcs_file):
@@ -233,13 +247,13 @@ jobs:
                   for file_node in root.findall('file'):
                       full_path = file_node.get('name')
                       rel_path = os.path.relpath(full_path, start=os.getcwd()) if os.path.isabs(full_path) else full_path
-                      filename = rel_path.split('/')[-1]
+                      filename = cell(rel_path.split('/')[-1])
                       for error in file_node.findall('error'):
                           has_errors = True
                           line = error.get('line')
                           col = error.get('column', '1')
                           raw_msg = error.get('message', '')
-                          msg = raw_msg.replace('|', '\\|')
+                          msg = cell(raw_msg)
                           table += f"| WPCS | {filename} | {line} | {msg} |\n"
                           clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                           print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
@@ -256,14 +270,14 @@ jobs:
                           for result in run.get('results', []):
                               has_errors = True
                               raw_msg = result.get('message', {}).get('text', '')
-                              msg = raw_msg.replace('|', '\\|')
+                              msg = cell(raw_msg)
                               for loc in result.get('locations', []):
                                   phys = loc.get('physicalLocation', {})
                                   rel_path = phys.get('artifactLocation', {}).get('uri', '')
                                   if rel_path.startswith('file://'):
                                       rel_path = rel_path[7:]
                                   rel_path = os.path.relpath(rel_path, start=os.getcwd()) if os.path.isabs(rel_path) else rel_path
-                                  filename = rel_path.split('/')[-1]
+                                  filename = cell(rel_path.split('/')[-1])
                                   line = phys.get('region', {}).get('startLine', '?')
                                   table += f"| Psalm | {filename} | {line} | {msg} |\n"
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
