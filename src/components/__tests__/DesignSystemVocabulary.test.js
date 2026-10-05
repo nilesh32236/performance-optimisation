@@ -72,6 +72,40 @@ describe( 'a class the markup emits has a rule behind it', () => {
 	} );
 } );
 
+describe( 'message region token bindings', () => {
+	it( 'defines the neutral chip background token', () => {
+		const variables = read( 'src/css/abstracts/_variables.scss' );
+		expect( variables ).toMatch( /--wppo-chip-neutral:\s*#[0-9a-fA-F]+/ );
+	} );
+
+	it( 'binds main region properties to tokens with no hex literals', () => {
+		const scss = read( 'src/css/components/_message-region.scss' );
+
+		// The rule block for the main item surface.
+		const block = scss.slice(
+			scss.indexOf( '.wppo-message-region__item {' ),
+			scss.indexOf( '}', scss.indexOf( '.wppo-message-region__item {' ) )
+		);
+
+		expect( block ).toMatch( /color:\s*var\(--wppo-text-main\);/ );
+		expect( block ).toMatch( /background:\s*var\(--wppo-bg-card\);/ );
+		expect( block ).toMatch( /border:\s*1px solid var\(--wppo-border\);/ );
+
+		// Ensure none of those three properties use a hex literal in the source.
+		expect( block ).not.toMatch( /color:\s*#[0-9a-fA-F]+/i );
+		expect( block ).not.toMatch( /background:\s*#[0-9a-fA-F]+/i );
+		expect( block ).not.toMatch( /border:.*#[0-9a-fA-F]+/i );
+	} );
+
+	it( 'and the bindings ship in the built stylesheet', () => {
+		const css = read( 'build/style-index.css' );
+		expect( css ).toContain( 'color:var(--wppo-text-main)' );
+		expect( css ).toContain( 'background:var(--wppo-bg-card)' );
+		expect( css ).toContain( 'border:1px solid var(--wppo-border)' );
+		expect( css ).toContain( 'background:var(--wppo-chip-neutral)' );
+	} );
+} );
+
 describe( 'the area heading is not overridden by WordPress core', () => {
 	it( 'scopes the title rule by the mount id, not only by class', () => {
 		// A **tripwire, not a CSS test**: only a browser can observe which
