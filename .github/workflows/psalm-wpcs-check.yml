@@ -361,6 +361,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # ref_name is branch-controlled; pass through env, never the run body.
+          # This job deliberately checks out nothing, so there is no git remote and
+          # no working directory for `gh` to infer the repository from. Without this
+          # every gh call below fails to resolve, the comment is never posted, and
+          # the job that exists to REPORT failures reports nothing while going
+          # green. A stubbed gh would not catch this: a stub always resolves.
+          GH_REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
         run: |
           # The Playground gate reports separately from the scanners. Fold its
