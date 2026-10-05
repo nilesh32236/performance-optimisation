@@ -164,6 +164,46 @@ if ( is_string( $contents ) && ! is_string( $head_blueprint ) ) {
 }
 
 
+// The release ZIP's byte size is quoted in prose in more than one place. Two
+// hand-copied numbers that drift apart are worse than one number, because a
+// reader has no way to tell which is current. Assert every in-repo copy agrees.
+$sized = array();
+foreach ( array( 'docs/growth/claims.md', '.wordpress-org/playground/README.md' ) as $doc ) {
+	$doc_path = __DIR__ . '/../' . $doc;
+	if ( ! is_readable( $doc_path ) ) {
+		continue;
+	}
+	$text = (string) file_get_contents( $doc_path );
+	// Only lines that actually mention the release asset. Matching ANY large
+	// number in the file produced a false positive on an unrelated byte count.
+	foreach ( preg_split( '/\R/', $text ) as $line ) {
+		// Match on either the literal asset name or the release-ZIP wording, so
+		// BOTH documents are actually scanned. Keying on the literal filename
+		// alone found only one of them and the cross-document comparison below
+		// silently compared a set of one - reporting 'consistent' about nothing.
+		$is_asset_line = preg_match( '/performance-optimisation-[0-9]+\.[0-9]+\.[0-9]+\.zip/', $line )
+			|| preg_match( '/release ZIP/i', $line );
+		if ( ! $is_asset_line ) {
+			continue;
+		}
+		if ( preg_match_all( '/\b\d{1,3}(?:,\d{3}){2,}\b/', $line, $m ) ) {
+			foreach ( $m[0] as $n ) {
+				$sized[ $doc ][] = str_replace( ',', '', $n );
+			}
+		}
+	}
+}
+$flat = array_unique( array_merge( array(), ...array_values( $sized ) ) );
+if ( count( $flat ) > 1 ) {
+	$failures[] = sprintf(
+		'The release ZIP size is quoted inconsistently across documentation: %s. '
+		. 'Re-measure and correct every copy, or quote none of them.',
+		implode( ' vs ', array_map( static fn( $n ) => number_format( (int) $n ), $flat ) )
+	);
+} elseif ( 1 === count( $flat ) ) {
+	echo 'release ZIP size quoted consistently: ' . number_format( (int) $flat[0] ) . " bytes\n";
+}
+
 // Optional: prove the published URL actually serves it.
 if ( $network ) {
 	$ctx  = stream_context_create( array( 'http' => array( 'timeout' => 20 ) ) );
