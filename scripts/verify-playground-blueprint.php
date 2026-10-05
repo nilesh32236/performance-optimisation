@@ -105,7 +105,7 @@ if ( ! is_string( $head_blueprint ) ) {
 } elseif ( trim( $head_blueprint ) === trim( $contents ) ) {
 	echo "pinned blueprint matches the working tree\n";
 } else {
-	$pinned_url  = json_decode( $contents, true )['plugins'][0]['url']  ?? '(unreadable)';
+	$pinned_url  = json_decode( $contents, true )['plugins'][0]['url'] ?? '(unreadable)';
 	$working_url = json_decode( $head_blueprint, true )['plugins'][0]['url'] ?? '(unreadable)';
 
 	$failures[] = sprintf(
