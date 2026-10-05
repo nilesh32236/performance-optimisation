@@ -84,7 +84,11 @@ $blueprint_path = '.wordpress-org/playground/blueprint.json';
 // usually an ancestor, so `git show` would fail there even when the pin is
 // perfectly good. Fetch that one object before asking for it. A shallow local
 // clone here hits the same path, which is how this was found.
-if ( 0 !== shell_exec( 'git cat-file -e ' . escapeshellarg( $sha ) . ' 2>/dev/null' ) ) {
+// shell_exec() returns NULL on success and a non-empty string on failure, so
+// this test must be a truthiness test. `0 !== shell_exec(...)` was true for
+// EVERY successful exit - null !== 0 - and so fetched on every single run.
+$have_object = '' === shell_exec( 'git cat-file -e ' . escapeshellarg( $sha ) . ' 2>/dev/null' );
+if ( ! $have_object ) {
 	shell_exec(
 		'git fetch --quiet --depth=1 origin ' . escapeshellarg( $sha ) . ' 2>/dev/null'
 	);
@@ -93,6 +97,9 @@ if ( 0 !== shell_exec( 'git cat-file -e ' . escapeshellarg( $sha ) . ' 2>/dev/nu
 $contents = shell_exec( 'git show ' . escapeshellarg( $sha . ':' . $blueprint_path ) . ' 2>/dev/null' );
 
 if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
+	// is_string() is checked FIRST and short-circuits, so trim() is never
+	// reached with null. Under strict_types=1, trim( null ) is an uncaught
+	// TypeError that replaces the designed FAIL line with a stack trace.
 	$failures[] = "blueprint not found at {$sha}:{$blueprint_path}";
 } else {
 	$blueprint = json_decode( $contents, true );
@@ -129,7 +136,16 @@ if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
 // after the blueprint changes and the pin is not moved with it.
 $head_blueprint = @file_get_contents( __DIR__ . '/../' . $blueprint_path );
 
-if ( ! is_string( $head_blueprint ) ) {
+if ( is_string( $contents ) && ! is_string( $head_blueprint ) ) {
+	$failures[] = "cannot read {$blueprint_path} from the working tree";
+} elseif ( ! is_string( $contents ) ) {
+	// $contents is null whenever `git show` produced nothing and the failure is
+	// ALREADY recorded above. Falling through to trim() on it raises an uncaught
+	// TypeError under strict_types=1, replacing this script's own FAIL line with
+	// a stack trace - the one diagnostic it exists to print is the one thing a
+	// fatal destroys.
+	echo "skipping stale-pin comparison: no pinned blueprint to compare\n";
+} elseif ( ! is_string( $head_blueprint ) ) {
 	$failures[] = "cannot read {$blueprint_path} from the working tree";
 } elseif ( trim( $head_blueprint ) === trim( $contents ) ) {
 	echo "pinned blueprint matches the working tree\n";
