@@ -306,6 +306,31 @@ Consequences worth knowing before changing anything:
 - Deploys to WordPress.org SVN via `10up/action-wordpress-plugin-deploy`
 - `.distignore` excludes dev files (configs, tests, `.github`, `.jules`, `.qoder`, dev vendor packages)
 
+## The Playground demo has a mandatory gate
+
+`docs/site/playground.html` publishes a code-executing WordPress Playground link
+whose `blueprint-url` pins a commit SHA. **Moving that pin requires updating
+`docs/site/playground.html` and re-running:**
+
+```sh
+php scripts/verify-playground-blueprint.php   # --network to also fetch the pinned URL
+```
+
+It exits 0 only when the SHA resolves to a real commit, the blueprint parses, the
+plugin URL is an absolute https URL, and **the blueprint at that SHA still matches
+`.wordpress-org/playground/blueprint.json` in the working tree**. That last check
+is the stale-pin detection: a SHA can resolve perfectly and still serve an older
+blueprint, which is what a visitor loads.
+
+It runs in CI as a step of `psalm-wpcs-check.yml`. That workflow uses a `paths`
+WHITELIST, so **a change to `.wordpress-org/playground/blueprint.json` or to
+`docs/site/playground.html` without a `.php` file would otherwise skip the
+workflow entirely** and the gate would not run. Both paths are listed.
+
+If you change the blueprint, change the pin in the same commit. If the verifier
+fails because the pinned SHA is unreachable, the pin is pointing at a commit that
+is not on this branch — see the note below.
+
 ## CI workflows
 
 | Workflow | Trigger | What it does |
