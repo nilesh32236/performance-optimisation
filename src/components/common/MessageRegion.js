@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from '@wordpress/element';
 import { subscribe } from '../../lib/noticeBus';
+import { NOTICE_TYPES } from './NoticeBanner';
 
 const ICONS = {
 	success: '✓',
@@ -55,22 +56,25 @@ export default function MessageRegion() {
 		// `aria-hidden` on purpose — see the note in noticeBus.js. The inline
 		// banner is the accessible announcement; this is the visible one.
 		<div className="wppo-message-region" aria-hidden="true">
-			{ messages.map( ( m ) => (
-				<div
-					key={ m.key }
-					className={ `wppo-message-region__item wppo-message-region__item--${ m.type }` }
-				>
-					<span
-						className="wppo-message-region__icon"
-						aria-hidden="true"
+			{ messages.map( ( m ) => {
+				const type = NOTICE_TYPES.includes( m.type ) ? m.type : 'info';
+				return (
+					<div
+						key={ m.key }
+						className={ `wppo-message-region__item wppo-message-region__item--${ type }` }
 					>
-						{ ICONS[ m.type ] || ICONS.info }
-					</span>
-					<span className="wppo-message-region__text">
-						{ m.message }
-					</span>
-				</div>
-			) ) }
+						<span
+							className="wppo-message-region__icon"
+							aria-hidden="true"
+						>
+							{ ICONS[ type ] }
+						</span>
+						<span className="wppo-message-region__text">
+							{ m.message }
+						</span>
+					</div>
+				);
+			} ) }
 		</div>
 	);
 }

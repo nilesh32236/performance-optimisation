@@ -22,18 +22,25 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = path.join( __dirname, '../../..' );
-const read = ( rel ) => fs.readFileSync( path.join( ROOT, rel ), 'utf8' );
 
+const readCache = new Map();
+const read = ( rel ) => {
+	if ( ! readCache.has( rel ) ) {
+		readCache.set( rel, fs.readFileSync( path.join( ROOT, rel ), 'utf8' ) );
+	}
+	return readCache.get( rel );
+};
+
+const BUILD_CSS = read( 'build/style-index.css' );
 const TONES = [ 'good', 'warning', 'poor', 'needs_improvement' ];
 
 describe( 'status badge vocabulary', () => {
 	const source = read( 'src/components/ObjectCache.js' );
-	const css = read( 'build/style-index.css' );
 
 	it.each( TONES )(
 		'defines a rule for the `%s` tone in the built stylesheet',
 		( tone ) => {
-			expect( css ).toContain( `status-badge--${ tone }` );
+			expect( BUILD_CSS ).toContain( `status-badge--${ tone }` );
 		}
 	);
 
@@ -43,7 +50,7 @@ describe( 'status badge vocabulary', () => {
 		);
 		expect( emitted.length ).toBeGreaterThan( 0 );
 		for ( const tone of emitted ) {
-			expect( css ).toContain( `status-badge--${ tone }` );
+			expect( BUILD_CSS ).toContain( `status-badge--${ tone }` );
 		}
 	} );
 
@@ -73,14 +80,19 @@ describe( 'a class the markup emits has a rule behind it', () => {
 } );
 
 describe( 'message region token bindings', () => {
-	const BUILD_CSS = read( 'build/style-index.css' );
-
 	it( 'defines the neutral chip background token', () => {
 		const variables = read( 'src/css/abstracts/_variables.scss' );
-		expect( variables ).toContain( '--wppo-bg-chip-neutral:' );
+		expect( variables ).toMatch( /--wppo-bg-badge-neutral:\s*#64748b;/ );
+		// Referenced is not defined: an undeclared custom property resolves to
+		// `transparent`, which erases the white glyph.
+		expect( BUILD_CSS ).toMatch(
+			/:root\{[^}]*--wppo-bg-badge-neutral:#64748b;/
+		);
 	} );
 
-	it( 'binds main region properties to tokens with no hex literals', () => {
+	// Only the item rule is pinned. The tone literals and the icon's `color`
+	// are still hardcoded, so this is not a "no literals" claim.
+	it( 'binds the item text, surface and border to tokens', () => {
 		const scss = read( 'src/css/components/_message-region.scss' );
 
 		const anchor = '.wppo-message-region__item {';
@@ -95,16 +107,27 @@ describe( 'message region token bindings', () => {
 		);
 	} );
 
-	it( 'and the bindings ship in the built stylesheet', () => {
+	// Narrow on purpose: this catches a forgotten `npm run build` and nothing
+	// else. Mutations are caught above, from the SCSS the author edits.
+	it( 'and a rebuild shipped them', () => {
 		const start = BUILD_CSS.indexOf( '.wppo-message-region__item{' );
+		expect( start ).toBeGreaterThanOrEqual( 0 );
 		const item = BUILD_CSS.slice( start, BUILD_CSS.indexOf( '}', start ) );
 
 		expect( item ).toMatch( /color:var\(--wppo-text-main\)/ );
 		expect( item ).toMatch( /background:var\(--wppo-bg-card\)/ );
 		expect( item ).toMatch( /border:1px solid var\(--wppo-border\)/ );
 		expect( BUILD_CSS ).toMatch(
-			/\.wppo-message-region__icon\{[^}]*background:var\(--wppo-bg-chip-neutral\)/
+			/\.wppo-message-region__icon\{[^}]*background:var\(--wppo-bg-badge-neutral\)/
 		);
+	} );
+
+	it( 'mirrors the tone rule to the right edge in RTL', () => {
+		const rtl = read( 'build/style-index-rtl.css' );
+		expect( rtl ).toMatch(
+			/\.wppo-message-region__item\{[^}]*border-right-width:3px/
+		);
+		expect( rtl ).not.toMatch( /message-region__item\{[^}]*border-left-width/ );
 	} );
 } );
 

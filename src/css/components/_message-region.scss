@@ -45,10 +45,10 @@
 	font-weight: 700;
 	line-height: 1;
 	color: #fff;
+	/* Fallback dot for a type with no tone modifier; the tone rules below
+	   re-bind `background` for the four known types. */
+	background: var(--wppo-bg-badge-neutral);
 	border-radius: 50%;
-	/* --wppo-bg-chip-neutral: added to abstracts/_variables.scss; no
-	   pre-existing neutral filled-chip token matched this role. */
-	background: var(--wppo-bg-chip-neutral);
 }
 
 .wppo-message-region__text {
