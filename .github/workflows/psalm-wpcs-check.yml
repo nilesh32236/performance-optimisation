@@ -12,6 +12,7 @@ on:
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
       - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   pull_request:
     branches: ["master"]
     paths:
@@ -23,6 +24,7 @@ on:
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
       - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   schedule:
     - cron: "28 13 * * 0"
   # Manual re-run. The path filters below mean a change to psalm.xml, the
