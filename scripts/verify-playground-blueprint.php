@@ -2,10 +2,10 @@
 /**
  * Verify the published Playground demo points at a blueprint that exists.
  *
- * docs/site/playground.html ships a code-executing link whose blueprint-url
- * pins a commit SHA on raw.githubusercontent.com. Nothing in CI checks that
- * pin, so a bad or stale SHA is only discovered by a visitor whose browser
- * runs whatever that URL serves.
+ * The published docs/site/playground.html ships a code-executing link whose
+ * blueprint-url pins a commit SHA on raw.githubusercontent.com. Nothing in CI
+ * checks that pin, so a bad or stale SHA is only discovered by a visitor whose
+ * browser runs whatever that URL serves.
  *
  * Checks, in order:
  *   1. docs/site/playground.html contains a blueprint-url
@@ -22,17 +22,27 @@
 
 declare( strict_types = 1 );
 
+// phpcs:disable WordPress.WP.AlternativeFunctions -- CI development script: it runs
+// outside WordPress and must use native filesystem, shell and output APIs, which is
+// the same scope generate-class-inventory.php disables.
+// phpcs:disable WordPress.Security.EscapeOutput -- CLI stdout, not HTML. Every value
+// printed is either a hex SHA matched from a 40-character regex or a basename().
+// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec -- the
+// check is "does this commit exist in git"; there is no WordPress API for that.
+// phpcs:disable WordPress.PHP.NoSilencedErrors.Discouraged -- the optional --network
+// probe turns a fetch warning into false on purpose, to report it as a failure.
+
 $root      = dirname( __DIR__ );
-$page      = $root . '/docs/site/playground.html';
+$page_path = $root . '/docs/site/playground.html';
 $network   = in_array( '--network', $argv, true );
 $failures  = array();
 
-if ( ! is_readable( $page ) ) {
+if ( ! is_readable( $page_path ) ) {
 	fwrite( STDERR, "cannot read docs/site/playground.html\n" );
 	exit( 1 );
 }
 
-$html = (string) file_get_contents( $page );
+$html = (string) file_get_contents( $page_path );
 
 if ( ! preg_match( '#blueprint-url=([^"\'<>\s]+)#', $html, $m ) ) {
 	fwrite( STDERR, "no blueprint-url found in docs/site/playground.html\n" );
@@ -51,7 +61,7 @@ $sha = $s[1];
 echo "pinned SHA: {$sha}\n";
 
 // 3. the blueprint must exist at that SHA and parse.
-$path = '.wordpress-org/playground/blueprint.json';
+$blueprint_path = '.wordpress-org/playground/blueprint.json';
 
 // CI checks out at depth 1 (actions/checkout's default), and the pinned SHA is
 // usually an ancestor, so `git show` would fail there even when the pin is
@@ -63,10 +73,10 @@ if ( 0 !== shell_exec( 'git cat-file -e ' . escapeshellarg( $sha ) . ' 2>/dev/nu
 	);
 }
 
-$contents = shell_exec( 'git show ' . escapeshellarg( $sha . ':' . $path ) . ' 2>/dev/null' );
+$contents = shell_exec( 'git show ' . escapeshellarg( $sha . ':' . $blueprint_path ) . ' 2>/dev/null' );
 
 if ( ! is_string( $contents ) || '' === trim( $contents ) ) {
-	$failures[] = "blueprint not found at {$sha}:{$path}";
+	$failures[] = "blueprint not found at {$sha}:{$blueprint_path}";
 } else {
 	$blueprint = json_decode( $contents, true );
 	if ( ! is_array( $blueprint ) ) {
@@ -91,7 +101,7 @@ if ( $network ) {
 	if ( false === $body ) {
 		$failures[] = "pinned URL is not reachable: {$raw}";
 	} else {
-		echo "pinned URL reachable, " . strlen( $body ) . " bytes\n";
+		echo 'pinned URL reachable, ' . strlen( $body ) . " bytes\n";
 	}
 }
 
