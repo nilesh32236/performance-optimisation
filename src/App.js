@@ -417,8 +417,10 @@ const App = () => {
 			first.focus();
 		}
 
-		// Audit #1420: document-level trap (overlay button + outside focus
-		// cannot escape) with Escape-to-close returning focus to the toggle.
+		// Audit #1420: document-level trap so focus cannot escape the drawer while
+		// it is open, with Escape-to-close returning focus to the toggle. The
+		// out-of-sidebar recovery branch below is what enforces it; the overlay is
+		// no longer a focusable control, so it is not part of the trap.
 		const handleKeyDown = ( e ) => {
 			if ( e.key === 'Escape' ) {
 				setMobileMenuOpen( false );
