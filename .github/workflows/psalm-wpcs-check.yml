@@ -268,7 +268,7 @@ jobs:
                       filename = cell(rel_path.split('/')[-1])
                       for error in file_node.findall('error'):
                           has_errors = True
-                          line = error.get('line')
+                          line = cell(error.get('line'))
                           col = error.get('column', '1')
                           raw_msg = error.get('message', '')
                           msg = cell(raw_msg)
@@ -296,7 +296,7 @@ jobs:
                                       rel_path = rel_path[7:]
                                   rel_path = os.path.relpath(rel_path, start=os.getcwd()) if os.path.isabs(rel_path) else rel_path
                                   filename = cell(rel_path.split('/')[-1])
-                                  line = phys.get('region', {}).get('startLine', '?')
+                                  line = cell(phys.get('region', {}).get('startLine', '?'))
                                   table += f"| Psalm | {filename} | {line} | {msg} |\n"
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                                   print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
