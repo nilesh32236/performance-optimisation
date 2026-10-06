@@ -451,7 +451,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// Compile-time validation: alternatives are quoted literals so
 				// this cannot backtrack-catastrophically; a false return here
 				// (overlong pattern) degrades to the strpos fallback per tag.
-				set_error_handler( static function (): bool { return true; } ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from validating the generated alternation.
+				set_error_handler(
+					static function (): bool {
+						return true;
+					}
+				); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from validating the generated alternation.
 				try {
 					$valid = preg_match( $re, '' );
 				} catch ( \Throwable $e ) {

@@ -5315,14 +5315,14 @@
         "kind": "class",
         "scope": "protected_vendor_adjacent",
         "domain": "Minify",
-        "lines": 1704,
+        "lines": 1708,
         "methods": 26,
         "public_methods": 2,
         "large_methods": 3,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "safe_minify_js",
-            "line": 901,
+            "line": 905,
             "lines": 256
         },
         "method_prefixes": {

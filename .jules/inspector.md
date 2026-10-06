@@ -90,3 +90,7 @@
 **Bug/Gap:** PHPStan static analysis complained that the closures passed to `set_error_handler` in `includes/minify/class-html.php` and `includes/Core/class-main.php` were returning `void` instead of `bool`.
 **Root Cause:** The callbacks were defined as `static function () {}`. In PHP, if an error handler returns false/void, the standard PHP error handler continues to execute, causing the suppressed warnings to leak out.
 **Test Added:** No new unit tests, but updated the callbacks to `static function (): bool { return true; }` to satisfy PHPStan and ensure warnings are properly suppressed.
+## 2024-05-18 - Avoid single-line closures to maintain WPCS compliance
+**Bug/Gap:** Replaced an empty closure `static function () {}` with `static function (): bool { return true; }` on a single line. While this fixed the PHPStan error, it violated WordPress Coding Standards (WPCS) because opening braces must be the last content on a line, and PHP statements must be on their own line.
+**Root Cause:** Writing compact single-line closures directly conflicts with strict WPCS formatting rules.
+**Test Added:** No new test, but learned to always format closures across multiple lines or run `vendor/bin/phpcbf --standard=WordPress` after manually creating a closure.
