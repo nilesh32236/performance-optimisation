@@ -7,9 +7,17 @@ produced that evidence, and the **commit SHA that evidence was produced on**.
 better than a plausible number, because a missing row is visible and a plausible number is not.
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
-**Last reviewed:** 2026-10-03
-**Baseline commit (this branch):** `66fd4914164d135d0176a45243748d7af6eee44e` (`growth/claims-register`)
-**Live listing version at review time:** 2.4.0, uploaded 2026-09-24
+**Exemption (cross-branch run records, recorded 2026-10-06):** C-04 and C-05 cite
+check-run records on `72cd755c` (`release/2.4.1`), and C-13 cites probe results on
+`origin/design/variant-c-redesign`, because GitHub check-runs and unmerged-branch probe
+output cannot be reproduced from this branch's tree. Each such row names the foreign SHA
+on its face, is marked re-verification-needed on any workflow change, and must never be
+read as same-branch evidence. No same-branch substitute exists; absent this written
+exemption those three rows would fail the rule above.
+
+**Last reviewed:** 2026-10-06
+**Baseline commit (this branch):** `644556a5f3663e517a9ae12f47cd30dda84ffb7c` (`growth/fix-wcag-claim-and-register`)
+**Live listing version at review time:** 2.4.1, uploaded 2026-10-03
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
 without discussion.
 
@@ -81,6 +89,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | `Requires at least: 6.2`; constant at `:46`; gate at `:275`. Test: **15 tests, 37 assertions, 0 failures**. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
+| **Re-verified** | 2026-10-06 on `644556a5` (`growth/fix-wcag-claim-and-register`): this branch touches `readme.txt:298` only; header lines 1–12 byte-identical, `WPPO_REQUIRES_WP` still at `performance-optimisation.php:46`, gate at `:275`. |
 | **Expires** | Never. It is a code constant, not a test result. Re-verify on any change to `performance-optimisation.php`. |
 
 ### C-02 — "Tested up to" is 7.1
@@ -95,6 +104,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | API: `tested: 7.1.2`. SVN trunk `readme.txt:6`: `Tested up to: 7.1`. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
+| **Re-verified** | 2026-10-06 on `644556a5`: `readme.txt:6` still reads `Tested up to: 7.1`; live API still `tested 7.1.2` / version 2.4.1. |
 | **Expires** | On the next WordPress core release. Until then this row is the only thing standing between "7.1" and whatever the directory displays. |
 
 ### C-03 — Minimum PHP version is 8.2
@@ -108,6 +118,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | `Requires PHP: 8.2`; `composer.json:13: "php": ">=8.2",`; `55: "platform": {` / `56: "php": "8.2"`. Test: **15 tests, 37 assertions, 0 failures**. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
+| **Re-verified** | 2026-10-06 on `644556a5`: `readme.txt:5` still `Requires PHP: 8.2`; `composer.json:13` still `"php": ">=8.2"`, platform still `8.2`. |
 | **Expires** | Never. Code + manifest constant. |
 
 ### C-04 — PHPUnit runs on PHP 8.2 in CI
@@ -211,8 +222,8 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Evidence** | WordPress.org API, re-fetched **2026-10-05**: `version 2.4.1`, `tested 7.1.2`, `requires 6.2`, `requires_php 8.2`, `rating 100`, `num_ratings 4`, `active_installs 0`, `last_updated 2026-10-03 9:56am GMT`, `added 2025-02-24`, tags `cache, core-web-vitals, optimization, pagespeed, performance`. |
 | **What changed since the 2026-10-03 snapshot** | **A release shipped between the two fetches.** `version` went `2.4.0` → **`2.4.1`**; `last_updated` went `2026-09-24` → **`2026-10-03 9:56am GMT`**; and the tag set changed to the five intended tags — the old listing was still serving `cache, minify, pagespeed, performance, speed`. Unchanged: `tested`, `requires`, `requires_php`, `rating`, `num_ratings`, `active_installs`. |
 | **Command** | `curl -sS "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=performance-optimisation" \| python3 -m json.tool` |
-| **SHA / date** | Live API, 2026-10-05 |
-| **Verified** | 2026-10-05 |
+| **SHA / date** | Live API, re-checked 2026-10-06 from `644556a5f3663e517a9ae12f47cd30dda84ffb7c`: still `version 2.4.1`, `last_updated 2026-10-03 9:56am GMT`, `tested 7.1.2` |
+| **Verified** | 2026-10-06 |
 | **Expires** | Any release — and a release happened inside this register's own lifetime, which is the proof. **Never quote these numbers without re-running the command.** |
 | **Do not repackage** | `rating 100` is computed from **`num_ratings 4`**. Four ratings cannot support a quality claim. Never surface `rating` without `num_ratings` beside it, and never use either in copy. `active_installs` is **0** — the listing shows **fewer than 10 active installs**, and no copy may imply otherwise. |
 
@@ -283,7 +294,7 @@ command above will get `False`; if it ever returns `True`, the release process h
 | **Verdict** | **TRUE**, with the measurements below |
 | **The narrow, real measurement** | On `design/variant-c-redesign`, two WCAG criteria were measured to zero failures in a real browser against the live admin: **1.4.3 Contrast (Minimum)** (Level AA) and **1.4.12 Text Spacing** (Level AA). |
 | **Command** | `git show origin/design/variant-c-redesign:scripts/probe-text-spacing.mjs`, and the commit bodies of `77e89ce1` and `38d5f15d` for the contrast and text-spacing results. |
-| **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". |
+| **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". Found-then-fixed: `c97ee033` recorded 35 AA text-contrast failures first; `77e89ce1` recorded their closure to TOTAL 0 (see the withdrawn-claims table below for the finding half). |
 | **SHA** | `c97ee033…`, `77e89ce1…`, `38d5f15d…` on `origin/design/variant-c-redesign` — **not merged into `master`** |
 | **NOT measured — do not claim** | **2.4.7 Focus Visible**, **2.4.11 Focus Not Obscured** and **2.4.13 Focus Appearance** have probe scripts on that branch (`probe-focus.mjs`, `probe-focus-ring.mjs`) but **no recorded result was found in the repository**. `2.4.13` is **Level AAA**, not AA. `probe-forced-colors.mjs` tests a rendering *condition*, not a numbered criterion. `probe-inspector.mjs`, `probe-save.mjs` and `probe-tokens.mjs` are **not WCAG criteria** at all. |
 | **NOT a conformance claim** | There is no automated WCAG conformance scan: `axe-core` is not a dependency. No probe result artifact is committed — only screenshots. The recorded results exist **solely in commit messages**, which is weaker evidence than a run log. |
@@ -325,7 +336,8 @@ Copy that is not backed by anything in this file. Fix the copy or add the eviden
 
 | Location | Text | Status |
 |---|---|---|
-| `readme.txt:298` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **WITHDRAWN 2026-10-05.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch, so the shipped 2.0.0 claim was contradicted by the project's own measurement. The clause has now been removed from `readme.txt` and replaced with a note that the claim was never measured and is withdrawn, matching the 2.4.1 changelog's own correction style. It is still live on the listing at `trunk/readme.txt:298` and will clear on the next release. |
+| `readme.txt:298` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **WITHDRAWN 2026-10-05.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch, so the shipped 2.0.0 claim was contradicted by the project's own measurement. Found-then-fixed: the 35 were found in `c97ee033` and closed to TOTAL 0 in `77e89ce1` (see C-13 for the closure half). The clause has now been removed from `readme.txt` and replaced with a note that the claim was never measured and is withdrawn, matching the 2.4.1 changelog's own correction style. It is still live on the listing at `trunk/readme.txt:298` and will clear on the next release. |
+| `changelog.md:48` | "- **Redesigned dashboard and all settings tabs** with WCAG AA contrast, equal-height metrics, segmented tabs, full mobile/RTL support and 44×44 touch targets." (verbatim) | **STILL PRESENT 2026-10-06.** Same unmeasured 2.0.0-era WCAG AA wording as the withdrawn `readme.txt:298` line, surviving in the repo's own changelog. Not edited here (outside this PR's write scope); needs the same withdraw-or-measure treatment before anyone quotes it. |
 | `docs/site/compatibility.html:4` | `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Open PR #1756 replaces both rows. Not edited here to avoid colliding with it. |
 | `docs/growth/claims.md` (previous revision) | citation to `docs/growth/ACCESSIBILITY-STATEMENT.md` | **DANGLING at the time of writing** — the file arrives with PR #1759. Now cited precisely as such in C-13. |
 

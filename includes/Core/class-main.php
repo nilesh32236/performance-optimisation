@@ -4779,7 +4779,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * while Aggressive pins it true), so enabling CSS combining after
 		 * applying Safe clears the confirmation instead of overstating
 		 * safety. `minifyHTML` is part of the pipeline gate because the
-		 * bundle pins it true. Fail-open: any failure returns false.
+		 * bundle pins it true. There is no catch block: the body is
+		 * `empty()` checks only, which cannot throw, so every `false`
+		 * return above is a settings mismatch, never an error path.
 		 *
 		 * @since 2.3.0
 		 * @param array<string, mixed> $file_opt file_optimisation settings slice.
@@ -5523,7 +5525,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * disabling safe mode later restores the previous configuration
 		 * without re-entering settings. Pure function for testability;
 		 * persistence lives in the REST handler (per-site wppo_settings).
-		 * Fail-open: any failure returns the input unchanged with safeMode on.
+		 * There is no catch block: the body is a single array write,
+		 * which cannot throw, so the input is always returned with
+		 * `safeMode` forced on.
 		 *
 		 * @since 2.3.0
 		 *
