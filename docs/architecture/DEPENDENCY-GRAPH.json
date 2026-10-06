@@ -20549,21 +20549,21 @@
             "file": "includes/Settings/class-settings-store.php",
             "domain": "Settings",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1692,
+            "lines": 1705,
             "property_count": 4,
             "static_property_count": 4,
             "public_property_count": 0,
             "protected_property_count": 0,
             "private_property_count": 4,
             "static_state": true,
-            "method_count": 25,
+            "method_count": 26,
             "top_level_function_count": 0,
             "top_level_functions": [],
             "largest_methods": [
                 {
                     "name": "sanitize_settings_recursively",
-                    "line": 369,
-                    "end_line": 769,
+                    "line": 382,
+                    "end_line": 782,
                     "lines": 401,
                     "visibility": "public",
                     "static": true,
@@ -20571,8 +20571,8 @@
                 },
                 {
                     "name": "get_resolved_settings",
-                    "line": 1033,
-                    "end_line": 1319,
+                    "line": 1046,
+                    "end_line": 1332,
                     "lines": 287,
                     "visibility": "public",
                     "static": true,
@@ -20580,26 +20580,26 @@
                 },
                 {
                     "name": "get_default_settings",
-                    "line": 781,
-                    "end_line": 999,
+                    "line": 794,
+                    "end_line": 1012,
                     "lines": 219,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
-                    "name": "sanitize_cdn_mapping",
-                    "line": 182,
-                    "end_line": 261,
-                    "lines": 80,
-                    "visibility": "public",
+                    "name": "sanitize_cdn_mapping_entry",
+                    "line": 180,
+                    "end_line": 239,
+                    "lines": 60,
+                    "visibility": "private",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "restore_settings_snapshot",
-                    "line": 1658,
-                    "end_line": 1690,
+                    "line": 1671,
+                    "end_line": 1703,
                     "lines": 33,
                     "visibility": "public",
                     "static": true,
@@ -20607,8 +20607,8 @@
                 },
                 {
                     "name": "save_settings",
-                    "line": 1442,
-                    "end_line": 1469,
+                    "line": 1455,
+                    "end_line": 1482,
                     "lines": 28,
                     "visibility": "public",
                     "static": true,
@@ -20624,9 +20624,18 @@
                     "delegates": false
                 },
                 {
+                    "name": "sanitize_cdn_mapping",
+                    "line": 250,
+                    "end_line": 274,
+                    "lines": 25,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
                     "name": "sanitize_scalar_setting",
-                    "line": 275,
-                    "end_line": 292,
+                    "line": 288,
+                    "end_line": 305,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -20634,17 +20643,8 @@
                 },
                 {
                     "name": "get_settings_sanitizer_map",
-                    "line": 308,
-                    "end_line": 325,
-                    "lines": 18,
-                    "visibility": "public",
-                    "static": true,
-                    "delegates": false
-                },
-                {
-                    "name": "take_settings_snapshot",
-                    "line": 1630,
-                    "end_line": 1647,
+                    "line": 321,
+                    "end_line": 338,
                     "lines": 18,
                     "visibility": "public",
                     "static": true,
@@ -20654,24 +20654,25 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::current_blog_id": 1034,
-                    "self::ensure_settings_cache_hook": 1397,
-                    "self::get_default_settings": 1039,
-                    "self::get_settings": 1040,
-                    "self::get_settings_snapshot": 1660,
-                    "self::invalidate_resolved_settings": 1418,
-                    "self::sanitize_cdn_mapping": 397,
-                    "self::sanitize_mode_value": 385,
-                    "self::sanitize_scalar_setting": 765,
-                    "self::sanitize_settings_recursively": 339,
-                    "self::sanitize_ttl_overrides": 391,
-                    "self::save_settings": 1675,
-                    "self::set_settings_cache": 1452
+                    "self::current_blog_id": 1047,
+                    "self::ensure_settings_cache_hook": 1410,
+                    "self::get_default_settings": 1052,
+                    "self::get_settings": 1053,
+                    "self::get_settings_snapshot": 1673,
+                    "self::invalidate_resolved_settings": 1431,
+                    "self::sanitize_cdn_mapping": 410,
+                    "self::sanitize_cdn_mapping_entry": 261,
+                    "self::sanitize_mode_value": 398,
+                    "self::sanitize_scalar_setting": 778,
+                    "self::sanitize_settings_recursively": 352,
+                    "self::sanitize_ttl_overrides": 404,
+                    "self::save_settings": 1688,
+                    "self::set_settings_cache": 1465
                 },
                 "instance_calls": [],
                 "new_expressions": [],
                 "class_references": {
-                    "self": 1561
+                    "self": 1574
                 },
                 "class_constant_references": {
                     "self": 109
@@ -20680,7 +20681,7 @@
                     "PerformanceOptimise\\Inc\\Settings_Store": 39
                 },
                 "class_exists": {
-                    "OD_URL_Metric": 966,
+                    "OD_URL_Metric": 979,
                     "PerformanceOptimise\\Inc\\Settings_Store": 39
                 },
                 "method_exists": [],
@@ -20690,60 +20691,60 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "OD_URL_Metric": 966
+                    "OD_URL_Metric": 979
                 },
                 "external_functions": {
                     "absint": 158,
-                    "add_action": 1561,
+                    "add_action": 1574,
                     "apply_filters": 170,
-                    "array_filter": 201,
-                    "array_map": 201,
-                    "array_values": 234,
+                    "array_filter": 189,
+                    "array_map": 189,
+                    "array_values": 222,
                     "class_exists": 39,
                     "defined": 35,
-                    "esc_url_raw": 193,
-                    "explode": 201,
-                    "filter_var": 411,
-                    "function_exists": 823,
-                    "get_current_blog_id": 1374,
-                    "get_option": 1398,
-                    "implode": 208,
+                    "esc_url_raw": 181,
+                    "explode": 189,
+                    "filter_var": 424,
+                    "function_exists": 836,
+                    "get_current_blog_id": 1387,
+                    "get_option": 1411,
+                    "implode": 196,
                     "in_array": 134,
-                    "is_array": 190,
-                    "is_bool": 276,
-                    "is_finite": 708,
-                    "is_int": 1488,
-                    "is_numeric": 279,
-                    "is_string": 373,
-                    "ltrim": 216,
-                    "max": 680,
-                    "min": 680,
-                    "preg_match": 204,
+                    "is_array": 221,
+                    "is_bool": 289,
+                    "is_finite": 721,
+                    "is_int": 1501,
+                    "is_numeric": 292,
+                    "is_string": 386,
+                    "ltrim": 204,
+                    "max": 693,
+                    "min": 693,
+                    "preg_match": 192,
                     "preg_replace": 151,
                     "sanitize_text_field": 133,
-                    "sanitize_textarea_field": 286,
-                    "stripos": 285,
-                    "strtolower": 213,
-                    "time": 1640,
-                    "trim": 478,
-                    "update_option": 1445
+                    "sanitize_textarea_field": 299,
+                    "stripos": 298,
+                    "strtolower": 201,
+                    "time": 1653,
+                    "trim": 491,
+                    "update_option": 1458
                 },
                 "wordpress_functions": {
                     "absint": 158,
-                    "add_action": 1561,
+                    "add_action": 1574,
                     "apply_filters": 170,
-                    "esc_url_raw": 193,
-                    "get_current_blog_id": 1374,
-                    "get_option": 1398,
+                    "esc_url_raw": 181,
+                    "get_current_blog_id": 1387,
+                    "get_option": 1411,
                     "sanitize_text_field": 133,
-                    "sanitize_textarea_field": 286,
-                    "update_option": 1445
+                    "sanitize_textarea_field": 299,
+                    "update_option": 1458
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": [],
                 "database_dependencies": [],
                 "dynamic_references": {
-                    "static::self": 1035
+                    "static::self": 1048
                 }
             },
             "extends": [],
@@ -20756,13 +20757,13 @@
             "delegating_methods": [],
             "hooks": {
                 "add_option_wppo_settings": [
-                    1562
+                    1575
                 ],
                 "delete_option_wppo_settings": [
-                    1563
+                    1576
                 ],
                 "update_option_wppo_settings": [
-                    1561
+                    1574
                 ]
             },
             "metrics": {
@@ -64249,7 +64250,7 @@
                     "node": "PerformanceOptimise\\Inc\\Settings_Store",
                     "file": "includes/Settings/class-settings-store.php",
                     "method": "current_blog_id",
-                    "line": 1369,
+                    "line": 1382,
                     "lines": 10
                 },
                 {
