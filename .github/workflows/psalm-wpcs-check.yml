@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up PHP
         uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -402,7 +404,9 @@ jobs:
         uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939
         with:
           sarif_file: reports/psalm.sarif
-          if-no-files-found: ignore
+          # NOT an upload-sarif input - it belongs to upload-artifact. Passing an
+          # unrecognised input makes the action raise ConfigurationError, turning a
+          # soft skip into a hard failure on every run.
 
 
   report:
