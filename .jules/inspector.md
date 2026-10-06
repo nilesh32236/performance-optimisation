@@ -86,3 +86,7 @@
 **Bug/Gap:** 5 `catch.neverThrown` static analysis errors reported by PHPStan.
 **Root Cause:** `try...catch (\Throwable)` blocks were wrapped around simple logic (variable assignment, conditionals, array generation) that cannot natively throw exceptions.
 **Test Added:** Removed the redundant try...catch blocks to satisfy PHPStan strict static analysis.
+## 2024-05-18 - Fix PHPStan strict callable signatures for set_error_handler
+**Bug/Gap:** PHPStan static analysis complained that the closures passed to `set_error_handler` in `includes/minify/class-html.php` and `includes/Core/class-main.php` were returning `void` instead of `bool`.
+**Root Cause:** The callbacks were defined as `static function () {}`. In PHP, if an error handler returns false/void, the standard PHP error handler continues to execute, causing the suppressed warnings to leak out.
+**Test Added:** No new unit tests, but updated the callbacks to `static function (): bool { return true; }` to satisfy PHPStan and ensure warnings are properly suppressed.
