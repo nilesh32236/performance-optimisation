@@ -376,7 +376,10 @@ jobs:
         with:
           name: code-quality-summary
           path: reports
-          if-no-files-found: warn
+          # NOT a download-artifact input - it belongs to upload-artifact and is
+          # silently ignored here. A no-op guard reads as protection, which is worse
+          # than none. The producer uploads with if-no-files-found: error, so a
+          # missing artefact already fails loudly where it went wrong.
 
       - name: Upload Security Analysis results
         uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939
@@ -407,10 +410,10 @@ jobs:
         with:
           name: code-quality-summary
           path: reports/
-          # The upload uses if-no-files-found: error, so a missing artefact fails the
-          # producer loudly rather than letting the consumer decide. Warn here so a
-          # consumer cannot hard-fail on a producer that legitimately had no SARIF.
-          if-no-files-found: warn
+          # NOT a download-artifact input - it belongs to upload-artifact and is
+          # silently ignored here. A no-op guard reads as protection, which is worse
+          # than none. The producer uploads with if-no-files-found: error, so a
+          # missing artefact already fails loudly where it went wrong.
 
       - name: Manage GitHub PR Comment or Issue
         id: manage_issue
