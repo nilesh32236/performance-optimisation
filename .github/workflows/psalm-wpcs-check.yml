@@ -371,6 +371,19 @@ jobs:
       contents: read
       security-events: write
     steps:
+      # The source tree is REQUIRED here, not optional. upload-sarif computes
+      # result fingerprints by hashing the analysed source files; with no checkout
+      # it cannot, and results arrive untracked. Measured, not assumed - see the
+      # commit message.
+      #
+      # A checkout copies files. It does not execute them, so this does not undo
+      # the split: nothing in this job runs composer, npm, phpcs or the Psalm
+      # image. persist-credentials: false so the clone leaves no usable token.
+      - name: Checkout code for fingerprinting
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
       - name: Download the SARIF report
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
