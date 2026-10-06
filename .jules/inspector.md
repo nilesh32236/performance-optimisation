@@ -94,3 +94,11 @@
 **Bug/Gap:** Replaced an empty closure `static function () {}` with `static function (): bool { return true; }` on a single line. While this fixed the PHPStan error, it violated WordPress Coding Standards (WPCS) because opening braces must be the last content on a line, and PHP statements must be on their own line.
 **Root Cause:** Writing compact single-line closures directly conflicts with strict WPCS formatting rules.
 **Test Added:** No new test, but learned to always format closures across multiple lines or run `vendor/bin/phpcbf --standard=WordPress` after manually creating a closure.
+## 2024-05-18 - Properly ignore WPCS set_error_handler warnings
+**Bug/Gap:** Using `phpcs:ignore` at the end of the line for a multi-line `set_error_handler` statement failed to actually suppress the `WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` warning because the sniff was triggering before the end of the statement or the ignore comment wasn't properly targeted.
+**Root Cause:** When `set_error_handler` is formatted across multiple lines (to comply with bracket/statement rules), appending `// phpcs:ignore ...` at the very end `);` sometimes fails to suppress the warning emitted at the function call start.
+**Test Added:** No new test, but learned to place `// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` on its own line immediately *above* the `set_error_handler` call to consistently and reliably suppress the warning.
+## 2024-05-18 - Properly ignore WPCS set_error_handler warnings
+**Bug/Gap:** Using `phpcs:ignore` at the end of the line for a multi-line `set_error_handler` statement failed to actually suppress the `WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` warning because the sniff was triggering before the end of the statement or the ignore comment wasn't properly targeted.
+**Root Cause:** When `set_error_handler` is formatted across multiple lines (to comply with bracket/statement rules), appending `// phpcs:ignore ...` at the very end `);` sometimes fails to suppress the warning emitted at the function call start.
+**Test Added:** No new test, but learned to place `// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` on its own line immediately *above* the `set_error_handler` call to consistently and reliably suppress the warning.

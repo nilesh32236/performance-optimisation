@@ -2270,7 +2270,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10260,
+        "lines": 10270,
         "methods": 238,
         "public_methods": 151,
         "large_methods": 16,
@@ -5315,14 +5315,14 @@
         "kind": "class",
         "scope": "protected_vendor_adjacent",
         "domain": "Minify",
-        "lines": 1708,
+        "lines": 1709,
         "methods": 26,
         "public_methods": 2,
         "large_methods": 3,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "safe_minify_js",
-            "line": 905,
+            "line": 906,
             "lines": 256
         },
         "method_prefixes": {
