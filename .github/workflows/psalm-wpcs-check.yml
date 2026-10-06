@@ -51,7 +51,6 @@ jobs:
     # without it, and dropping it would silently break code scanning.
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -219,14 +218,6 @@ jobs:
           fi
           echo "exists=${exists}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Security Analysis results
-        # always() so a failed scan still uploads its report; the outcome and
-        # existence guards keep a skipped or SARIF-less run from calling the
-        # action with nothing to read.
-        if: always() && steps.psalm.outcome != 'skipped' && steps.psalm_report.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939 # v4
-        with:
-          sarif_file: reports/psalm.sarif
 
       - name: Fix Reports Permissions
         if: always()
@@ -361,8 +352,37 @@ jobs:
             reports/status.txt
             reports/summary.md
             reports/playground_pin.txt
+            reports/psalm.sarif
           retention-days: 7
           if-no-files-found: error
+
+  sarif:
+    # Holds security-events:write and nothing else. GitHub scopes `permissions`
+    # to the workflow or a job, never to a step, so this scope cannot be narrowed
+    # inside code-quality without splitting it out - which is what this job is.
+    #
+    # It consumes reports/psalm.sarif as an artefact and checks out NOTHING, so
+    # no pull-request-controlled code ever runs here either.
+    name: Upload SARIF
+    needs: code-quality
+    if: always() && needs.code-quality.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Download the SARIF report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: code-quality-summary
+          path: reports
+
+      - name: Upload Security Analysis results
+        uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939
+        with:
+          sarif_file: reports/psalm.sarif
+          if-no-files-found: ignore
+
 
   report:
     name: Post the scan summary
