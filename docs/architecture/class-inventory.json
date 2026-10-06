@@ -4766,14 +4766,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Settings",
-        "lines": 1714,
+        "lines": 1705,
         "methods": 26,
         "public_methods": 24,
         "large_methods": 3,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "sanitize_settings_recursively",
-            "line": 391,
+            "line": 382,
             "lines": 401
         },
         "method_prefixes": {
