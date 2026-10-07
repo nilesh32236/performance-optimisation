@@ -26,9 +26,9 @@
 	padding: 12px 14px;
 	font-size: 0.875rem;
 	line-height: 1.45;
-	color: var(--wppo-text-main, #0f172a);
-	background: var(--wppo-bg-card, #fff);
-	border: 1px solid var(--wppo-border, #e2e8f0);
+	color: var(--wppo-text-main);
+	background: var(--wppo-bg-card-surface, #fafbfc);
+	border: 1px solid var(--wppo-border);
 	border-left-width: 3px;
 	border-radius: 8px;
 	box-shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 8px 24px -12px rgb(15 23 42 / 18%);
