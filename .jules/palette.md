@@ -61,3 +61,6 @@
 ## 2026-10-03 - Dynamic Welcome Panel Shadows
 **Learning:** Hardcoded `rgba()` colors in the welcome-step number badge shadows do not track the active WP admin color scheme. Note `--wppo-primary` is bound to `var(--wp-admin-theme-color)` and therefore adapts, whereas `--wppo-success` is a static hex, so converting its shadow is a no-op until that token is themed.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)`; the percentage must match the original alpha because `color-mix()` mixes premultiplied alpha.
+## 2026-10-07 - Dynamic Theme Variables for Message Region
+**Learning:** The message region component used hardcoded hex colors for structural elements (background, borders, text). This breaks WP theme adaptation as hardcoded colors ignore the user's active color scheme.
+**Action:** Always replace hardcoded structural hex colors in SCSS components with their corresponding design system CSS variables from `_variables.scss` (e.g., `var(--wppo-bg-card, #fff)`, `var(--wppo-text-main, #0f172a)`).
