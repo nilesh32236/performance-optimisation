@@ -44,9 +44,9 @@
 	font-size: 12px;
 	font-weight: 700;
 	line-height: 1;
-	color: var(--wppo-text-sidebar-active, #fff);
+	color: #fff;
 	border-radius: 50%;
-	background: var(--wppo-text-light, #64748b);
+	background: #64748b;
 }
 
 .wppo-message-region__text {
@@ -57,31 +57,31 @@
 /* The left rule carries the tone; the icon repeats it, so neither is the only
    signal — which also keeps it readable without relying on colour alone. */
 .wppo-message-region__item--success {
-	border-left-color: var(--wppo-success, #0f7b4f);
+	border-left-color: #0f7b4f;
 }
 .wppo-message-region__item--success .wppo-message-region__icon {
-	background: var(--wppo-success, #0f7b4f);
+	background: #0f7b4f;
 }
 
 .wppo-message-region__item--error {
-	border-left-color: var(--wppo-danger, #b3261e);
+	border-left-color: #b3261e;
 }
 .wppo-message-region__item--error .wppo-message-region__icon {
-	background: var(--wppo-danger, #b3261e);
+	background: #b3261e;
 }
 
 .wppo-message-region__item--warning {
-	border-left-color: var(--wppo-warning-text, #8a5a00);
+	border-left-color: #8a5a00;
 }
 .wppo-message-region__item--warning .wppo-message-region__icon {
-	background: var(--wppo-warning-text, #8a5a00);
+	background: #8a5a00;
 }
 
 .wppo-message-region__item--info {
-	border-left-color: var(--wppo-info, #0b6e75);
+	border-left-color: #0b6e75;
 }
 .wppo-message-region__item--info .wppo-message-region__icon {
-	background: var(--wppo-info, #0b6e75);
+	background: #0b6e75;
 }
 
 @media (max-width: 600px) {
