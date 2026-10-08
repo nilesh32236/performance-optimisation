@@ -6,8 +6,6 @@
  * @since NEXT
  */
 
-// phpcs:disable WordPress.Files.FileName -- PHPUnit discovers via the *Test.php suffix; the class name cannot satisfy both PHPCS and PHPUnit.
-
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,16 +14,25 @@ use PHPUnit\Framework\TestCase;
  * @since NEXT
  */
 final class RedisNodeParseTest extends TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		setUp as protected wppoSetUp;
+	}
 
 	/**
-	 * Setup before each test.
+	 * Load the dependency-light parser once, then run the shared bootstrap.
+	 *
+	 * The helper is loaded here rather than inside the test body so a load
+	 * failure is a clear include error instead of "Call to undefined
+	 * function". require_once already dedupes by realpath, so the guard is
+	 * not load-bearing: every declaration in the helper is itself
+	 * function_exists-guarded.
+	 *
+	 * @return void
 	 */
-	public function setUp(): void {
-		parent::setUp();
-		if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
-			require_once dirname( __DIR__, 2 ) . '/includes/Support/redis-connect-helper.php';
-		}
+	protected function setUp(): void {
+		require_once WPPO_PLUGIN_PATH . 'includes/Support/redis-connect-helper.php';
+
+		$this->wppoSetUp();
 	}
 
 	/**
@@ -48,6 +55,26 @@ final class RedisNodeParseTest extends TestCase {
 
 		$this->assertSame( $exp_host, $result['host'] );
 		$this->assertSame( $exp_port, $result['port'] );
+	}
+
+	/**
+	 * The new $default_port parameter is honoured, not just defaulted.
+	 *
+	 * Every shape that carries no port segment must resolve to the
+	 * caller-supplied port; a node that carries an explicit port segment
+	 * keeps it.
+	 *
+	 * @return void
+	 */
+	public function test_explicit_default_port_is_honoured(): void {
+		$this->assertSame( 6379, wppo_parse_redis_node( 'localhost', 6379 )['port'] );
+		$this->assertSame( 6379, wppo_parse_redis_node( '[fe80::1]', 6379 )['port'] );
+		$this->assertSame( 6379, wppo_parse_redis_node( 'fe80::1', 6379 )['port'] );
+		$this->assertSame( 6379, wppo_parse_redis_node( 'redis.example.internal', 6379 )['port'] );
+
+		// An explicit port segment wins over the supplied default.
+		$this->assertSame( 26380, wppo_parse_redis_node( 'localhost:26380', 6379 )['port'] );
+		$this->assertSame( 1234, wppo_parse_redis_node( '[fe80::1]:1234', 6379 )['port'] );
 	}
 
 	/**

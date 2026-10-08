@@ -308,19 +308,23 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * Parses a Redis node string into host and port components.
 	 *
 	 * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
-	 * A node with no port at all falls back to the Sentinel default (26379);
-	 * a node with an empty or non-numeric port segment ('host:') yields
+	 * A node with no port at all falls back to $default_port, which defaults to
+	 * the Redis Sentinel port 26379 (the only caller is the Sentinel connect
+	 * path). A node with an empty or non-numeric port segment ('host:') yields
 	 * port 0, which callers reject.
 	 *
-	 * @param mixed $node         Node string to parse; non-string values are cast to string.
-	 * @param int   $default_port Default port to return if the node provides none.
+	 * @param mixed $node         Node string to parse; non-scalar values fail closed to ''.
+	 * @param int   $default_port Port to return when the node provides none.
 	 * @since 2.0.0
+	 * @since NEXT Added the $default_port parameter.
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
 	function wppo_parse_redis_node( $node, $default_port = 26379 ) {
 		// Null-safe: internal string functions deprecate null arguments on
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
-		// the invalid-node path handled by callers).
+		// the invalid-node path handled by callers). is_scalar() also fails
+		// closed for arrays and objects, which the old is_string() ?:(string)
+		// cast turned into 'Array' / 'Resource id #N' or threw on.
 		$node = is_scalar( $node ) ? (string) $node : '';
 
 		if ( 0 === strpos( $node, '[' ) ) {
