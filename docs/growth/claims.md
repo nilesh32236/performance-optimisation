@@ -277,10 +277,11 @@ users**. It moves to corrected only when the release is live and the API returns
 | **Verdict** | **TRUE**, with the limit stated rather than hidden |
 | **Evidence — the two tests** | `tests/php/MainSpeculationRulesTest.php:6` reconciles speculation-rules handling with the WP 7.1 `moderate` default and pins an explicit eagerness so the escalation cannot override the plugin UI. `tests/php/ImgConverterTest.php:97` stubs `wp_get_image_encode_quality()` (WP 7.1+) *while simulating the WP 7.1+ runtime*. |
 | **Evidence — the limit** | Both SIMULATE the 7.1 runtime; neither exercises a real 7.1 install. `setup-php` is used by six workflows to select a PHP version and none of them installs WordPress. |
-| **Evidence — the absence** | `grep -rnE "wordpress-version\|wp-env\|playground\|wp core install\|wp-env (start\|run)\|playground (run\|cli)\|wordpress-setup-action" .github/workflows/` returns no output (exit 1). |
+| **Evidence — the absence** | `grep -rnE "wp-env\|wp core install\|wordpress-setup-action" .github/workflows/` returns no output (exit 1). **Corrected 2026-10-08:** the earlier form of this row also grepped for bare `playground`, and that no longer returns empty. `grep -rn "playground" .github/workflows/` returns **17 hits, all in `psalm-wpcs-check.yml`**, and none of them installs WordPress: four are path-filter globs (`docs/site/playground.html`, `.wordpress-org/playground/blueprint.json` at `:14,15,26,27`), the rest are a `playground_pin` step id with its status plumbing (`:203,329,335,336,338,356,455,457,459,461`) and an invocation of the plugin's own `scripts/verify-playground-blueprint.php` (`:214,218,222`). A path filter selects when a workflow runs; a step id names a step; a verifier checks a file. None of the three installs WordPress. The claim is therefore narrowed to what is actually true. |
+| **Command (absence)** | `grep -rnE "wp-env\|wp core install" .github/workflows/` → no output (exit 1). `grep -rn "playground" .github/workflows/ \| wc -l` → `17`, all in `psalm-wpcs-check.yml`, none an installer. |
 | **NOT a conformance claim** | No automated WCAG conformance scan. `axe-core` is not a dependency on this branch. No independent audit, no assistive-technology testing. See C-13. |
 | **Rule 7** | This row exists so the compatibility page's 7.1 statements are not unbacked copy. |
-| **Verified** | 2026-10-04 |
+| **Verified** | 2026-10-04; absence claim re-verified and narrowed 2026-10-08 |
 
 ### C-15 — The `JS Tests & Build (React 19)` job forces React 19 and `@wordpress/element@7.0.0`
 
