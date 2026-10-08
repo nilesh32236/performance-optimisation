@@ -9410,6 +9410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// We still validate via WP_Speculation_Rules when available, with allowlist fallback.
 			if ( function_exists( 'wp_get_speculation_rules_default_configuration' ) ) {
 				$defaults = wp_get_speculation_rules_default_configuration();
+
 				if ( is_array( $defaults ) ) {
 					$key = null;
 					if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
@@ -9417,29 +9418,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
 						$key = 'eagerness';
 					}
+
 					if ( null !== $key && isset( $defaults[ $key ] ) && is_string( $defaults[ $key ] ) && '' !== $defaults[ $key ] ) {
 						$candidate = $defaults[ $key ];
-						$is_valid  = true;
-						if ( class_exists( 'WP_Speculation_Rules' ) ) {
-							if ( 'mode' === $key ) {
-								if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
-									$is_valid = \WP_Speculation_Rules::is_valid_mode( $candidate );
-								} else {
-									$is_valid = in_array( $candidate, array( 'prefetch', 'prerender' ), true );
-								}
-							} elseif ( 'eagerness' === $key ) {
-								if ( method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
-									$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $candidate );
-								} else {
-									$is_valid = in_array( $candidate, array( 'conservative', 'moderate', 'eager' ), true );
-								}
-							}
-						} elseif ( 'mode' === $key ) {
-							$is_valid = in_array( $candidate, array( 'prefetch', 'prerender' ), true );
-						} else {
-							$is_valid = in_array( $candidate, array( 'conservative', 'moderate', 'eager' ), true );
-						}
-						if ( $is_valid ) {
+
+						if ( $this->is_valid_speculation_value( $key, $candidate ) ) {
 							// Core hardcoded defaults are prefetch and conservative without host override.
 							// Only treat as override when effective value differs from those defaults,
 							// so vanilla 7.1 install does not look pinned when it is not.
@@ -9477,35 +9460,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Validate via WP_Speculation_Rules when available, else allowlist.
-			if ( class_exists( 'WP_Speculation_Rules' ) ) {
-				if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
-					if ( ! \WP_Speculation_Rules::is_valid_mode( $value ) ) {
-						return null;
-					}
-				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
-					if ( ! \WP_Speculation_Rules::is_valid_eagerness( $value ) ) {
-						return null;
-					}
-				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
-					if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
-						return null;
-					}
-				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
-					if ( ! in_array( $value, array( 'conservative', 'moderate', 'eager' ), true ) ) {
-						return null;
-					}
-				}
-			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
-				if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
-					return null;
-				}
+			if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+				$key = 'mode';
 			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
-				if ( ! in_array( $value, array( 'conservative', 'moderate', 'eager' ), true ) ) {
-					return null;
-				}
+				$key = 'eagerness';
+			} else {
+				return $value; // Unknown key, pass through safely.
+			}
+
+			if ( ! $this->is_valid_speculation_value( $key, $value ) ) {
+				return null;
 			}
 
 			return $value;
+		}
+
+		/**
+		 * Validates a speculation rule value (mode or eagerness) against WP 7.1 core standards
+		 * or local fallbacks.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $key   The speculation attribute to validate ('mode' or 'eagerness').
+		 * @param string $value The value to check.
+		 * @return bool True if valid, false otherwise.
+		 */
+		private function is_valid_speculation_value( string $key, string $value ): bool {
+			if ( class_exists( 'WP_Speculation_Rules' ) ) {
+				if ( 'mode' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
+					return \WP_Speculation_Rules::is_valid_mode( $value );
+				}
+				if ( 'eagerness' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+					return \WP_Speculation_Rules::is_valid_eagerness( $value );
+				}
+			}
+
+			if ( 'mode' === $key ) {
+				return in_array( $value, array( 'prefetch', 'prerender' ), true );
+			}
+
+			if ( 'eagerness' === $key ) {
+				return in_array( $value, array( 'conservative', 'moderate', 'eager' ), true );
+			}
+
+			return false;
 		}
 
 		/**
