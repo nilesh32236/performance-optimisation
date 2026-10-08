@@ -706,12 +706,6 @@ jobs:
             echo "::notice::No PR number on this event — nothing to merge"
             exit 0
           fi
-          # Only a PR the reviewer approved is eligible. Guards the post-autofix
-          # sweep from merging a PR the loop did not approve.
-          if ! gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | index("autofix:ready")' | grep -q true; then
-            echo "::notice::PR #${PR_NUMBER} is not autofix:ready — nothing to merge"
-            exit 0
-          fi
           # Bind the decision to the exact head the reviewer approved. Read it
           # here (not from the event) so both trigger paths share one code path.
           PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
@@ -762,6 +756,18 @@ jobs:
           # that had never run CI at all.
           if [ "$TOTAL" -eq 0 ]; then
             echo "::warning::Auto-merge blocked — PR #${PR_NUMBER} reported no checks; refusing to merge unverified code"
+            exit 0
+          fi
+          # Only a PR the reviewer approved is eligible. Guards the post-autofix
+          # sweep from merging a PR the loop did not approve. Re-checked here,
+          # after the poll, because the label can be removed while we wait.
+          # `index()` yields a number or null — never the string "true" — so the
+          # old `| grep -q true` could never match and silently skipped every
+          # merge. Test for PRESENCE instead. `(.labels // [])` keeps jq from
+          # erroring on a PR whose labels come back null.
+          if [ "$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels \
+                 --jq '[(.labels // [])[]?.name] | any(. == "autofix:ready")')" != "true" ]; then
+            echo "::notice::PR #${PR_NUMBER} is not autofix:ready — nothing to merge"
             exit 0
           fi
           echo "All $TOTAL check(s) green — merging PR #${PR_NUMBER} (autofix:ready)..."
