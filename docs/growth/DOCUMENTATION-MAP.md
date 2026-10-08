@@ -69,8 +69,10 @@ Each page answers a distinct question. No thin keyword-only pages were added.
 
 `docs/site/compatibility.html` distinguishes:
 
+- **Verified:** current CI or recorded live evidence
 - **Supported:** implemented path with configuration and recovery
 - **Best effort:** common setup that needs site-specific testing
+- **Known limitation:** deliberate boundary the plugin does not hide
 
 It covers WordPress, PHP, WooCommerce, Elementor, LiteSpeed/OpenLiteSpeed, Redis, Cloudflare/Bunny Edge, and Varnish.
 

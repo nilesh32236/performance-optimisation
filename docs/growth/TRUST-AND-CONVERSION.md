@@ -60,10 +60,12 @@ The readmes now link the support route and repeat the redaction rule.
 
 ## Compatibility trust
 
-`docs/site/compatibility.html` is the compatibility page. It separates:
+The existing Phase E compatibility matrix remains the source of truth. It separates:
 
+- Verified: current CI or recorded live evidence
 - Supported: implemented path with configuration and recovery
 - Best effort: common setup that needs site-specific testing
+- Known limitation: a deliberate boundary the plugin does not hide
 
 The public readme keeps the caution that cache, minification, defer/delay, image, and CDN behavior must be tested on staging.
 
@@ -71,7 +73,7 @@ The public readme keeps the caution that cache, minification, defer/delay, image
 
 The plugin documents PageSpeed, Google Fonts, Cloudflare, Bunny, and Varnish behavior. The trust copy does not imply that external services are required for every feature, and it does not ask users to post credentials or leave ratings.
 
-Review automation runs on pull requests that touch source files and posts its verdict as a PR review. It does not run on a Markdown-only pull request: the CI workflow sets `paths-ignore: **.md`. No fake support content, fabricated installation count, or unsupported score was added.
+No review automation, fake support content, fabricated installation count, or unsupported score was added.
 
 ## New-user Playwright journey
 
