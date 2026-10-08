@@ -3218,33 +3218,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Disk-safe slice (issue #1428): cached-page file count for the
-			// dashboard size/count surface. Fail-open to 0; multisite-safe
-			// via Util::transient_key().
-			$cache_count = 0;
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_stats' ) ) {
-					if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-						$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', $cache_salt );
-						if ( is_array( $cached_stats ) && isset( $cached_stats['count'] ) ) {
-							$cache_count = (int) $cached_stats['count'];
-						} else {
-							$stats       = Cache::get_cache_stats();
-							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
-						}
-					} else {
-						$cached_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
-						if ( false !== $cached_count && is_numeric( $cached_count ) ) {
-							$cache_count = (int) $cached_count;
-						} else {
-							$stats       = Cache::get_cache_stats();
-							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$cache_count = 0;
-			}
+			// dashboard size/count surface. Reuses unified stats to avoid
+			// redundant cache reads or filesystem traversals.
+			$cache_count = (int) ( $cache_stats['cached_pages'] ?? 0 );
 
 			// Clone options and redact sensitive keys before exposing to the client.
 			$safe_options = $this->get_options();
