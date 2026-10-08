@@ -4899,7 +4899,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Regex-per-line when wrapped in valid delimiters; invalid regex fails open to substring.
 					if ( strlen( $line ) > 2 && '#' === $line[0] && false !== strrpos( $line, '#', 1 ) ) {
 						$valid = false;
-						set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex validation.
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from user-supplied regex validation.
+						set_error_handler(
+							static function (): bool {
+								return true;
+							}
+						);
 						try {
 							$valid = false !== preg_match( $line, '' );
 						} catch ( \Throwable $e ) {
@@ -4908,7 +4913,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 						restore_error_handler();
 						if ( $valid ) {
-							set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex matching.
+							// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from user-supplied regex matching.
+							set_error_handler(
+								static function (): bool {
+									return true;
+								}
+							);
 							try {
 								$matched = preg_match( $line . 'i', $request_uri );
 							} catch ( \Throwable $e ) {
