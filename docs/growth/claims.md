@@ -7,7 +7,7 @@ produced that evidence, and the **commit SHA that evidence was produced on**.
 better than a plausible number, because a missing row is visible and a plausible number is not.
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
-**Last reviewed:** 2026-10-03
+**Last reviewed:** 2026-10-08
 **Baseline commit:** `66fd4914164d135d0176a45243748d7af6eee44e` — recorded when the register was first written on `growth/claims-register`; not a claim about the current branch.
 **Live listing version at review time:** 2.4.0, uploaded 2026-09-24
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
@@ -281,6 +281,32 @@ users**. It moves to corrected only when the release is live and the API returns
 | **NOT a conformance claim** | No automated WCAG conformance scan. `axe-core` is not a dependency on this branch. No independent audit, no assistive-technology testing. See C-13. |
 | **Rule 7** | This row exists so the compatibility page's 7.1 statements are not unbacked copy. |
 | **Verified** | 2026-10-04 |
+
+### C-15 — The `JS Tests & Build (React 19)` job forces React 19 and `@wordpress/element@7.0.0`
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/compatibility.html` states that a `JS Tests & Build (React 19)` job forces `@wordpress/element@7.0.0` and React 19 and runs the JS tests. |
+| **Verdict** | **TRUE**, with the limit stated rather than hidden |
+| **Evidence** | `.github/workflows/webpack.yml:93` declares the job `js-react19`; `:94` names it `JS Tests & Build (React 19)`; `:112` runs `npm install --save-dev --legacy-peer-deps @wordpress/element@7.0.0 react@^19 react-dom@^19 …`. |
+| **Command** | `grep -n "js-react19\|name: JS Tests & Build (React 19)\|@wordpress/element@7.0.0" .github/workflows/webpack.yml` |
+| **Result** | Three matching lines: `93:  js-react19:`, `94:    name: JS Tests & Build (React 19)`, `112:        run: npm install --save-dev --legacy-peer-deps @wordpress/element@7.0.0 react@^19 …`. |
+| **Evidence — the limit** | The job forces those versions as a **dev-dependency**. It does not tell you what WordPress 7.1 ships, and its result is **not** evidence about the WordPress 7.1 compatibility row. The page says so in the same cell. |
+| **Rule 7** | Added 2026-10-08 so this page assertion is not unbacked copy. The AI verdict on #1765 named six unregistered page claims; four were already covered by C-14 and one by C-07, leaving this one and the job-scoping half of C-16. |
+| **Verified** | 2026-10-08 |
+
+### C-16 — `PhpDeprecationHygieneTest` gates the deprecation rules, in the PHP 8.2 job only
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/compatibility.html` states that the static source-pattern scanner `PhpDeprecationHygieneTest` gates the deprecation rules, but runs in the PHP 8.2 job only — the 8.2–8.5 test matrix is documented and not applied. |
+| **Verdict** | **TRUE** |
+| **Evidence — the test** | `tests/php/PhpDeprecationHygieneTest.php`. See C-07 for what it scans and its result. |
+| **Evidence — the job scoping** | `.github/workflows/webpack.yml:140` declares the job `php-tests`; `:141` names it `PHPUnit Tests`; `:153` sets `php-version: '8.2'`; `:160` runs `composer test`. `phpunit.xml.dist:9` discovers `tests/php` by the `Test.php` suffix, so the scanner runs wherever that job runs — and that job is 8.2 only. No other workflow invokes PHPUnit. |
+| **Command** | `grep -n "php-tests:\|name: PHPUnit Tests\|php-version: '8.2'\|run: composer test" .github/workflows/webpack.yml` |
+| **Result** | `140:  php-tests:`, `141:    name: PHPUnit Tests`, `153:          php-version: '8.2'`, `160:        run: composer test`. |
+| **Rule 7** | C-07 names the test but not the job scoping; this row exists so the page's "runs in the 8.2 job only" statement is backed. |
+| **Verified** | 2026-10-08 |
 
 ---
 
