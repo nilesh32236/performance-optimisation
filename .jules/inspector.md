@@ -86,3 +86,7 @@
 **Bug/Gap:** 5 `catch.neverThrown` static analysis errors reported by PHPStan.
 **Root Cause:** `try...catch (\Throwable)` blocks were wrapped around simple logic (variable assignment, conditionals, array generation) that cannot natively throw exceptions.
 **Test Added:** Removed the redundant try...catch blocks to satisfy PHPStan strict static analysis.
+## 2024-05-24 - PHPStan strict callable signature for set_error_handler
+**Bug/Gap:** PHPStan threw an error because the error handler closure did not return a boolean.
+**Root Cause:** The closure was missing a `: bool` return type and a boolean return value, which causes the default error handler to continue executing and leaking warnings.
+**Test Added:** Fixed strict static analysis error by properly defining the closure signature and returning true to stop execution.
