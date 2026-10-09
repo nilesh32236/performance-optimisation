@@ -157,7 +157,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  *
  * @since NEXT
  * @param {*} raw Raw `ccss_status` response data.
- * @return {{templates: Object, suspended: boolean, effective: boolean, ccssInlineAllowed: boolean}} Normalized shape.
+ * @return {{templates: Object, suspended: boolean, effective: boolean, ccssInlineAllowed: boolean, inlineAllowed: boolean}} Normalized shape.
  */
 export const resolveCcssStatusShape = ( raw ) => {
 	const failOpen = {
@@ -165,6 +165,7 @@ export const resolveCcssStatusShape = ( raw ) => {
 		suspended: false,
 		effective: true,
 		ccssInlineAllowed: true,
+		inlineAllowed: true,
 	};
 	if ( ! raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
 		return failOpen;
@@ -180,6 +181,7 @@ export const resolveCcssStatusShape = ( raw ) => {
 			suspended: raw.suspended === true,
 			effective: raw.effective !== false,
 			ccssInlineAllowed: raw.ccss_inline_allowed !== false,
+			inlineAllowed: raw.inline_allowed !== false,
 		};
 	}
 	return { ...failOpen, templates: raw };
@@ -207,7 +209,7 @@ export const statusConfigFor = ( statusKey ) => {
 
 const CriticalCssPanel = ( {
 	status = {},
-	suspended = false,
+	suspended,
 	onRegenerate,
 	onRegenerateSingle,
 	onPreviewTemplate,
@@ -299,8 +301,13 @@ const CriticalCssPanel = ( {
 		rolloutBusy.hash === hash &&
 		rolloutBusy.action === action;
 
+	const resolvedStatus = useMemo(
+		() => resolveCcssStatusShape( status ),
+		[ status ]
+	);
+
 	const entries = useMemo( () => {
-		const { templates } = resolveCcssStatusShape( status );
+		const { templates } = resolvedStatus;
 		if (
 			! templates ||
 			typeof templates !== 'object' ||
@@ -309,12 +316,14 @@ const CriticalCssPanel = ( {
 			return [];
 		}
 		return Object.entries( templates );
-	}, [ status ] );
+	}, [ resolvedStatus ] );
 
-	// Suspended while defer/delay is on (issue #1706): an explicit prop
-	// wins, otherwise the flag rides along in the status payload shape.
+	// Suspended while defer/delay is on (issue #1706): an explicit
+	// boolean `suspended` prop wins (so callers can suppress a stale
+	// payload flag); when the prop is omitted the flag rides along in
+	// the status payload shape.
 	const isSuspended =
-		suspended === true || resolveCcssStatusShape( status ).suspended;
+		typeof suspended === 'boolean' ? suspended : resolvedStatus.suspended;
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">

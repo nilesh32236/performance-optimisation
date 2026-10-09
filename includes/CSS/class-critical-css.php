@@ -3208,13 +3208,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * must be allowed (dedicated `wppo_inline_critical_css` gate, issue
 		 * #1706) AND deferral must be available. When deferral is
 		 * suspended by deferred/delayed JS, emitting critical CSS only adds
-		 * redundant weight (issue #1090).
+		 * redundant weight (issue #1090). Fail-open: any failure returns true
+		 * (never unstyled), matching the snapshot path in
+		 * get_ccss_effective_state().
 		 *
 		 * @return bool True when CCSS emission and deferral should run.
 		 * @since 2.2.0
 		 */
 		public static function is_ccss_effective(): bool {
-			return self::is_critical_css_inline_allowed() && ! self::is_deferral_suspended_by_js();
+			try {
+				return self::is_critical_css_inline_allowed() && ! self::is_deferral_suspended_by_js();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
 
 		/**

@@ -559,6 +559,7 @@ describe( 'resolveCcssStatusShape', () => {
 			suspended: false,
 			effective: true,
 			ccssInlineAllowed: true,
+			inlineAllowed: true,
 		} );
 	} );
 
@@ -578,6 +579,7 @@ describe( 'resolveCcssStatusShape', () => {
 			suspended: true,
 			effective: false,
 			ccssInlineAllowed: false,
+			inlineAllowed: true,
 		} );
 	} );
 
@@ -588,7 +590,56 @@ describe( 'resolveCcssStatusShape', () => {
 				suspended: false,
 				effective: true,
 				ccssInlineAllowed: true,
+				inlineAllowed: true,
 			} );
 		}
+	} );
+
+	it( 'preserves the combined-file gate for parity with the REST envelope', () => {
+		const templates = {
+			abcdef1234567890: { status: 'ready', label: 'Home' },
+		};
+		expect(
+			resolveCcssStatusShape( {
+				templates,
+				suspended: false,
+				effective: true,
+				ccss_inline_allowed: true,
+				inline_allowed: false,
+			} )
+		).toEqual( {
+			templates,
+			suspended: false,
+			effective: true,
+			ccssInlineAllowed: true,
+			inlineAllowed: false,
+		} );
+	} );
+
+	it( 'lets an explicit suspended={false} suppress a stale payload flag', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					templates: {
+						abcdef1234567890: {
+							status: 'ready',
+							label: 'Home',
+						},
+					},
+					suspended: true,
+					effective: false,
+					ccss_inline_allowed: true,
+				} }
+				suspended={ false }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.queryByText(
+				'Critical CSS is suspended while deferred or delayed JavaScript is enabled — disable Defer JS and Delay JS to emit it.'
+			)
+		).not.toBeInTheDocument();
+		expect( screen.getByText( 'Home' ) ).toBeInTheDocument();
 	} );
 } );

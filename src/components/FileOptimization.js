@@ -1848,6 +1848,13 @@ const FileOptimization = ( {
 		() => stripCdnRowIds( settings ),
 		[ settings ]
 	);
+	// Resolve the CCSS status envelope once per payload (issue #1706
+	// review): the derived `suspended` flag is passed to CriticalCssPanel
+	// so neither parent nor child re-resolves the same small object.
+	const ccssResolvedStatus = useMemo(
+		() => resolveCcssStatusShape( ccssStatus ),
+		[ ccssStatus ]
+	);
 	useUnsavedChanges( settingsForCompare, baseline );
 
 	// Sync local state when parent props change after mount.
@@ -3807,9 +3814,7 @@ const FileOptimization = ( {
 										<CriticalCssPanel
 											status={ ccssStatus }
 											suspended={
-												resolveCcssStatusShape(
-													ccssStatus
-												).suspended
+												ccssResolvedStatus.suspended
 											}
 											onRegenerate={ handleRegenerateCss }
 											onRegenerateSingle={
