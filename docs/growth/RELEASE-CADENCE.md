@@ -4,13 +4,13 @@
 **Status:** finding only. No version number was changed, no changelog entry was written, no release
 was cut. This file exists so the next person does not have to re-derive the dates.
 
-> **Correction, 2026-10-02.** An earlier draft of this file stated that the WordPress.org plugin
-> directory "caps a plugin at one release per seven days" and attributed it to a numbered section of
-> the guidelines. **That is not a real rule, and the citation was fabricated.** It could not be found
-> on any WordPress.org page, and the actual guidelines contain a different rule, quoted verbatim
-> below. The fabricated cap has been deleted. The underlying finding — five releases in thirteen days
-> is too much churn for a plugin that rewrites `wp-config.php`, `.htaccess` and `advanced-cache.php` —
-> does not rest on the cap, and it is unchanged.
+> **Correction, 2026-10-02.** An earlier draft of this file invoked a WordPress.org release-interval
+> cap with a numbered-guideline citation. **No such interval rule exists, and the citation was
+> fabricated.** It could not be found on any WordPress.org page, and the actual guidelines contain a
+> different rule, quoted verbatim below. The fabricated claim has been deleted. The underlying
+> finding — five releases in thirteen days is too much churn for a plugin that rewrites
+> `wp-config.php`, `.htaccess` and `advanced-cache.php` — does not rest on any interval rule, and it
+> is unchanged.
 
 ---
 
