@@ -120,7 +120,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 		}
 
 		$timeout    = 0.5;
-		$password   = $config['password'] ?? '';
+		$password   = isset( $config['password'] ) ? (string) $config['password'] : '';
 		$persistent = ! empty( $config['persistent'] );
 
 		try {

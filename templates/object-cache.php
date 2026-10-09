@@ -286,7 +286,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 					$r_host = $replica['host'] ?? '127.0.0.1';
 					$r_port = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-					$r_pass = $replica['password'] ?? $password;
+					$r_pass = isset( $replica['password'] ) ? (string) $replica['password'] : (string) $password;
 					try {
 						$tmp_replica = new \Redis();
 						if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {
@@ -294,7 +294,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 						}
 						if ( $tmp_replica->connect( $r_host, $r_port, $timeout ) ) {
 							$replica_auth_ok = true;
-							if ( ! empty( $r_pass ) ) {
+							if ( '' !== $r_pass ) {
 								$replica_auth_ok = $tmp_replica->auth( $r_pass );
 							}
 
@@ -309,7 +309,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					}
 				}
 
-				if ( $this->redis_connected && null !== $this->redis ) {
+				if ( null !== $this->redis ) {
 					if ( function_exists( 'wppo_apply_redis_options' ) ) {
 						wppo_apply_redis_options( $this->redis, $config );
 						if ( null !== $this->redis_replica ) {
