@@ -102,23 +102,6 @@ describe( 'useNotice', () => {
 		expect( result.current.notice ).toBeNull();
 	} );
 
-	it( 'stores an optional action on the notice (issue #1702)', () => {
-		const { result } = renderHook( () => useNotice() );
-		const onClick = jest.fn();
-		act( () => {
-			result.current.notify( {
-				type: 'success',
-				message: 'Saved successfully.',
-				action: { label: 'Revert', onClick },
-			} );
-		} );
-		expect( result.current.notice ).toEqual( {
-			type: 'success',
-			message: 'Saved successfully.',
-			action: { label: 'Revert', onClick },
-		} );
-	} );
-
 	it( 'clears any pending timer on unmount', () => {
 		const { result, unmount } = renderHook( () => useNotice() );
 		act( () => {

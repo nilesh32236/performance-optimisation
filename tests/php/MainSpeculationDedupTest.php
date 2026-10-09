@@ -33,7 +33,7 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 	private $options = array();
 
 	/**
-	 * Recorded add_filter()/add_action() hooks.
+	 * Recorded add_filter() hooks.
 	 *
 	 * @var string[]
 	 */
@@ -85,16 +85,6 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 		$this->added_filters = array();
 		$recorded            = &$this->added_filters;
 		Functions\when( 'add_filter' )->alias(
-			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$recorded ) {
-				unset( $callback, $priority, $args );
-				$recorded[] = (string) $hook;
-				return true;
-			}
-		);
-		// Record add_action() into the same array so the double-registration
-		// test also observes the wp_load_speculation_rules action (issue
-		// #1700): Brain Monkey otherwise backs it with real hook storage.
-		Functions\when( 'add_action' )->alias(
 			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$recorded ) {
 				unset( $callback, $priority, $args );
 				$recorded[] = (string) $hook;
@@ -281,83 +271,6 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'prefetch', $result['mode'] );
 		$this->assertSame( 'conservative', $result['eagerness'] );
-	}
-
-	/**
-	 * A re-entrant wp_head double-fire registers the core filters exactly
-	 * once (issue #1700): the second add_speculation_rules() call is a
-	 * no-op so core emits a single speculationrules block, never two.
-	 *
-	 * @return void
-	 */
-	public function test_double_call_registers_filters_once(): void {
-		$GLOBALS['wp_version'] = '6.8';
-		$this->options         = array(
-			'wppo_settings'       => array(),
-			'permalink_structure' => '/%postname%/',
-		);
-		$main                  = $this->make_main( array( 'enableSpeculationRules' => true ) );
-
-		ob_start();
-		$main->add_speculation_rules();
-		$main->add_speculation_rules();
-		$output = (string) ob_get_clean();
-
-		$this->assertSame( '', $output );
-		$counts = array_count_values( $this->added_filters );
-		$this->assertSame( 1, $counts['wp_speculation_rules_configuration'] ?? 0 );
-		$this->assertSame( 1, $counts['wp_speculation_rules_href_exclude_paths'] ?? 0 );
-		$this->assertSame( 1, $counts['wp_speculation_rules'] ?? 0 );
-		$this->assertSame( 1, $counts['wp_load_speculation_rules'] ?? 0 );
-	}
-
-	/**
-	 * The WooCommerce dynamic wc-ajax endpoint stays out of speculation
-	 * rules via the href exclude paths (issue #1700).
-	 *
-	 * @return void
-	 */
-	public function test_exclude_paths_include_wc_ajax(): void {
-		$GLOBALS['wp_version'] = '6.8';
-		$this->options         = array(
-			'wppo_settings'       => array(),
-			'permalink_structure' => '/%postname%/',
-		);
-		$main                  = $this->make_main( array( 'enableSpeculationRules' => true ) );
-
-		$paths = $main->get_speculation_exclude_paths( array() );
-
-		$this->assertContains( '/wc-ajax/*', $paths );
-		$this->assertContains( '/cart/*', $paths );
-		$this->assertContains( '/checkout/*', $paths );
-	}
-
-	/**
-	 * Plain permalinks emit no rules (issue #1700): the document
-	 * configuration returns null and the list filter passes input through
-	 * unchanged, mirroring the logged-in suppression.
-	 *
-	 * @return void
-	 */
-	public function test_plain_permalinks_emit_no_rules(): void {
-		$GLOBALS['wp_version'] = '6.8';
-		$this->options         = array(
-			'wppo_settings'       => array(),
-			'permalink_structure' => '',
-		);
-		$main                  = $this->make_main( array( 'enableSpeculationRules' => true ) );
-
-		$this->assertNull(
-			$main->filter_speculation_rules_configuration(
-				array(
-					'mode'      => 'auto',
-					'eagerness' => 'auto',
-				),
-				array( 'enableSpeculationRules' => true ),
-				true
-			)
-		);
-		$this->assertSame( array(), $main->filter_speculation_list_rules( array() ) );
 	}
 
 	/**

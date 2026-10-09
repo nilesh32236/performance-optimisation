@@ -4,7 +4,7 @@ Tags: performance, cache, optimization, core-web-vitals, pagespeed
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 2.4.1
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -98,7 +98,7 @@ System Info dashboard, Google PageSpeed Insights integration, per-page asset man
 
 = Compatibility =
 
-Performance Optimisation contains explicit integration code for Elementor, Divi, Kadence, Bricks, WPBakery and Beaver Builder, plus WooCommerce. It has no integration code for any SEO plugin. Everything else is handled by generic rules rather than product-specific code, and we make no compatibility guarantee for it. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
+Performance Optimisation includes compatibility safeguards for common WordPress environments and integrations, including Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, and Rank Math. These are compatibility safeguards rather than a blanket guarantee: test caching, minification, defer/delay rules, and image handling on staging before production. LiteSpeed/OpenLiteSpeed, Redis, CDN providers, and external services have their own configuration requirements described below.
 
 = Who is this plugin for? =
 
@@ -111,12 +111,7 @@ This plugin bundles 7 Composer packages: `voku/html-min` (HTML minification), `m
 == Installation ==
 
 1. Install the plugin from the **WordPress Plugin Directory** (search for "Performance Optimisation") or upload it manually to `/wp-content/plugins/performance-optimisation`.
-
-   **Check three things before you go further.** This plugin requires **PHP 8.2+** and **WordPress 6.2+**; on older versions it activates but stays paused and does nothing. If you upload a ZIP manually, unzip it first - otherwise the folder arrives as `performance-optimisation-master` and activation fails with a missing-file error. And if another caching plugin already provides a drop-in, check that first.
-
 2. Activate the plugin through the **Plugins** screen in WordPress.
-
-   **Activation edits two files on your server, and you should know that before you click.** It writes `wp-content/advanced-cache.php` - the slot other caching plugins also use, so an existing drop-in there will conflict. It also edits `wp-config.php`, flipping `define('WP_CACHE', false)` to `true` or inserting a block above `/* That's all, stop editing! */`. If you set WP_CACHE to false deliberately - because another drop-in broke your site - activating this plugin will turn it back on. **Back up wp-config.php first**, and test on a staging site if you have one.
 3. Go to the **Performance Optimisation** menu in your WordPress admin panel.
 4. Start with the **Dashboard** to see your current performance status, then enable features one at a time.
 
@@ -142,16 +137,16 @@ The plugin includes WooCommerce safeguards, such as dynamic cart/checkout route 
 You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
 
 = Does this plugin improve Core Web Vitals and PageSpeed scores? =
-Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a Nginx/Apache install in a controlled lab with a warm cache (Astra theme, 5 images) we observed large improvements in PageSpeed scores, Time to First Byte, LCP and total page size. That is a best case. On generic Nginx or Apache hosts using a PHP file cache, our own measurements put TTFB at roughly 170-350 ms rather than the ~45 ms the same benchmark shows. Results vary significantly with hosting, theme, plugin mix and content, so your own before/after measurements are the only reliable guide.
+Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but **results vary** significantly with hosting, theme, plugin mix, and content, so your own before/after measurements are the only reliable guide.
 
 = Does this work on shared hosting? =
 Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
 
 = Is this compatible with page builders like Elementor or Divi? =
-The plugin contains product-specific integration code for Elementor, Divi, Kadence, Bricks, WPBakery and Beaver Builder, including builder-aware asset handling and exclusions. It has no integration code for any SEO plugin. For everything else it applies generic rules - it does not contain code written for them, and we do not claim compatibility. Test on a staging site before updating a production one. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
+The plugin includes compatibility safeguards for Elementor, Divi, Beaver Builder, and WPBakery, including builder-aware asset handling and exclusions. Test layout and interactions on a staging site after changing minification, defer, or delay rules; add exclusions when needed.
 
 = Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
-The plugin contains product-specific integration code for Elementor, Divi, Kadence and WooCommerce. For other themes and SEO plugins it applies generic rules - it does not contain code written for them, and we do not claim compatibility. Test on a staging site before updating a production one.
+The plugin includes safeguards for common themes (including Astra, GeneratePress, Kadence, OceanWP, Blocksy, and Twenty Twenty-Four), WooCommerce, and SEO plugins (including Yoast SEO, Rank Math, All in One SEO, and SEOPress). This is not a blanket guarantee for every version: test on staging, and use the File Optimization exclusion rules when a theme, builder, or integration needs a specific adjustment. WooCommerce cart, checkout, and account pages are excluded from full-page caching.
 
 = How do I convert images to WebP or AVIF? =
 Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
@@ -160,7 +155,7 @@ Go to the **Image Optimization** tab, enable image conversion, and choose your f
 Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
 
 = Does the plugin support lazy loading? =
-Yes, but it is OFF by default on a fresh install. You have to turn on Settings -> Media -> Lazy Loading for images (or the equivalent preset) before anything is deferred; a new install defers nothing until you do. When enabled it uses the browser's native loading=lazy where available. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
+Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
 
 = How do I clean up my WordPress database? =
 Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
@@ -229,17 +224,6 @@ This plugin relies on the following external services. The PageSpeed and Google 
 When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin records **anonymised field metrics only** — the page path and that page's Largest Contentful Paint (LCP), Interaction to Next Paint (INP) and Cumulative Layout Shift (CLS) samples. No cookies, names, email addresses, user IDs, form values, or IP addresses are stored with the samples. A visitor IP is read into memory solely to rate-limit the public beacon (120 requests/hour) and is never persisted. Metrics are aggregated and stored only in your own site's database (`wppo_web_vitals_rum` option plus per-path trend data), retained on a rolling 14-day window (up to 200 paths/day, 600 paths total), and are never sent to the plugin author or any third party. Disabling RUM stops collection; uninstalling the plugin removes the stored data. See `includes/class-rum.php`.
 
 == Changelog ==
-
-= 2.4.1 (2026-10-02) =
-* Documentation: corrected the compatibility description. The previous text
-  read "Fully compatible with popular themes and page builders", which is a
-  claim about the behaviour of software this plugin does not control, and
-  which we had no evidence for. It now states what is actually true: the
-  plugin includes compatibility safeguards for named themes and builders.
-  This copy has been correct in the repository since bc377d41 and had not yet
-  reached the WordPress.org listing, which was still serving the 2.4.0 text.
-* Documentation: page-builder and theme questions in the FAQ now carry the
-  same wording as the listing description, so they cannot drift apart again.
 
 = 2.4.0 (2026-09-24) =
 * Improvement: under-the-hood architecture modernization — the plugin's internals are now organized by responsibility (cache, settings, assets, images, CSS, database, edge delivery, integrations) behind a centralized loader, with no settings changes required and all existing behavior preserved. Includes focused services for settings migrations, script defer/delay strategy, CSS combining, cache invalidation, LCP/hero preloading, anomaly detection, critical-CSS storage, REST cache/settings handlers, and scheduler primitives, plus the first File Optimisation settings card extraction.

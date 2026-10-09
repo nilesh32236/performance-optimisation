@@ -33,9 +33,3 @@ test-lab/
 # Private release-rhythm files (local planning only, never commit).
 /AGENT-RELEASE.md
 /RELEASE-SCHEDULE.local.md
-
-# Removed from the branch tip: these are unredacted admin captures of a LIVE
-# site (real visitor IPs with timestamps, admin username, server paths).
-# They were committed here by mistake. Removing from the tip does NOT remove
-# them from history - see escalations.md item 1a for the purge plan.
-.ux-shots/

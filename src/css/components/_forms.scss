@@ -213,20 +213,3 @@
 		font-size: 13px !important; // keep density for code lists
 	}
 }
-
-.wppo-file-input-wrapper {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-
-// The file chooser's focus ring is drawn on the proxy, because the real input is
-// a 1px clipped box and focusing it shows nothing at all.
-.wppo-file-input-wrapper {
-	&:focus-within {
-		> .wppo-button {
-			outline: solid 2px var(--wppo-primary, #007cb6);
-			outline-offset: 2px;
-		}
-	}
-}

@@ -69,16 +69,4 @@ describe( 'SwitchField', () => {
 		} );
 		expect( checkbox ).toBeInTheDocument();
 	} );
-
-	it( 'renders an optional badge next to the label (issue #1702)', () => {
-		const { container } = render(
-			<SwitchField
-				{ ...defaultProps }
-				badge={ <span>Aggressive</span> }
-			/>
-		);
-		const label = container.querySelector( '.wppo-switch-field__label' );
-		expect( label ).toHaveTextContent( 'Toggle Feature' );
-		expect( label ).toHaveTextContent( 'Aggressive' );
-	} );
 } );

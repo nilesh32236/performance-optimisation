@@ -308,60 +308,42 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * Parses a Redis node string into host and port components.
 	 *
 	 * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
-	 * A node with no port at all falls back to $default_port, which defaults to
-	 * the Redis Sentinel port 26379 (the only caller is the Sentinel connect
-	 * path). A node with an empty or non-numeric port segment ('host:') yields
-	 * port 0, which callers reject.
 	 *
-	 * @param mixed $node         Node string to parse; non-scalar values fail closed to ''.
-	 * @param int   $default_port Port to return when the node provides none.
+	 * @param string $node The node string to parse.
 	 * @since 2.0.0
-	 * @since NEXT Added the $default_port parameter.
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
-	function wppo_parse_redis_node( $node, $default_port = 26379 ) {
+	function wppo_parse_redis_node( $node ) {
 		// Null-safe: internal string functions deprecate null arguments on
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
-		// the invalid-node path handled by callers). is_scalar() also fails
-		// closed for arrays and objects, which the old is_string() ?:(string)
-		// cast turned into 'Array' / 'Resource id #N' or threw on.
-		$node = is_scalar( $node ) ? (string) $node : '';
-
+		// the invalid-node path handled by callers).
+		$node = is_string( $node ) ? $node : (string) $node;
 		if ( 0 === strpos( $node, '[' ) ) {
 			$port_start = strpos( $node, ']:' );
-
 			if ( false !== $port_start ) {
-				return array(
-					'host' => substr( $node, 1, $port_start - 1 ),
-					'port' => (int) substr( $node, $port_start + 2 ),
-				);
+				$host = substr( $node, 1, $port_start - 1 );
+				$port = (int) substr( $node, $port_start + 2 );
+			} else {
+				$host = trim( $node, '[]' );
+				$port = 26379;
 			}
-
-			return array(
-				'host' => trim( $node, '[]' ),
-				'port' => $default_port,
-			);
-		}
-
-		if ( substr_count( $node, ':' ) > 1 ) {
-			return array(
-				'host' => $node,
-				'port' => $default_port,
-			);
-		}
-
-		$last_colon = strrpos( $node, ':' );
-
-		if ( false !== $last_colon ) {
-			return array(
-				'host' => substr( $node, 0, $last_colon ),
-				'port' => (int) substr( $node, $last_colon + 1 ),
-			);
+		} elseif ( substr_count( $node, ':' ) > 1 ) {
+			$host = $node;
+			$port = 26379;
+		} else {
+			$last_colon = strrpos( $node, ':' );
+			if ( false !== $last_colon ) {
+				$host = substr( $node, 0, $last_colon );
+				$port = (int) substr( $node, $last_colon + 1 );
+			} else {
+				$host = $node;
+				$port = 26379;
+			}
 		}
 
 		return array(
-			'host' => $node,
-			'port' => $default_port,
+			'host' => $host,
+			'port' => $port,
 		);
 	}
 }

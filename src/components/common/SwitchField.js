@@ -5,15 +5,14 @@ import { ToggleControl } from '@wordpress/components';
  * SwitchField — Accessible toggle switch with label and description.
  * Uses WordPress ToggleControl for native WP styling + accessibility.
  *
- * @param {Object}                    props               Component props.
- * @param {string}                    props.label         Visible heading for the switch.
- * @param {string}                    [props.description] Subtitle text.
- * @param {string}                    props.name          Input name attribute.
- * @param {boolean}                   props.checked       Whether the switch is on.
- * @param {Function}                  props.onChange      Change handler (receives synthetic event).
- * @param {boolean}                   [props.showLabel]   Whether to show the label.
- * @param {boolean}                   [props.disabled]    Whether the switch is disabled.
- * @param {import('react').ReactNode} [props.badge]       Optional inline badge (e.g. RiskBadge) rendered next to the label text.
+ * @param {Object}   props               Component props.
+ * @param {string}   props.label         Visible heading for the switch.
+ * @param {string}   [props.description] Subtitle text.
+ * @param {string}   props.name          Input name attribute.
+ * @param {boolean}  props.checked       Whether the switch is on.
+ * @param {Function} props.onChange      Change handler (receives synthetic event).
+ * @param {boolean}  [props.showLabel]   Whether to show the label.
+ * @param {boolean}  [props.disabled]    Whether the switch is disabled.
  */
 const SwitchField = ( {
 	label,
@@ -23,7 +22,6 @@ const SwitchField = ( {
 	onChange,
 	showLabel = true,
 	disabled = false,
-	badge = null,
 } ) => {
 	const handleToggle = ( newValue ) => {
 		// Synthesize an event-like object so existing handleChange() util works unchanged.
@@ -50,7 +48,6 @@ const SwitchField = ( {
 							id={ labelId }
 						>
 							{ label }
-							{ badge }
 						</span>
 					) }
 					{ description && (

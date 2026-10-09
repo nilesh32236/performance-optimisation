@@ -133,24 +133,9 @@
 						}
 					}
 
-					// MEASURED, not assumed: --wppo-primary is scheme-tinted
-					// and fails 3:1 against this drawer's #0f172a background
-					// under 6 of 11 core admin schemes. The token
-					// --wppo-focus-ring-on-dark is scheme-independent and
-					// clears every one of them (worst measured 11.91:1).
-					//
-					// outline-offset is NEGATIVE on purpose.
-					// .wppo-sidebar is `overflow-y: auto`, so a ring drawn
-					// outside the item box is clipped by the scroll container
-					// when the item sits at a scroll edge, which is WCAG 2.2
-					// SC 2.4.11 Focus Not Obscured. Drawing it inside the
-					// item's own box means no scroll container can clip it.
-					// Contrast is unaffected: nav items are transparent or
-					// carry the hover/active tint, and #e2e8f0 clears 3:1 on
-					// all three.
 					&:focus-visible {
-						outline: 2px solid var(--wppo-focus-ring-on-dark);
-						outline-offset: -2px;
+						outline: 2px solid var(--wppo-primary);
+						outline-offset: 2px;
 					}
 
 					&.wppo-is-active {
@@ -202,13 +187,16 @@
 	-webkit-backdrop-filter: blur(2px);
 	backdrop-filter: blur(2px);
 	z-index: 90;
-	// Rendered as a <div aria-hidden="true">, not a <button>. It is a
-	// pointer-only convenience: Escape and the toggle button are the
-	// keyboard paths. As a <button> it was a screen-filling tab stop
-	// sitting between the toggle and every nav item. The border/padding/
-	// margin/font/appearance resets it used to need are gone with it —
-	// only cursor and width remain.
+	// Reset native button styles (overlay renders as <button> for
+	// keyboard/screen-reader parity).
+	border: 0;
+	padding: 0;
+	margin: 0;
 	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	appearance: none;
+	-webkit-appearance: none;
 	width: 100%;
 }
 
@@ -283,16 +271,6 @@
 
 		&:hover {
 			background: rgba(255, 255, 255, 0.15);
-		}
-
-		// Same measured problem as the nav items: this control sits on the
-		// dark mobile header, where a --wppo-primary ring fails 3:1 under
-		// 6 of 11 admin schemes. Negative offset for the same reason —
-		// the header is inside a clipped/edge-adjacent context and an
-		// outside ring is the part most likely to be cut off.
-		&:focus-visible {
-			outline: 2px solid var(--wppo-focus-ring-on-dark);
-			outline-offset: -2px;
 		}
 
 		@include respond-to('md') {

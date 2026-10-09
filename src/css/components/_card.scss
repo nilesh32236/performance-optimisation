@@ -191,7 +191,7 @@
 	width: 100%;
 	padding: 12px 14px;
 	border: 1px solid var(--wppo-border);
-	border-radius: var(--wppo-radius-sm, 6px);
+	border-radius: var(--wppo-radius-sm, 10px);
 	background: var(--wppo-bg-card, #fff);
 	color: var(--wppo-text-main);
 	text-align: start;
@@ -249,16 +249,11 @@
 }
 
 .wppo-danger-zone {
-	border-left: 4px solid var(--wppo-border, #e2e8f0);
-	background: transparent;
-	margin-top: 20px;
-	border-radius: var(--wppo-radius-sm, 6px);
-	overflow: hidden;
-}
-
-.wppo-danger-zone--has-error {
-	border-left-color: var(--wppo-danger, #ef4444);
+	border-left: 4px solid var(--wppo-danger, #ef4444);
 	background: var(--wppo-error-bg, #fef2f2);
+	margin-top: 20px;
+	border-radius: var(--wppo-radius-sm, 10px);
+	overflow: hidden;
 }
 // Keep .wppo-danger-zone as canonical danger-zone token — see
 // src/components/PluginSetting.js (danger-zone import card). Do not

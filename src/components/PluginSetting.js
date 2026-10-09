@@ -1513,7 +1513,7 @@ const PluginSetting = ( { options } ) => {
 							) }
 						</p>
 						<LoadingSubmitButton
-							className="wppo-button wppo-button--secondary"
+							className="wppo-button wppo-button--primary"
 							onClick={ exportSettings }
 							label={ __(
 								'Download JSON',
@@ -1523,13 +1523,7 @@ const PluginSetting = ( { options } ) => {
 					</FeatureCard>
 
 					{ /* Import — danger zone — uses .wppo-danger-zone tokens (D-17). */ }
-					<div
-						className={ `wppo-danger-zone ${
-							importNotice?.type === 'error'
-								? 'wppo-danger-zone--has-error '
-								: ''
-						}`.trim() }
-					>
+					<div className="wppo-danger-zone">
 						<FeatureCard
 							title={ __(
 								'Import Configuration',
@@ -1556,51 +1550,17 @@ const PluginSetting = ( { options } ) => {
 										'performance-optimisation'
 									) }
 								</label>
-								<div className="wppo-file-input-wrapper">
-									<input
-										type="file"
-										id="import-config"
-										// Audit #1354: match by extension as well — some
-										// browsers filter file pickers by extension.
-										accept="application/json,.json"
-										onChange={ handleFileSelection }
-										ref={ fileInputRef }
-										className="wppo-visually-hidden"
-										aria-describedby="import-config-desc"
-									/>
-									{ /* A **label**, not a button. A button
-									     here gave one control TWO tab stops:
-									     the visually-hidden input is
-									     clip-based, not `display:none`, so it
-									     stays focusable — and its focus ring
-									     is drawn on a 1px clipped box, so a
-									     keyboard user landed on it and saw
-									     nothing. The label activates the input
-									     natively and is not a tab stop, which
-									     leaves exactly one; the ring is drawn
-									     on the proxy by :focus-within. */ }
-									<label
-										htmlFor="import-config"
-										className="wppo-button wppo-button--secondary"
-									>
-										{ __(
-											'Choose File',
-											'performance-optimisation'
-										) }
-									</label>
-									<span
-										role="status"
-										aria-live="polite"
-										className="wppo-text-muted"
-									>
-										{ selectedFile
-											? selectedFile.name
-											: __(
-													'No file chosen',
-													'performance-optimisation'
-											  ) }
-									</span>
-								</div>
+								<input
+									type="file"
+									id="import-config"
+									// Audit #1354: match by extension as well — some
+									// browsers filter file pickers by extension.
+									accept="application/json,.json"
+									onChange={ handleFileSelection }
+									ref={ fileInputRef }
+									className="wppo-input"
+									aria-describedby="import-config-desc"
+								/>
 								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
 									{ __(
 										'Only .json files exported from this plugin are accepted.',

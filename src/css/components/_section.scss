@@ -82,7 +82,7 @@
 	padding: 8px 12px;
 	border: 1px solid transparent;
 	border-block-end: 2px solid transparent;
-	border-radius: var(--wppo-radius-sm, 6px) var(--wppo-radius-sm, 6px) 0 0;
+	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
 	background: transparent;
 	color: var(--wppo-text-muted, #475569);
 	font-size: 14px;
@@ -178,7 +178,7 @@
 	// false. Keeping the comment accurate matters more than keeping the rule:
 	// a comment that says a working base rule is unreliable invites redundant
 	// overrides in the next place someone cannot find their focus ring.
-	border-radius: var(--wppo-radius-sm, 6px);
+	border-radius: var(--wppo-radius-sm, 8px);
 }
 
 @media ( prefers-reduced-motion: reduce ) {

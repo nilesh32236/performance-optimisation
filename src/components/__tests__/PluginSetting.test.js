@@ -879,21 +879,4 @@ describe( 'PluginSetting', () => {
 			screen.getByRole( 'button', { name: /Undo Last Change/i } )
 		).toBeDisabled();
 	} );
-
-	describe( 'TOL-04: File input tab order', () => {
-		it( 'has exactly one tab stop for the file chooser (the input) and uses a label as a proxy', () => {
-			render( <PluginSetting options={ baseOptions } /> );
-
-			const fileInput = screen.getByLabelText(
-				'Select configuration file'
-			);
-			const proxyLabel = screen.getByText( 'Choose File' );
-
-			expect( fileInput ).toHaveClass( 'wppo-visually-hidden' );
-			expect( fileInput ).not.toHaveAttribute( 'tabindex' );
-
-			expect( proxyLabel.tagName ).toBe( 'LABEL' );
-			expect( proxyLabel ).toHaveAttribute( 'for', fileInput.id );
-		} );
-	} );
 } );

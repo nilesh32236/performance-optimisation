@@ -6,13 +6,6 @@
  * dismiss button. Pair with the `useNotice()` hook for state and timing.
  *
  * @since 1.10.0
- * @param {Object}   props             Component props.
- * @param {string}   [props.type]      Notice type.
- * @param {string}   [props.message]   Notice text.
- * @param {Function} [props.onDismiss] Dismiss handler.
- * @param {string}   [props.className] Extra class names.
- * @param {Object}   [props.action]    Optional one-click action
- *                                     `{ label, onClick, disabled?, isBusy? }`.
  */
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -55,7 +48,6 @@ const NoticeBanner = ( {
 	message = '',
 	onDismiss,
 	className,
-	action,
 } ) => {
 	if ( ! message ) {
 		return null;
@@ -76,21 +68,6 @@ const NoticeBanner = ( {
 				<FontAwesomeIcon icon={ icon } aria-hidden="true" />
 				<span>{ message }</span>
 			</div>
-			{ action &&
-				action.label &&
-				typeof action.onClick === 'function' && (
-					<button
-						type="button"
-						className="wppo-notice__action"
-						onClick={ action.onClick }
-						disabled={ action.disabled || action.isBusy }
-						aria-busy={ action.isBusy || undefined }
-					>
-						{ action.isBusy
-							? __( 'Working…', 'performance-optimisation' )
-							: action.label }
-					</button>
-				) }
 			{ onDismiss && (
 				<button
 					type="button"

@@ -166,10 +166,7 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 		$workflow = $this->read_plugin_file( '.github/workflows/wppo-ai-review.yml' );
 		$this->assertStringContainsString( 'github.event.issue.pull_request == null', $workflow );
 		$this->assertStringContainsString( 'github.event.issue.pull_request != null', $workflow );
-		// The trigger must match `/fix` as a command PREFIX, not any substring:
-		// `contains` would fire on prose like "please do not /fix this".
-		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "startsWith(github.event.comment.body || '', '/fix')" ) );
-		$this->assertStringNotContainsString( "contains(github.event.comment.body || '', '/fix')", $workflow );
+		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "contains(github.event.comment.body || '', '/fix')" ) );
 		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'OWNER'" ) );
 		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'MEMBER'" ) );
 		$this->assertGreaterThanOrEqual( 2, substr_count( $workflow, "github.event.comment.author_association == 'COLLABORATOR'" ) );

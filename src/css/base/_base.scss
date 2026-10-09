@@ -48,9 +48,6 @@
 .wppo-text-danger { color: var(--wppo-danger, #ef4444); }
 .wppo-stat-icon__spacer { margin-right: 6px; }
 .wppo-status-badge--sm { font-size: 11px; }
-// Risk pill for aggressive toggles (RiskBadge.js): reuses the
-// .wppo-status-badge--poor palette, only spacing/alignment lives here.
-.wppo-risk-badge { margin-left: 8px; vertical-align: middle; }
 .wppo-cleanup-row__actions { display: flex; align-items: center; gap: 8px; }
 .wppo-cleanup-row__count--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .wppo-input--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

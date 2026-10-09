@@ -77,10 +77,10 @@ describe( 'the welcome step badge halo tracks the admin colour scheme', () => {
 		const css = read( 'build/style-index.css' );
 		// Ensure the fallback shadow is present via the variables block.
 		expect( css ).toMatch(
-			/:root\s*\{[^}]*--wppo-shadow-welcome-step:[^}]*rgba\(34,113,177,\.3\)[^}]*rgba\(0,0,0,\.08\)/
+			/:root\s*\{[^}]*--wppo-shadow-welcome-step:[^}]*#2271b14d[^}]*#00000014/i
 		);
 		expect( css ).toMatch(
-			/:root\s*\{[^}]*--wppo-shadow-welcome-step-done:[^}]*rgba\(5,150,105,\.3\)[^}]*rgba\(0,0,0,\.08\)/
+			/:root\s*\{[^}]*--wppo-shadow-welcome-step-done:[^}]*#0596694d[^}]*#00000014/i
 		);
 		// Ensure the root element supports block is present, injecting the upgraded variables.
 		expect( css ).toMatch(

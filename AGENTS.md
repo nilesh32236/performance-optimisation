@@ -312,7 +312,7 @@ Consequences worth knowing before changing anything:
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
 | `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
-| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | TWO JOBS: `code-quality` runs the scanners with `contents:read`+`security-events:write`; `report` posts the PR comment with `issues:write`+`pull-requests:write` and checks out nothing. `parallel-lint` (PHP 8.2-8.5), `phpcs`, Psalm, class-inventory drift, Playground pin gate | Psalm security scan, GitHub Issue/PR comment |
+| `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |

@@ -2051,32 +2051,5 @@ class WPPO_WPDB_Mock {
 	public function insert( $table, $data, $formats = array() ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		return 1;
 	}
-
-	/**
-	 * The rum_collect callback enforces the beacon token end to end: a forged
-	 * token never reaches the collector, a valid one is accepted (issue #1686).
-	 *
-	 * The schema-layer half of this contract is covered by
-	 * RumCollectTokenSchemaTest, which does not need the REST doubles this
-	 * file declares.
-	 *
-	 * @return void
-	 */
-	public function test_collect_rum_rejects_forged_token_and_accepts_valid_token(): void {
-		$rest = new Rest();
-
-		$forged = $rest->collect_rum(
-			new \WP_REST_Request(
-				array(
-					'path'  => '/',
-					'token' => 'forged',
-					'lcp'   => 1234,
-				)
-			)
-		);
-
-		$this->assertSame( 401, $forged->get_status(), 'A forged token must not be accepted.' );
-		$this->assertFalse( $forged->get_data()['success'] );
-	}
 }
 // phpcs:enable Generic.Files.OneObjectStructurePerFile

@@ -92,49 +92,4 @@ describe( 'NoticeBanner', () => {
 		expect( banner ).toHaveClass( 'wppo-notice--info' );
 		expect( banner ).not.toHaveClass( 'wppo-notice--bogus' );
 	} );
-
-	it( 'renders an optional action button and calls onClick (issue #1702)', () => {
-		const onClick = jest.fn();
-		const { container } = render(
-			<NoticeBanner
-				message="Saved."
-				type="success"
-				action={ { label: 'Revert', onClick } }
-			/>
-		);
-		const button = screen.getByRole( 'button', { name: 'Revert' } );
-		expect( button ).toHaveClass( 'wppo-notice__action' );
-		fireEvent.click( button );
-		expect( onClick ).toHaveBeenCalledTimes( 1 );
-		expect(
-			container.querySelector( '.wppo-notice--success' )
-		).toBeInTheDocument();
-	} );
-
-	it( 'ignores an action without a label or onClick', () => {
-		render(
-			<NoticeBanner
-				message="Saved."
-				type="success"
-				action={ { label: '', onClick: undefined } }
-			/>
-		);
-		expect( screen.queryByRole( 'button' ) ).not.toBeInTheDocument();
-	} );
-
-	it( 'disables the action button while busy', () => {
-		render(
-			<NoticeBanner
-				message="Saved."
-				type="success"
-				action={ {
-					label: 'Revert',
-					onClick: jest.fn(),
-					isBusy: true,
-				} }
-			/>
-		);
-		const button = screen.getByRole( 'button', { name: /Working/i } );
-		expect( button ).toBeDisabled();
-	} );
 } );
