@@ -44,7 +44,7 @@
     "slug": "compatibility",
     "parent_slug": "performance-optimisation",
     "title": "Compatibility",
-    "excerpt": "Verified, supported, best-effort, and known-limitation guidance for WordPress, PHP, WooCommerce, builders, caches, and CDNs.",
+    "excerpt": "Supported and best-effort guidance for WordPress, PHP, WooCommerce, builders, caches and CDNs \u2014 with the limitations stated rather than implied.",
     "menu_order": 70
   },
   {

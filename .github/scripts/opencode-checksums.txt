@@ -1,0 +1,5 @@
+# OpenCode CLI release checksums
+# Format: <version> <linux asset platform> <sha256>
+# Update the version and both hashes atomically with workflow pins.
+v1.18.29 linux-x64 ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194
+v1.18.29 linux-arm64 70baf769395ca4e7a68924026530c390eace194f3b7e4919d4efcb2aa2eed3c0

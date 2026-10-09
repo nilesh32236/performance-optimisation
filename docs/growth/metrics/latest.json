@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "captured_at": "2026-09-28T13:51:31+00:00",
+  "captured_at": "2026-10-02T14:10:07+00:00",
   "privacy": "Public WordPress.org and GitHub repository data only; no WordPress visitor or site-owner data collected.",
   "wordpress_org": {
     "version": "2.4.0",
@@ -18,10 +18,10 @@
   "github": {
     "stars": 4,
     "forks": 0,
-    "open_issues_search": 11,
-    "open_prs_search": 10,
+    "open_issues_search": 18,
+    "open_prs_search": 9,
     "updated_at": "2026-09-28T12:59:29Z",
-    "pushed_at": "2026-09-28T12:59:23Z",
+    "pushed_at": "2026-10-02T13:59:01Z",
     "latest_release": "v2.4.0",
     "latest_release_at": "2026-09-24T01:09:01Z",
     "release_count_recent": 10,

@@ -82,3 +82,19 @@
 **Bug/Gap:** PHPStan throws `catch.neverThrown` errors in `includes/Scheduler/class-cron.php` and `includes/class-util.php`.
 **Root Cause:** Simple boolean checks and integer assignment/comparisons were wrapped in `try...catch (\Throwable)` blocks unnecessarily.
 **Test Added:** Static analysis will no longer fail on these files for `catch.neverThrown`.
+## 2025-01-16 - Resolve catch.neverThrown dead catch errors
+**Bug/Gap:** 5 `catch.neverThrown` static analysis errors reported by PHPStan.
+**Root Cause:** `try...catch (\Throwable)` blocks were wrapped around simple logic (variable assignment, conditionals, array generation) that cannot natively throw exceptions.
+**Test Added:** Removed the redundant try...catch blocks to satisfy PHPStan strict static analysis.
+## 2026-10-06 - Fix PHPStan strict callable signatures for set_error_handler
+**Bug/Gap:** PHPStan static analysis complained that the closures passed to `set_error_handler` in `includes/minify/class-html.php` and `includes/Core/class-main.php` were returning `void` instead of `bool`.
+**Root Cause:** The callbacks were defined as `static function () {}`. In PHP, if an error handler returns false/void, the standard PHP error handler continues to execute, causing the suppressed warnings to leak out.
+**Test Added:** No new unit tests, but updated the callbacks to `static function (): bool { return true; }` to satisfy PHPStan and ensure warnings are properly suppressed.
+## 2026-10-06 - Avoid single-line closures to maintain WPCS compliance
+**Bug/Gap:** Replaced an empty closure `static function () {}` with `static function (): bool { return true; }` on a single line. While this fixed the PHPStan error, it violated WordPress Coding Standards (WPCS) because opening braces must be the last content on a line, and PHP statements must be on their own line.
+**Root Cause:** Writing compact single-line closures directly conflicts with strict WPCS formatting rules.
+**Test Added:** No new test, but learned to always format closures across multiple lines or run `vendor/bin/phpcbf --standard=WordPress` after manually creating a closure.
+## 2026-10-06 - Properly ignore WPCS set_error_handler warnings
+**Bug/Gap:** Using `phpcs:ignore` at the end of the line for a multi-line `set_error_handler` statement failed to actually suppress the `WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` warning because the sniff was triggering before the end of the statement or the ignore comment wasn't properly targeted.
+**Root Cause:** When `set_error_handler` is formatted across multiple lines (to comply with bracket/statement rules), appending `// phpcs:ignore ...` at the very end `);` sometimes fails to suppress the warning emitted at the function call start.
+**Test Added:** No new test, but learned to place `// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler` on its own line immediately *above* the `set_error_handler` call to consistently and reliably suppress the warning.
