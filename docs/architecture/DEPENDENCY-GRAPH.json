@@ -10001,21 +10001,21 @@
             "file": "includes/Integrations/class-host-detect.php",
             "domain": "Integrations",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 251,
+            "lines": 273,
             "property_count": 1,
             "static_property_count": 1,
             "public_property_count": 0,
             "protected_property_count": 0,
             "private_property_count": 1,
             "static_state": true,
-            "method_count": 6,
+            "method_count": 7,
             "top_level_function_count": 0,
             "top_level_functions": [],
             "largest_methods": [
                 {
                     "name": "probe",
-                    "line": 191,
-                    "end_line": 249,
+                    "line": 213,
+                    "end_line": 271,
                     "lines": 59,
                     "visibility": "private",
                     "static": true,
@@ -10024,25 +10024,34 @@
                 {
                     "name": "detect",
                     "line": 94,
-                    "end_line": 133,
-                    "lines": 40,
+                    "end_line": 137,
+                    "lines": 44,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
                     "name": "get_degrade_reason",
-                    "line": 164,
-                    "end_line": 173,
+                    "line": 168,
+                    "end_line": 177,
                     "lines": 10,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
                 },
                 {
+                    "name": "sanitize_slug",
+                    "line": 200,
+                    "end_line": 205,
+                    "lines": 6,
+                    "visibility": "private",
+                    "static": true,
+                    "delegates": false
+                },
+                {
                     "name": "reset_cache",
-                    "line": 144,
-                    "end_line": 146,
+                    "line": 148,
+                    "end_line": 150,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -10050,8 +10059,8 @@
                 },
                 {
                     "name": "is_banned_conflict",
-                    "line": 154,
-                    "end_line": 156,
+                    "line": 158,
+                    "end_line": 160,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -10059,8 +10068,8 @@
                 },
                 {
                     "name": "is_page_cache_allowed",
-                    "line": 181,
-                    "end_line": 183,
+                    "line": 185,
+                    "end_line": 187,
                     "lines": 3,
                     "visibility": "public",
                     "static": true,
@@ -10070,9 +10079,10 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "self::detect": 155,
-                    "self::is_banned_conflict": 182,
-                    "self::probe": 100
+                    "self::detect": 159,
+                    "self::is_banned_conflict": 186,
+                    "self::probe": 100,
+                    "self::sanitize_slug": 114
                 },
                 "instance_calls": [],
                 "new_expressions": [],
@@ -10084,13 +10094,13 @@
                     "PerformanceOptimise\\Inc\\Host_Detect": 22
                 },
                 "class_exists": {
-                    "Breeze_PurgeCache": 241,
-                    "Kinsta\\Cache": 232,
-                    "Kinsta_Cache": 232,
+                    "Breeze_PurgeCache": 263,
+                    "Kinsta\\Cache": 254,
+                    "Kinsta_Cache": 254,
                     "PerformanceOptimise\\Inc\\Host_Detect": 22,
-                    "SG_CachePress": 238,
-                    "SiteGround_Cache": 238,
-                    "WpeCommon": 235
+                    "SG_CachePress": 260,
+                    "SiteGround_Cache": 260,
+                    "WpeCommon": 257
                 },
                 "method_exists": [],
                 "interface_exists": [],
@@ -10099,26 +10109,29 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "Breeze_PurgeCache": 241,
-                    "Kinsta\\Cache": 232,
-                    "Kinsta_Cache": 232,
-                    "SG_CachePress": 238,
-                    "SiteGround_Cache": 238,
-                    "WpeCommon": 235
+                    "Breeze_PurgeCache": 263,
+                    "Kinsta\\Cache": 254,
+                    "Kinsta_Cache": 254,
+                    "SG_CachePress": 260,
+                    "SiteGround_Cache": 260,
+                    "WpeCommon": 257
                 },
                 "external_functions": {
-                    "__": 167,
+                    "__": 171,
                     "apply_filters": 112,
                     "class_exists": 22,
                     "defined": 18,
                     "function_exists": 111,
                     "in_array": 106,
                     "is_string": 113,
-                    "strtolower": 114,
+                    "preg_replace": 204,
+                    "sanitize_key": 202,
+                    "strtolower": 204,
                     "trim": 113
                 },
                 "wordpress_functions": {
-                    "apply_filters": 112
+                    "apply_filters": 112,
+                    "sanitize_key": 202
                 },
                 "filesystem_dependencies": [],
                 "network_dependencies": [],

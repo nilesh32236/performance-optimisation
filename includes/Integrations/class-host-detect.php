@@ -111,13 +111,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 				if ( function_exists( 'apply_filters' ) ) {
 					$override = apply_filters( self::FILTER_ADAPTER, $slug );
 					if ( is_string( $override ) && '' !== trim( $override ) ) {
-						$slug = strtolower( trim( $override ) );
+						$sanitized = self::sanitize_slug( $override );
+						if ( '' !== $sanitized ) {
+							$slug = $sanitized;
+						}
 					}
 					$filtered = apply_filters( self::FILTER_DETECTED, $slug );
 					if ( ! is_string( $filtered ) || '' === trim( $filtered ) ) {
 						$slug = 'none';
 					} else {
-						$slug = strtolower( trim( $filtered ) );
+						$sanitized = self::sanitize_slug( $filtered );
+						$slug      = '' !== $sanitized ? $sanitized : 'none';
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -180,6 +184,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 		 */
 		public static function is_page_cache_allowed(): bool {
 			return ! self::is_banned_conflict();
+		}
+
+		/**
+		 * Sanitize a filter-provided host slug for REST-exposed output.
+		 *
+		 * Uses `sanitize_key()` when available (consistent with
+		 * `Edge_Cache::get_config()` provider handling) with a pure-PHP
+		 * fallback for early-load/test contexts without WP formatting.
+		 *
+		 * @since NEXT
+		 * @param string $slug Raw filter-provided slug.
+		 * @return string Sanitized slug (may be '').
+		 */
+		private static function sanitize_slug( string $slug ): string {
+			if ( function_exists( 'sanitize_key' ) ) {
+				return sanitize_key( $slug );
+			}
+			return strtolower( (string) preg_replace( '/[^a-z0-9_\-]/i', '', $slug ) );
 		}
 
 		/**
