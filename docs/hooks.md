@@ -2358,6 +2358,14 @@ Filters whether an ESI block should punch a hole. Return `null` to defer to defa
 
 ---
 
+### `wppo_esi_allowed_blocks`
+Filters the ESI fragment block allowlist enforced by `LiteSpeed_ESI::handle_ajax_fragment()` before any throttle transient I/O (audit #1785). Custom blocks served via the `wppo_esi_block` / `wppo_esi_fragment_html` extension points must be added here or the endpoint returns 403. @since NEXT.
+
+**Parameters:**
+- `$default_blocks` *(string[])* — Allowed block names (lowercase).
+
+---
+
 ### `wppo_esi_block`
 Filters the ESI block name before the `<esi:include>` is assembled. @since 2.0.0.
 
