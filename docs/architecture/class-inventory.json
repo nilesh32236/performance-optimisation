@@ -1020,14 +1020,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "CSS",
-        "lines": 6329,
+        "lines": 6330,
         "methods": 128,
         "public_methods": 76,
         "large_methods": 10,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "generate",
-            "line": 3908,
+            "line": 3909,
             "lines": 267
         },
         "method_prefixes": {

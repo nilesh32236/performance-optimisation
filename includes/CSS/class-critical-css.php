@@ -3110,7 +3110,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * normally-enqueued stylesheets instead of inline output. Critical
 		 * CSS has its own gate since NEXT
 		 * (`is_critical_css_inline_allowed()`): the legacy combined filter
-		 * below no longer disables Critical CSS.
+		 * below applies to Critical CSS only as a fallback until a
+		 * `wppo_inline_critical_css` callback is registered.
 		 *
 		 * @return bool True when inlining is allowed.
 		 * @since 2.0.0
