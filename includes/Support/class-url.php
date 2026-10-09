@@ -790,7 +790,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 				$max_hops            = max( 0, $max_hops );
 				$current_url         = $url;
 				$hops                = 0;
-				$response            = false;
 				while ( $hops <= $max_hops ) {
 					$candidate = wp_remote_get( $current_url, $args );
 					if ( is_wp_error( $candidate ) ) {
@@ -816,9 +815,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 					if ( $hops > $max_hops ) {
 						return false;
 					}
-					$response = $candidate;
 				}
-				return $response;
+				// Hop budget exhausted without a terminal response: fail
+				// closed rather than returning a mid-chain redirect.
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

@@ -743,14 +743,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( function_exists( 'is_404' ) && is_404() ) {
 					return;
 				}
+				// $wp_query fallback: status_header() sends headers without
+				// updating http_response_code(), so when the is_404() template
+				// tag is unavailable consult the queried object directly —
+				// otherwise non-2xx pages could still mint tokens.
+				if ( isset( $GLOBALS['wp_query'] ) && is_object( $GLOBALS['wp_query'] ) && ! empty( $GLOBALS['wp_query']->is_404 ) ) {
+					return;
+				}
 				if ( function_exists( 'post_password_required' ) && post_password_required() ) {
 					return;
 				}
 				if ( function_exists( 'http_response_code' ) ) {
 					$status = http_response_code();
-					if ( is_int( $status ) && ( $status < 200 || $status >= 300 ) ) {
-						return;
+					if ( is_int( $status ) ) {
+						if ( $status < 200 || $status >= 300 ) {
+							return;
+						}
 					}
+					// A non-int (false) status means unknown, not 200: the
+					// is_404() and $wp_query guards above already ran, so an
+					// unknown status alone does not block minting (SAPIs
+					// without an HTTP context report false for healthy
+					// requests). Unknown-with-error-signal stays denied via
+					// the $wp_query guard.
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

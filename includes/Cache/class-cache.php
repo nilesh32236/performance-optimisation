@@ -3796,10 +3796,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			// Password-post storage parity: same fail-safe posture as the
 			// read path above — a failed inspection never flips the store
-			// decision on its own.
+			// decision on its own. Mirrors the read-path get_post()
+			// fallback so both paths agree when post_password_required()
+			// is unavailable but get_post() is (early hook or stub).
 			try {
-				if ( function_exists( 'is_singular' ) && function_exists( 'post_password_required' ) && is_singular() && post_password_required() ) {
-					return false;
+				if ( function_exists( 'is_singular' ) && function_exists( 'post_password_required' ) ) {
+					if ( is_singular() && post_password_required() ) {
+						return false;
+					}
+				} elseif ( function_exists( 'is_singular' ) && function_exists( 'get_post' ) && is_singular() ) {
+					$store_post = get_post();
+					if ( $store_post instanceof \WP_Post && '' !== (string) $store_post->post_password ) {
+						return false;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

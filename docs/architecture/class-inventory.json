@@ -1546,7 +1546,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 5159,
+        "lines": 5168,
         "methods": 167,
         "public_methods": 67,
         "large_methods": 7,
@@ -1554,7 +1554,7 @@
         "largest_method": {
             "name": "maybe_store_cache",
             "line": 3733,
-            "lines": 205
+            "lines": 214
         },
         "method_prefixes": {
             "is": 23,
@@ -3753,14 +3753,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Insight",
-        "lines": 3447,
+        "lines": 3462,
         "methods": 64,
         "public_methods": 28,
-        "large_methods": 7,
+        "large_methods": 8,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "flush_queue",
-            "line": 2106,
+            "line": 2121,
             "lines": 347
         },
         "method_prefixes": {
@@ -3804,7 +3804,7 @@
         "private_state_properties": 7,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 93,
+        "external_dependencies": 94,
         "wordpress_dependencies": 33,
         "filesystem_dependencies": 2,
         "network_dependencies": 0,
