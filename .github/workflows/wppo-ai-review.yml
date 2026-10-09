@@ -133,7 +133,7 @@ jobs:
           npm ci || npm install
 
       - name: Fix Issue
-        uses: nilesh32236/opencode-ai-reviewer@eb38eb88235ade5068817f03aa40156894d687a8 # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): upstream opencode releases
@@ -260,7 +260,7 @@ jobs:
           npm ci || npm install
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@eb38eb88235ade5068817f03aa40156894d687a8 # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: review
           # Fail-open checksum (Sep 2026): see fix job above.
@@ -488,7 +488,7 @@ jobs:
           retention-days: 30
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@eb38eb88235ade5068817f03aa40156894d687a8 # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         if: failure()
         with:
           mode: review
@@ -633,7 +633,7 @@ jobs:
           npm ci || npm install
 
       - name: Autofix Review Loop
-        uses: nilesh32236/opencode-ai-reviewer@eb38eb88235ade5068817f03aa40156894d687a8 # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): see first fix job above.
