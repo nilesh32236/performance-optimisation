@@ -602,7 +602,27 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		// Delete user meta. `delete_metadata( 'user', null, ... )` is the core
 		// metadata API; the previous helper was not a WordPress core function,
 		// so it fataled here and aborted uninstall (compliance audit fix).
-		delete_metadata( 'user', null, 'wppo_welcome_dismissed', '', true );
+		//
+		// The list is explicit rather than a single key because only
+		// `wppo_welcome_dismissed` was deleted previously, which left three
+		// plugin-owned user-meta rows behind on every site that uninstalled:
+		// the LiteSpeed notice, the AVIF/WebP-only notice, and the nginx/Redis
+		// config notice, all set with `update_user_meta` in
+		// includes/Admin/class-admin-notices.php:171, :175 and :210/:455.
+		//
+		// `delete_metadata( 'user', null, ... )` with a null object id deletes
+		// the key for EVERY user and never touches another plugin's meta, so
+		// this cannot remove data the plugin does not own.
+		foreach (
+			array(
+				'wppo_welcome_dismissed',
+				'wppo_litespeed_notice_dismissed',
+				'wppo_avif_webp_only_dismissed',
+				'wppo_nginx_redis_config_dismissed',
+			) as $wppo_user_meta_key
+		) {
+			delete_metadata( 'user', null, $wppo_user_meta_key, '', true );
+		}
 
 		// Delete transients (prefix computed above with the option cleanup).
 		delete_transient( $transient_prefix . 'wppo_activation_notices' );

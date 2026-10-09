@@ -369,10 +369,20 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotFalse( $source );
 		$source = (string) $source;
 
-		$this->assertStringContainsString(
-			"delete_metadata( 'user', null, 'wppo_welcome_dismissed', '', true );",
+		// The deletes are driven from an explicit key list, so the inline
+		// literal call is gone — asserting its exact text would pin formatting
+		// rather than behaviour. What matters is that removal still goes through
+		// the core metadata API and that the welcome key is among the keys
+		// removed. UninstallUserMetaLeakTest pins the complete set.
+		$this->assertMatchesRegularExpression(
+			'#delete_metadata\(\s*[\'"]user[\'"]\s*,\s*null#',
 			$source,
-			'uninstall.php must delete the welcome user meta via delete_metadata( \'user\', null, ... )'
+			'uninstall.php must delete user meta via delete_metadata( \'user\', null, ... )'
+		);
+		$this->assertStringContainsString(
+			'wppo_welcome_dismissed',
+			$source,
+			'uninstall.php must still remove the welcome user meta'
 		);
 		$this->assertStringNotContainsString(
 			'delete_user_meta_by_key',
