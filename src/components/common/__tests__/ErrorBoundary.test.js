@@ -99,9 +99,10 @@ describe( 'ErrorBoundary Component', () => {
 			'utf8'
 		);
 		expect( source ).toContain( 'window.location.reload()' );
-		// And the button really uses the injected-or-default handler.
+		// And the button really uses the injected-or-default handler, with a
+		// typeof guard so a non-function onReload cannot break the button.
 		expect( source ).toContain(
-			'onClick={ this.props.onReload ?? reloadPage }'
+			"'function' === typeof this.props.onReload"
 		);
 	} );
 

@@ -28,10 +28,10 @@
  * escape reloads the page and discards every other tab's unsaved work.
  *
  * @since NEXT
- * @param {Object}                    props            Component props.
- * @param {import('react').ReactNode} [props.children] Content to guard.
- * @param {*}                         [props.resetKey] Changing value clears a latched error state.
- * @param {Function}                  [props.onReload] Reload handler (defaults to a full page reload).
+ * @param {Object}                     props            Component props.
+ * @param {import('react').ReactNode}  [props.children] Content to guard.
+ * @param {string|number|boolean|null} [props.resetKey] Changing primitive value clears a latched error state.
+ * @param {Function}                   [props.onReload] Reload handler (defaults to a full page reload; non-functions are ignored).
  */
 import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
@@ -47,6 +47,22 @@ import { getErrorLogMessage } from '../../lib/apiRequest';
 export const reloadPage = () => {
 	window.location.reload();
 };
+
+/**
+ * Whether a resetKey value is safe for identity comparison.
+ *
+ * Object (including array) values compare by identity, so an inline literal
+ * would differ on every update and clear the fallback on every render.
+ * Only primitives (plus null/undefined) participate in the reset check.
+ *
+ * @since NEXT
+ * @param {*} value Candidate resetKey value.
+ * @return {boolean} True when the value is nullish or a non-object primitive.
+ */
+export const isPrimitive = ( value ) =>
+	value === null ||
+	value === undefined ||
+	( typeof value !== 'object' && typeof value !== 'function' );
 
 class ErrorBoundary extends Component {
 	constructor( props ) {
@@ -71,9 +87,18 @@ class ErrorBoundary extends Component {
 		// boundary instance. Resetting (rather than remounting via `key`) keeps
 		// each panel's own state, so a sub-tab switch that re-renders the same
 		// component does not discard its in-flight work.
+		//
+		// Only primitive resetKeys participate: an object-valued resetKey
+		// compares by identity, so an inline object literal would differ on
+		// every update and reset the fallback on every render. Objects are
+		// ignored here — remount via `key` instead for those cases.
+		const nextKey = this.props.resetKey;
+		const prevKey = prevProps.resetKey;
 		if (
 			this.state.hasError &&
-			this.props.resetKey !== prevProps.resetKey
+			isPrimitive( nextKey ) &&
+			isPrimitive( prevKey ) &&
+			! Object.is( nextKey, prevKey )
 		) {
 			this.setState( { hasError: false, error: null } );
 		}
@@ -99,7 +124,11 @@ class ErrorBoundary extends Component {
 					<button
 						type="button"
 						className="wppo-button wppo-button--primary"
-						onClick={ this.props.onReload ?? reloadPage }
+						onClick={
+							'function' === typeof this.props.onReload
+								? this.props.onReload
+								: reloadPage
+						}
 					>
 						{ __( 'Reload', 'performance-optimisation' ) }
 					</button>
