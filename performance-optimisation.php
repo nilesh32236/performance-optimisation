@@ -72,10 +72,11 @@ if ( ! function_exists( 'wppo_get_wp_version' ) ) {
 					return '';
 				}
 
-				// No is_string() guard: get_bloginfo() is stubbed as string and
-				// trim() coerces scalars; an exotic filtered value throws a
-				// TypeError that the outer catch turns into a fail-open ''.
-				if ( '' !== trim( $version ) ) {
+				// Guard the mixed value before trim(): trim( null ) raises a
+				// deprecation on PHP 8.1+ (not a Throwable), so it would not
+				// fail open via the catch below. Non-string filtered values
+				// fail open to '' instead.
+				if ( is_string( $version ) && '' !== trim( $version ) ) {
 					return trim( $version );
 				}
 			}

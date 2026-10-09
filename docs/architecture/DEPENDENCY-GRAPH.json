@@ -23668,111 +23668,111 @@
             "file": "templates/object-cache.php",
             "domain": "DropIn",
             "namespace": "",
-            "lines": 1934,
+            "lines": 1967,
             "property_count": 8,
             "static_property_count": 0,
             "public_property_count": 1,
             "protected_property_count": 0,
             "private_property_count": 7,
             "static_state": false,
-            "method_count": 30,
+            "method_count": 31,
             "top_level_function_count": 24,
             "top_level_functions": [
                 {
                     "name": "wp_cache_add",
-                    "line": 1503
+                    "line": 1536
                 },
                 {
                     "name": "wp_cache_set",
-                    "line": 1517
+                    "line": 1550
                 },
                 {
                     "name": "wp_cache_get",
-                    "line": 1531
-                },
-                {
-                    "name": "wp_cache_delete",
-                    "line": 1543
-                },
-                {
-                    "name": "wp_cache_flush",
-                    "line": 1553
-                },
-                {
-                    "name": "wp_cache_flush_group",
                     "line": 1564
                 },
                 {
+                    "name": "wp_cache_delete",
+                    "line": 1576
+                },
+                {
+                    "name": "wp_cache_flush",
+                    "line": 1586
+                },
+                {
+                    "name": "wp_cache_flush_group",
+                    "line": 1597
+                },
+                {
                     "name": "wp_cache_init",
-                    "line": 1574
+                    "line": 1607
                 },
                 {
                     "name": "wp_cache_replace",
-                    "line": 1589
+                    "line": 1622
                 },
                 {
                     "name": "wp_cache_add_global_groups",
-                    "line": 1600
+                    "line": 1633
                 },
                 {
                     "name": "wp_cache_add_non_persistent_groups",
-                    "line": 1611
+                    "line": 1644
                 },
                 {
                     "name": "wp_cache_incr",
-                    "line": 1624
+                    "line": 1657
                 },
                 {
                     "name": "wp_cache_decr",
-                    "line": 1637
+                    "line": 1670
                 },
                 {
                     "name": "wp_cache_close",
-                    "line": 1651
+                    "line": 1684
                 },
                 {
                     "name": "wp_cache_get_multiple",
-                    "line": 1680
+                    "line": 1713
                 },
                 {
                     "name": "wp_cache_set_multiple",
-                    "line": 1693
+                    "line": 1726
                 },
                 {
                     "name": "wp_cache_delete_multiple",
-                    "line": 1705
+                    "line": 1738
                 },
                 {
                     "name": "wp_cache_get_salted",
-                    "line": 1727
+                    "line": 1760
                 },
                 {
                     "name": "wp_cache_set_salted",
-                    "line": 1756
+                    "line": 1789
                 },
                 {
                     "name": "wp_cache_get_multiple_salted",
-                    "line": 1782
-                },
-                {
-                    "name": "wp_cache_set_multiple_salted",
                     "line": 1815
                 },
                 {
+                    "name": "wp_cache_set_multiple_salted",
+                    "line": 1848
+                },
+                {
                     "name": "wp_cache_delete_salted",
-                    "line": 1841
+                    "line": 1874
                 },
                 {
                     "name": "wp_cache_delete_multiple_salted",
-                    "line": 1862
+                    "line": 1895
                 },
                 {
                     "name": "wp_cache_supports",
-                    "line": 1888
+                    "line": 1921
                 },
                 {
                     "name": "wp_cache_add_salt",
-                    "line": 1927
+                    "line": 1960
                 }
             ],
             "largest_methods": [
@@ -23787,8 +23787,8 @@
                 },
                 {
                     "name": "record_redis_failure",
-                    "line": 497,
-                    "end_line": 576,
+                    "line": 516,
+                    "end_line": 595,
                     "lines": 80,
                     "visibility": "private",
                     "static": false,
@@ -23796,27 +23796,27 @@
                 },
                 {
                     "name": "trip_circuit_breaker",
-                    "line": 617,
-                    "end_line": 690,
-                    "lines": 74,
+                    "line": 636,
+                    "end_line": 710,
+                    "lines": 75,
                     "visibility": "private",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "get_multiple",
-                    "line": 887,
-                    "end_line": 955,
-                    "lines": 69,
+                    "line": 910,
+                    "end_line": 979,
+                    "lines": 70,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "set_multiple",
-                    "line": 965,
-                    "end_line": 1026,
-                    "lines": 62,
+                    "line": 989,
+                    "end_line": 1051,
+                    "lines": 63,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
@@ -23832,36 +23832,36 @@
                 },
                 {
                     "name": "delete_multiple",
-                    "line": 1063,
-                    "end_line": 1113,
-                    "lines": 51,
+                    "line": 1089,
+                    "end_line": 1140,
+                    "lines": 52,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "get",
-                    "line": 828,
-                    "end_line": 877,
-                    "lines": 50,
+                    "line": 850,
+                    "end_line": 900,
+                    "lines": 51,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "add",
-                    "line": 724,
-                    "end_line": 772,
-                    "lines": 49,
+                    "line": 744,
+                    "end_line": 793,
+                    "lines": 50,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
                 },
                 {
                     "name": "set",
-                    "line": 783,
-                    "end_line": 817,
-                    "lines": 35,
+                    "line": 804,
+                    "end_line": 839,
+                    "lines": 36,
                     "visibility": "public",
                     "static": false,
                     "delegates": false
@@ -23874,64 +23874,65 @@
                     "$connection->get_error_code": 261,
                     "$connection->get_error_message": 268,
                     "$e->getMessage": 324,
-                    "$pipeline->del": 1097,
-                    "$pipeline->exec": 1000,
-                    "$pipeline->setex": 998,
-                    "$redis->_masters": 1219,
-                    "$redis->decrBy": 1421,
-                    "$redis->del": 1049,
-                    "$redis->exists": 1137,
-                    "$redis->flushDb": 1178,
-                    "$redis->incrBy": 1382,
-                    "$redis->mSet": 1014,
-                    "$redis->multi": 996,
-                    "$redis->scan": 1223,
-                    "$redis->set": 754,
-                    "$redis->setex": 799,
-                    "$redis->setnx": 763,
-                    "$redis_instance->get": 858,
-                    "$redis_instance->mGet": 933,
-                    "$this->clear_redis_failures": 407,
+                    "$pipeline->del": 1124,
+                    "$pipeline->exec": 1025,
+                    "$pipeline->setex": 1023,
+                    "$redis->_masters": 1249,
+                    "$redis->decrBy": 1454,
+                    "$redis->del": 1075,
+                    "$redis->exists": 1165,
+                    "$redis->flushDb": 1207,
+                    "$redis->incrBy": 1414,
+                    "$redis->mSet": 1039,
+                    "$redis->multi": 1021,
+                    "$redis->scan": 1253,
+                    "$redis->set": 775,
+                    "$redis->setex": 821,
+                    "$redis->setnx": 784,
+                    "$redis_instance->get": 881,
+                    "$redis_instance->mGet": 957,
+                    "$this->clear_redis_failures": 426,
                     "$this->connect_redis": 130,
-                    "$this->fail_open_to_memory": 765,
-                    "$this->get_circuit_threshold": 517,
-                    "$this->get_circuit_window": 518,
-                    "$this->get_key": 730,
+                    "$this->fail_open_null_client": 765,
+                    "$this->fail_open_to_memory": 786,
+                    "$this->get_circuit_threshold": 536,
+                    "$this->get_circuit_window": 537,
+                    "$this->get_key": 750,
                     "$this->log_redis_failure_once": 268,
                     "$this->log_redis_recovery": 276,
                     "$this->record_redis_failure": 270,
-                    "$this->scan_delete_pattern": 1185,
-                    "$this->scan_pattern_is_empty": 1267,
-                    "$this->set": 1145,
-                    "$this->trip_circuit_breaker": 574,
-                    "$this->verify_prefix_flushed": 1182,
+                    "$this->scan_delete_pattern": 1214,
+                    "$this->scan_pattern_is_empty": 1297,
+                    "$this->set": 1173,
+                    "$this->trip_circuit_breaker": 593,
+                    "$this->verify_prefix_flushed": 1211,
                     "$tmp_replica->auth": 298,
                     "$tmp_replica->close": 304,
                     "$tmp_replica->connect": 295,
                     "$tmp_replica->select": 301,
-                    "$wp_object_cache->add": 1505,
-                    "$wp_object_cache->add_global_groups": 1602,
-                    "$wp_object_cache->add_non_persistent_groups": 1613,
-                    "$wp_object_cache->add_salt": 1930,
-                    "$wp_object_cache->decr": 1639,
-                    "$wp_object_cache->delete": 1545,
-                    "$wp_object_cache->delete_multiple": 1707,
-                    "$wp_object_cache->flush": 1555,
-                    "$wp_object_cache->flush_group": 1566,
-                    "$wp_object_cache->get": 1533,
-                    "$wp_object_cache->get_multiple": 1682,
-                    "$wp_object_cache->incr": 1626,
-                    "$wp_object_cache->replace": 1591,
-                    "$wp_object_cache->set": 1519,
-                    "$wp_object_cache->set_multiple": 1695
+                    "$wp_object_cache->add": 1538,
+                    "$wp_object_cache->add_global_groups": 1635,
+                    "$wp_object_cache->add_non_persistent_groups": 1646,
+                    "$wp_object_cache->add_salt": 1963,
+                    "$wp_object_cache->decr": 1672,
+                    "$wp_object_cache->delete": 1578,
+                    "$wp_object_cache->delete_multiple": 1740,
+                    "$wp_object_cache->flush": 1588,
+                    "$wp_object_cache->flush_group": 1599,
+                    "$wp_object_cache->get": 1566,
+                    "$wp_object_cache->get_multiple": 1715,
+                    "$wp_object_cache->incr": 1659,
+                    "$wp_object_cache->replace": 1624,
+                    "$wp_object_cache->set": 1552,
+                    "$wp_object_cache->set_multiple": 1728
                 },
                 "new_expressions": {
-                    "WP_Object_Cache": 1577,
+                    "WP_Object_Cache": 1610,
                     "\\Redis": 291
                 },
                 "class_references": [],
                 "class_constant_references": {
-                    "\\Redis": 996,
+                    "\\Redis": 1021,
                     "self": 261
                 },
                 "class_string_references": [],
@@ -23947,7 +23948,7 @@
                 "loader_references": [],
                 "file_references": {
                     "/*/includes/Support/redis-connect-helper.php": 234,
-                    "/object-cache.php": 623,
+                    "/object-cache.php": 642,
                     "/performance-optimisation/includes/Support/redis-connect-helper.php": 228,
                     "/wppo-redis-config.php": 199,
                     "<dynamic>": 203
@@ -23958,88 +23959,88 @@
                     "\\Redis": 291
                 },
                 "external_functions": {
-                    "WP_Object_Cache": 1577,
+                    "WP_Object_Cache": 1610,
                     "\\Redis": 291,
-                    "_masters": 1266,
-                    "apply_filters": 450,
-                    "array_fill_keys": 1003,
-                    "array_keys": 1003,
-                    "array_merge": 1442,
+                    "_masters": 1296,
+                    "apply_filters": 469,
+                    "array_fill_keys": 1028,
+                    "array_keys": 1028,
+                    "array_merge": 1475,
                     "array_rand": 284,
-                    "array_unique": 1442,
-                    "basename": 683,
+                    "array_unique": 1475,
+                    "basename": 703,
                     "class_exists": 17,
-                    "close": 1656,
+                    "close": 1689,
                     "defined": 175,
                     "error_log": 251,
-                    "fclose": 530,
+                    "fclose": 549,
                     "file_exists": 186,
-                    "file_get_contents": 646,
-                    "file_put_contents": 670,
-                    "filemtime": 383,
-                    "filesize": 642,
-                    "flock": 528,
-                    "fopen": 522,
-                    "ftruncate": 560,
+                    "file_get_contents": 665,
+                    "file_put_contents": 690,
+                    "filemtime": 402,
+                    "filesize": 661,
+                    "flock": 547,
+                    "fopen": 541,
+                    "ftruncate": 579,
                     "function_exists": 94,
-                    "fwrite": 567,
+                    "fwrite": 586,
                     "get_current_blog_id": 103,
                     "getenv": 212,
                     "glob": 234,
-                    "implode": 1729,
+                    "implode": 1762,
                     "in_array": 261,
                     "is_array": 206,
                     "is_multisite": 96,
-                    "is_numeric": 1230,
-                    "is_readable": 640,
+                    "is_numeric": 1260,
+                    "is_readable": 659,
                     "is_scalar": 84,
                     "is_string": 270,
                     "is_wp_error": 261,
-                    "json_decode": 538,
-                    "json_encode": 565,
-                    "max": 452,
+                    "json_decode": 557,
+                    "json_encode": 584,
+                    "max": 471,
                     "md5": 125,
-                    "rename": 680,
-                    "rewind": 535,
+                    "rename": 700,
+                    "rewind": 554,
                     "rtrim": 227,
-                    "stream_get_contents": 537,
-                    "strip_tags": 655,
+                    "stream_get_contents": 556,
+                    "strip_tags": 674,
                     "strpos": 237,
-                    "substr": 657,
-                    "time": 382,
-                    "touch": 389,
-                    "unlink": 411,
-                    "wp_json_encode": 565,
-                    "wp_strip_all_tags": 655,
-                    "wp_suspend_cache_addition": 725,
+                    "substr": 676,
+                    "time": 401,
+                    "touch": 408,
+                    "unlink": 430,
+                    "wp_json_encode": 584,
+                    "wp_strip_all_tags": 674,
+                    "wp_suspend_cache_addition": 745,
                     "wppo_apply_redis_options": 314,
                     "wppo_redis_connect": 257
                 },
                 "wordpress_functions": {
-                    "WP_Object_Cache": 1577,
-                    "apply_filters": 450,
+                    "WP_Object_Cache": 1610,
+                    "apply_filters": 469,
                     "get_current_blog_id": 103,
                     "is_multisite": 96,
                     "is_wp_error": 261,
-                    "wp_json_encode": 565,
-                    "wp_strip_all_tags": 655,
-                    "wp_suspend_cache_addition": 725
+                    "wp_json_encode": 584,
+                    "wp_strip_all_tags": 674,
+                    "wp_suspend_cache_addition": 745
                 },
                 "filesystem_dependencies": {
-                    "basename": 683,
-                    "fclose": 530,
+                    "basename": 703,
+                    "fclose": 549,
                     "file_exists": 186,
-                    "file_get_contents": 646,
-                    "file_put_contents": 670,
-                    "filemtime": 383,
-                    "filesize": 642,
-                    "fopen": 522,
-                    "fwrite": 567,
+                    "file_get_contents": 665,
+                    "file_put_contents": 690,
+                    "filemtime": 402,
+                    "filesize": 661,
+                    "fopen": 541,
+                    "fwrite": 586,
                     "glob": 234,
-                    "is_readable": 640,
-                    "rename": 680,
-                    "touch": 389,
-                    "unlink": 411
+                    "is_readable": 659,
+                    "rename": 700,
+                    "touch": 408,
+                    "unlink": 430
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -24078,7 +24079,7 @@
             "file": "includes/Support/redis-connect-helper.php",
             "domain": "Support",
             "namespace": "",
-            "lines": 658,
+            "lines": 662,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -24102,31 +24103,31 @@
                 },
                 {
                     "name": "wppo_redis_connect_standalone",
-                    "line": 269
+                    "line": 272
                 },
                 {
                     "name": "wppo_parse_redis_node",
-                    "line": 327
+                    "line": 331
                 },
                 {
                     "name": "wppo_normalize_redis_serializer_choice",
-                    "line": 396
+                    "line": 400
                 },
                 {
                     "name": "wppo_resolve_redis_serializer",
-                    "line": 444
+                    "line": 448
                 },
                 {
                     "name": "wppo_apply_redis_options",
-                    "line": 494
+                    "line": 498
                 },
                 {
                     "name": "wppo_validate_tls_ca_file",
-                    "line": 593
+                    "line": 597
                 },
                 {
                     "name": "wppo_parse_nodes",
-                    "line": 632
+                    "line": 636
                 }
             ],
             "largest_methods": [],
@@ -24134,27 +24135,27 @@
             "references": {
                 "static_calls": [],
                 "instance_calls": {
-                    "$redis-><dynamic>": 290,
-                    "$redis->auth": 219,
-                    "$redis->close": 220,
-                    "$redis->connect": 218,
-                    "$redis->select": 225,
-                    "$redis->setOption": 515,
-                    "$sentinel->getMasterAddrByName": 209
+                    "$redis-><dynamic>": 294,
+                    "$redis->auth": 222,
+                    "$redis->close": 223,
+                    "$redis->connect": 221,
+                    "$redis->select": 228,
+                    "$redis->setOption": 519,
+                    "$sentinel->getMasterAddrByName": 212
                 },
                 "new_expressions": {
-                    "\\Redis": 215,
+                    "\\Redis": 218,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 199,
+                    "\\RedisSentinel": 202,
                     "\\WP_Error": 89
                 },
                 "class_references": [],
                 "class_constant_references": {
-                    "\\Redis": 404
+                    "\\Redis": 408
                 },
                 "class_string_references": [],
                 "class_exists": {
-                    "Redis": 212,
+                    "Redis": 215,
                     "RedisCluster": 103,
                     "RedisSentinel": 153
                 },
@@ -24165,59 +24166,59 @@
                 "loader_references": [],
                 "file_references": [],
                 "external_classes": {
-                    "Redis": 212,
+                    "Redis": 215,
                     "RedisCluster": 103,
                     "RedisSentinel": 153,
-                    "\\Redis": 215,
+                    "\\Redis": 218,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 199,
+                    "\\RedisSentinel": 202,
                     "\\WP_Error": 89
                 },
                 "external_functions": {
-                    "\\Redis": 215,
+                    "\\Redis": 218,
                     "\\RedisCluster": 127,
-                    "\\RedisSentinel": 199,
+                    "\\RedisSentinel": 202,
                     "\\WP_Error": 89,
                     "__": 89,
-                    "array_filter": 645,
+                    "array_filter": 649,
                     "array_map": 114,
-                    "array_values": 644,
+                    "array_values": 648,
                     "class_exists": 103,
                     "defined": 11,
-                    "end": 252,
+                    "end": 255,
                     "error_log": 87,
-                    "extension_loaded": 448,
+                    "extension_loaded": 452,
                     "function_exists": 34,
                     "getenv": 63,
-                    "is_array": 640,
-                    "is_file": 604,
-                    "is_object": 495,
-                    "is_readable": 604,
-                    "is_scalar": 333,
-                    "is_string": 560,
-                    "ltrim": 600,
-                    "method_exists": 495,
+                    "is_array": 644,
+                    "is_file": 608,
+                    "is_object": 499,
+                    "is_readable": 608,
+                    "is_scalar": 337,
+                    "is_string": 564,
+                    "ltrim": 604,
+                    "method_exists": 499,
                     "phpversion": 162,
-                    "preg_match": 600,
-                    "preg_split": 634,
-                    "realpath": 603,
-                    "rtrim": 613,
-                    "sprintf": 228,
-                    "str_replace": 607,
+                    "preg_match": 604,
+                    "preg_split": 638,
+                    "realpath": 607,
+                    "rtrim": 617,
+                    "sprintf": 231,
+                    "str_replace": 611,
                     "strpos": 116,
-                    "strrpos": 358,
-                    "substr": 340,
-                    "substr_count": 351,
-                    "trim": 346,
+                    "strrpos": 362,
+                    "substr": 344,
+                    "substr_count": 355,
+                    "trim": 350,
                     "version_compare": 162
                 },
                 "wordpress_functions": {
                     "\\WP_Error": 89
                 },
                 "filesystem_dependencies": {
-                    "is_file": 604,
-                    "is_readable": 604,
-                    "realpath": 603
+                    "is_file": 608,
+                    "is_readable": 608,
+                    "realpath": 607
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -24256,7 +24257,7 @@
             "file": "performance-optimisation.php",
             "domain": "Bootstrap",
             "namespace": "",
-            "lines": 329,
+            "lines": 330,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -24272,27 +24273,27 @@
                 },
                 {
                     "name": "wppo_requirements_met",
-                    "line": 105
+                    "line": 106
                 },
                 {
                     "name": "wppo_render_requirements_notice",
-                    "line": 148
+                    "line": 149
                 },
                 {
                     "name": "wppo_version_guard",
-                    "line": 203
+                    "line": 204
                 },
                 {
                     "name": "wppo_render_missing_autoload_notice",
-                    "line": 239
+                    "line": 240
                 },
                 {
                     "name": "wppo_activate",
-                    "line": 308
+                    "line": 309
                 },
                 {
                     "name": "wppo_deactivate",
-                    "line": 325
+                    "line": 326
                 }
             ],
             "largest_methods": [],
@@ -24303,22 +24304,22 @@
             ],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Activate::init": 309,
-                    "PerformanceOptimise\\Inc\\Deactivate::init": 326
+                    "PerformanceOptimise\\Inc\\Activate::init": 310,
+                    "PerformanceOptimise\\Inc\\Deactivate::init": 327
                 },
                 "instance_calls": [],
                 "new_expressions": {
-                    "PerformanceOptimise\\Inc\\Main": 293
+                    "PerformanceOptimise\\Inc\\Main": 294
                 },
                 "class_references": [],
                 "class_constant_references": [],
                 "class_string_references": {
-                    "PerformanceOptimise\\Inc\\Loader_Map": 280,
-                    "PerformanceOptimise\\Inc\\Main": 286
+                    "PerformanceOptimise\\Inc\\Loader_Map": 281,
+                    "PerformanceOptimise\\Inc\\Main": 287
                 },
                 "class_exists": {
-                    "PerformanceOptimise\\Inc\\Loader_Map": 280,
-                    "PerformanceOptimise\\Inc\\Main": 286
+                    "PerformanceOptimise\\Inc\\Loader_Map": 281,
+                    "PerformanceOptimise\\Inc\\Main": 287
                 },
                 "method_exists": [],
                 "interface_exists": [],
@@ -24326,46 +24327,46 @@
                 "reflection": [],
                 "loader_references": [],
                 "file_references": {
-                    "<dynamic>": 262,
-                    "includes/Core/class-loader-map.php": 281,
-                    "includes/Core/class-main.php": 287,
-                    "vendor/autoload.php": 259
+                    "<dynamic>": 263,
+                    "includes/Core/class-loader-map.php": 282,
+                    "includes/Core/class-main.php": 288,
+                    "vendor/autoload.php": 260
                 },
                 "external_classes": [],
                 "external_functions": {
-                    "Main": 293,
-                    "add_action": 211,
-                    "class_exists": 280,
-                    "current_user_can": 152,
+                    "Main": 294,
+                    "add_action": 212,
+                    "class_exists": 281,
+                    "current_user_can": 153,
                     "define": 30,
                     "defined": 20,
-                    "esc_html": 177,
-                    "esc_html__": 172,
-                    "file_exists": 260,
+                    "esc_html": 178,
+                    "esc_html__": 173,
+                    "file_exists": 261,
                     "function_exists": 50,
                     "get_bloginfo": 69,
                     "is_string": 63,
-                    "phpversion": 113,
+                    "phpversion": 114,
                     "plugin_dir_path": 30,
                     "plugin_dir_url": 34,
-                    "printf": 174,
-                    "register_activation_hook": 312,
-                    "register_deactivation_hook": 329,
+                    "printf": 175,
+                    "register_activation_hook": 313,
+                    "register_deactivation_hook": 330,
                     "trim": 63,
-                    "version_compare": 117,
+                    "version_compare": 118,
                     "wp_normalize_path": 30
                 },
                 "wordpress_functions": {
-                    "add_action": 211,
-                    "current_user_can": 152,
-                    "esc_html": 177,
+                    "add_action": 212,
+                    "current_user_can": 153,
+                    "esc_html": 178,
                     "get_bloginfo": 69,
-                    "register_activation_hook": 312,
-                    "register_deactivation_hook": 329,
+                    "register_activation_hook": 313,
+                    "register_deactivation_hook": 330,
                     "wp_normalize_path": 30
                 },
                 "filesystem_dependencies": {
-                    "file_exists": 260
+                    "file_exists": 261
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -24389,12 +24390,12 @@
             "delegating_methods": [],
             "hooks": {
                 "admin_notices": [
-                    211,
-                    265
-                ],
-                "network_admin_notices": [
                     212,
                     266
+                ],
+                "network_admin_notices": [
+                    213,
+                    267
                 ]
             },
             "metrics": {
@@ -35551,7 +35552,7 @@
                 "static_call"
             ],
             "lines": [
-                309
+                310
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -35571,7 +35572,7 @@
                 "static_call"
             ],
             "lines": [
-                326
+                327
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -35593,7 +35594,7 @@
                 "class_string_reference"
             ],
             "lines": [
-                280
+                281
             ],
             "evidence_count": 1,
             "cross_domain": true,
@@ -35616,9 +35617,9 @@
                 "new_expression"
             ],
             "lines": [
-                286,
-                292,
-                293
+                287,
+                293,
+                294
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -55953,7 +55954,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    309
+                    310
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -55974,7 +55975,7 @@
                     "static_call"
                 ],
                 "lines": [
-                    326
+                    327
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -55997,7 +55998,7 @@
                     "class_string_reference"
                 ],
                 "lines": [
-                    280
+                    281
                 ],
                 "evidence_count": 1,
                 "cross_domain": true,
@@ -56021,9 +56022,9 @@
                     "new_expression"
                 ],
                 "lines": [
-                    286,
-                    292,
-                    293
+                    287,
+                    293,
+                    294
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -64125,9 +64126,9 @@
                     "new_expression"
                 ],
                 "lines": [
-                    286,
-                    292,
-                    293
+                    287,
+                    293,
+                    294
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,

@@ -166,7 +166,10 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 		// Normalize the password to string up front so the emptiness check
 		// below can use a strict comparison (no mixed truthiness). Scalars
 		// keep their value; anything exotic stringifies and fails closed
-		// at auth().
+		// at auth(). Intentional change vs the old loose check: a password
+		// of "0" now triggers AUTH (empty( '0' ) is true in PHP, so the old
+		// `$password && ...` guard skipped it). "0" is a valid Redis
+		// credential, so attempting AUTH is the correct behavior.
 		$master_name  = $config['master_name'] ?? 'mymaster';
 		$use_tls      = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 		$password     = isset( $config['password'] ) ? (string) $config['password'] : '';
@@ -272,6 +275,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		}
 
 		// Same password normalization as the Sentinel path: strict '' comparison below.
+		// A password of "0" intentionally triggers AUTH here too (see Sentinel note above).
 		$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 		$host     = $config['host'] ?? '127.0.0.1';
 		$port     = isset( $config['port'] ) ? (int) $config['port'] : 6379;

@@ -355,6 +355,25 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		}
 
 		/**
+		 * Fail open when the client handle is null despite the connected flag.
+		 *
+		 * A null handle with the flag set means a mid-request teardown left
+		 * inconsistent state (normally unreachable: every teardown clears
+		 * the flag). Reconcile the flag and emit the throttled outage log
+		 * for observability parity with the exception path. Deliberately
+		 * does NOT call record_redis_failure(): a torn-down handle is not a
+		 * Redis outage and must not count toward the circuit breaker.
+		 *
+		 * @since NEXT
+		 * @param string $operation Operation label for the log line.
+		 * @return void
+		 */
+		private function fail_open_null_client( string $operation ): void {
+			$this->redis_connected = false;
+			$this->log_redis_failure_once( 'WPPO Redis object cache: ' . $operation . ' with torn-down client — serving from memory.' );
+		}
+
+		/**
 		 * Log a Redis failure at most once per 5 minutes (and once per request).
 		 *
 		 * Object-cache drop-ins boot on every request, so raw error_log() would
@@ -663,9 +682,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// wp_json_encode() may not exist yet at drop-in boot; json_encode() is the early-boot fallback.
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
 			$encoded = function_exists( 'wp_json_encode' ) ? wp_json_encode( $payload ) : json_encode( $payload );
-			// is_string() alone suffices: wp_json_encode() is stubbed as
-			// non-empty-string|false, so a separate '' check is redundant.
-			if ( is_string( $encoded ) ) {
+			// Keep the '' check alongside is_string for exact prior semantics:
+			// an empty-string encode would otherwise be written as an empty
+			// state file, which a later decode treats as missing/corrupt state.
+			if ( is_string( $encoded ) && '' !== $encoded ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents,WordPress.PHP.NoSilencedErrors.Discouraged
 				@file_put_contents( $state_file, $encoded, LOCK_EX );
 			}
@@ -742,6 +762,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// and a torn-down client still fails open to memory.
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'add' );
 				if ( isset( $this->cache[ $local_key ] ) ) {
 					return false;
 				}
@@ -790,6 +811,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'set' );
 				$this->cache[ $formatted_key ] = $data;
 				return true;
 			}
@@ -846,6 +868,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// mid-request teardown, in which case serve from memory.
 			$redis_instance = null !== $this->redis_replica ? $this->redis_replica : $this->redis;
 			if ( null === $redis_instance ) {
+				$this->fail_open_null_client( 'get' );
 				if ( isset( $this->cache[ $local_key ] ) ) {
 					$found = true;
 					return $this->cache[ $local_key ];
@@ -921,6 +944,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis_instance = null !== $this->redis_replica ? $this->redis_replica : $this->redis;
 			if ( null === $redis_instance ) {
+				$this->fail_open_null_client( 'get_multiple' );
 				foreach ( $keys_to_fetch as $key ) {
 					if ( ! isset( $values[ $key ] ) ) {
 						$values[ $key ] = false;
@@ -984,6 +1008,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'set_multiple' );
 				foreach ( $data as $key => $value ) {
 					$results[ $key ] = true;
 				}
@@ -1042,6 +1067,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'delete' );
 				return true;
 			}
 
@@ -1085,6 +1111,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// We'll use a pipeline to get individual results if strict contract is required.
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'delete_multiple' );
 				foreach ( $keys as $key ) {
 					$results[ $key ] = true;
 				}
@@ -1130,6 +1157,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'replace' );
 				return false;
 			}
 
@@ -1171,6 +1199,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'flush' );
 				return true;
 			}
 			try {
@@ -1213,6 +1242,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		private function scan_delete_pattern( string $pattern ): void {
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'scan_delete' );
 				return;
 			}
 			if ( $redis instanceof \RedisCluster ) {
@@ -1291,6 +1321,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// already cleared the in-memory store.
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'scan_verify' );
 				return true;
 			}
 			$pages      = 0;
@@ -1371,6 +1402,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'incr' );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
@@ -1410,6 +1442,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$redis = $this->redis;
 			if ( null === $redis ) {
+				$this->fail_open_null_client( 'decr' );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
