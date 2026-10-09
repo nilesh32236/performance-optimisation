@@ -3880,12 +3880,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private static function fetch_and_generate_used_css( int $post_id, string $permalink, int $timeout ): string {
 			try {
 				$fetch_args = array(
-					'timeout' => $timeout,
-					'headers' => array(
+					'timeout'     => $timeout,
+					'redirection' => 0,
+					'headers'     => array(
 						'X-WPPO-Used-CSS' => '1',
 					),
 				);
-				$response   = wp_remote_get( $permalink, $fetch_args );
+				// Redirect-hop guard (audit #1785): only the first URL is
+				// same-site-checked by callers, and WP follows redirects
+				// transparently — a same-site open redirect could otherwise
+				// route this server-side fetch to internal/loopback
+				// services (SSRF). Hops are followed via the single shared
+				// Util helper (max 5); a false return means the guard
+				// aborted the fetch.
+				$response = Util::fetch_same_site_with_redirects( $permalink, $fetch_args, 5 );
+				if ( false === $response ) {
+					return '';
+				}
 
 				if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

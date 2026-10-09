@@ -653,12 +653,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'		return true;' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	foreach ( $_COOKIE as $name => $value ) {' . PHP_EOL .
-			'		if ( strpos( $name, \'wordpress_logged_in_\' ) === 0 || strpos( $name, \'wp-rs-\' ) === 0 ) {' . PHP_EOL .
+			'		if ( strpos( $name, \'wordpress_logged_in_\' ) === 0 || strpos( $name, \'wp-rs-\' ) === 0 || strpos( $name, \'wp-postpass_\' ) === 0 || strpos( $name, \'comment_author_\' ) === 0 ) {' . PHP_EOL .
 			'			return true;' . PHP_EOL .
 			'		}' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	return false;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
+			'// Password-protected (wp-postpass_*) and commenter-personalised' . PHP_EOL .
+			'// (comment_author_*) requests are never served from the static cache.' . PHP_EOL .
+			'// is_user_logged_in_without_wp() above already returns true for' . PHP_EOL .
+			'// these cookies; this explicit guard keeps the intent greppable' . PHP_EOL .
+			'// pre-boot without wp_* calls.' . PHP_EOL .
+			'foreach ( (array) $_COOKIE as $ck => $cv ) { if ( 0 === strpos( (string) $ck, \'wp-postpass_\' ) || 0 === strpos( (string) $ck, \'comment_author_\' ) ) { return; } }' . PHP_EOL . PHP_EOL .
 
 			'// WP-Cron on cache hits (issue #1088): a cache hit exits before WordPress' . PHP_EOL .
 			'// boots, so core spawn_cron() never runs and every scheduled job stalls.' . PHP_EOL .

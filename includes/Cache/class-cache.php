@@ -3281,6 +3281,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Password-protected and commenter-personalised pages must never
+			// be cached: a wp-postpass_* cookie means an unlocked password
+			// post (serving it would defeat post password protection), and
+			// comment_author_* cookies personalise comment_form() output
+			// (serving it would leak personal data).
+			try {
+				if ( isset( $_COOKIE ) && is_array( $_COOKIE ) ) {
+					foreach ( $_COOKIE as $cookie_name => $cookie_value ) {
+						$cookie_name = (string) $cookie_name;
+						if ( 0 === strpos( $cookie_name, 'wp-postpass_' ) || 0 === strpos( $cookie_name, 'comment_author_' ) ) {
+							$this->maybe_mark_page_not_cacheable();
+							return true;
+						}
+					}
+					unset( $cookie_name, $cookie_value );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+			// Password-post inspection depends on template-tag functions
+			// that may not exist yet (or in unit stubs): a failed
+			// inspection leaves the page cacheable rather than flipping
+			// unrelated fixtures dynamic. function_exists() guards keep
+			// Brain Monkey doubles working.
+			try {
+				if ( function_exists( 'is_singular' ) && function_exists( 'post_password_required' ) ) {
+					if ( is_singular() && post_password_required() ) {
+						$this->maybe_mark_page_not_cacheable();
+						return true;
+					}
+				} elseif ( function_exists( 'is_singular' ) && function_exists( 'get_post' ) && is_singular() ) {
+					$post = get_post();
+					if ( $post instanceof \WP_Post && '' !== (string) $post->post_password ) {
+						$this->maybe_mark_page_not_cacheable();
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Query-param poisoning guard (issue #1141): the cache key is
 			// path-only, so a functional query (`?s=`, `?add-to-cart=`, or
 			// any unknown param) must never be served the clean-URL file.
@@ -3733,6 +3775,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 				$this->maybe_mark_page_not_cacheable();
 				return false;
+			}
+
+			// Storage parity for password/commenter cookies (audit #1785):
+			// refuse the store even if is_not_cacheable() was bypassed via
+			// the wppo_should_cache_request filter. Unconditional.
+			try {
+				if ( isset( $_COOKIE ) && is_array( $_COOKIE ) ) {
+					foreach ( $_COOKIE as $store_cookie_name => $store_cookie_value ) {
+						$store_cookie_name = (string) $store_cookie_name;
+						if ( 0 === strpos( $store_cookie_name, 'wp-postpass_' ) || 0 === strpos( $store_cookie_name, 'comment_author_' ) ) {
+							return false;
+						}
+					}
+					unset( $store_cookie_name, $store_cookie_value );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			// Password-post storage parity: same fail-safe posture as the
+			// read path above — a failed inspection never flips the store
+			// decision on its own. Mirrors the read-path get_post()
+			// fallback so both paths agree when post_password_required()
+			// is unavailable but get_post() is (early hook or stub).
+			try {
+				if ( function_exists( 'is_singular' ) && function_exists( 'post_password_required' ) ) {
+					if ( is_singular() && post_password_required() ) {
+						return false;
+					}
+				} elseif ( function_exists( 'is_singular' ) && function_exists( 'get_post' ) && is_singular() ) {
+					$store_post = get_post();
+					if ( $store_post instanceof \WP_Post && '' !== (string) $store_post->post_password ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			if ( empty( $this->domain ) || $this->host_mismatch || $this->path_rejected || false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {

@@ -2123,8 +2123,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * current URL minus its fragment. The resolved hop must then pass
 		 * the same-host policy ({@see is_same_site_url()}) so a same-host
 		 * response can never bounce the server into internal endpoints
-		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
-		 * crawler so the two copies of this logic cannot drift apart.
+		 * (e.g. link-local metadata). Used by Telemetry, the LiteSpeed
+		 * crawler, and the used-CSS/critical-CSS fetch paths so the copies
+		 * of this logic cannot drift apart.
 		 *
 		 * @since 2.3.0
 		 * @param string $location    Raw Location header value.
@@ -2133,6 +2134,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function resolve_same_host_redirect( string $location, string $current_url ): string|false {
 			return Url::resolve_same_host_redirect( $location, $current_url );
+		}
+
+		/**
+		 * Fetch a URL via wp_remote_get(), manually following same-site redirects.
+		 *
+		 * Facade proxy: fetch ownership lives in {@see \PerformanceOptimise\Inc\Url}.
+		 *
+		 * Single shared redirect-following fetch (audit #1785 review) so the
+		 * used-CSS/critical-CSS fetch paths share one hop policy.
+		 *
+		 * @since NEXT
+		 * @param string $url      Initial URL to fetch.
+		 * @param array  $args     wp_remote_get() args (redirection is forced to 0).
+		 * @param int    $max_hops Maximum redirect hops to follow (>= 0).
+		 * @return array|\WP_Error|false Final response array, WP_Error on transport failure, or false on redirect-guard abort.
+		 */
+		public static function fetch_same_site_with_redirects( string $url, array $args, int $max_hops = 5 ): array|\WP_Error|false {
+			return Url::fetch_same_site_with_redirects( $url, $args, $max_hops );
 		}
 
 		/**
@@ -3978,6 +3997,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
 				unset( $settings['object_cache']['password'] );
+			}
+		}
+
+		/**
+		 * Strip local paths, embedded URLs, and unsafe characters from a
+		 * telemetry scan error before returning it to a client.
+		 *
+		 * Single shared implementation (audit #1785 review): cURL/wp_remote
+		 * errors can leak paths, hostnames, or credentials. Strips ABSPATH
+		 * and WP_CONTENT_DIR, redacts embedded http(s) URLs, Windows drive
+		 * paths, and common Unix absolute paths outside the known roots,
+		 * then bounds the length so a verbose backend error cannot smuggle
+		 * unbounded detail out. `Rest::run_performance_scan()` and
+		 * `Abilities::sanitize_scan_error()` both delegate here so the two
+		 * copies cannot drift apart. Never throws.
+		 *
+		 * @param string $message Raw error message.
+		 * @return string Sanitized message (never empty).
+		 * @since NEXT
+		 */
+		public static function sanitize_scan_error( string $message ): string {
+			try {
+				if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+					$message = str_replace( array( ABSPATH, rtrim( ABSPATH, '/\\' ) ), '', $message );
+				}
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$message = str_replace( array( WP_CONTENT_DIR, rtrim( WP_CONTENT_DIR, '/\\' ) ), '', $message );
+				}
+				$message = preg_replace( '#https?://[^\s\'"]+#', '[url]', $message );
+				if ( ! is_string( $message ) ) {
+					$message = '';
+				}
+				// Defense in depth: absolute paths outside the known roots
+				// (/tmp/, /etc/, Windows drive paths, PHP extension_dir).
+				$message = preg_replace( '#[A-Za-z]:[\\\\/][^\\s\'"]*#', '[path]', $message );
+				if ( ! is_string( $message ) ) {
+					$message = '';
+				}
+				$message = preg_replace( '#/(?:tmp|etc|var|usr|home|root|opt|srv|private|proc|sys|dev|run|mnt|Volumes|Users)(?:/[A-Za-z0-9._~%+-]+)+#', '[path]', $message );
+				if ( ! is_string( $message ) ) {
+					$message = '';
+				}
+				$message = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $message ) : trim( $message );
+				// Bound the length so a verbose backend error cannot smuggle
+				// unbounded detail to the client. Multibyte-safe: substr()
+				// could split a UTF-8 sequence at the boundary and emit
+				// invalid UTF-8.
+				if ( strlen( $message ) > 500 ) {
+					$message = function_exists( 'mb_substr' ) ? mb_substr( $message, 0, 500, 'UTF-8' ) : substr( $message, 0, 500 );
+				}
+				if ( '' === $message ) {
+					$message = function_exists( '__' ) ? __( 'Performance scan failed.', 'performance-optimisation' ) : 'Performance scan failed.';
+				}
+				return $message;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return function_exists( '__' ) ? __( 'Performance scan failed.', 'performance-optimisation' ) : 'Performance scan failed.';
 			}
 		}
 

@@ -1544,13 +1544,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
 			}
 			if ( file_exists( $wppo_dir ) ) {
+				// Symlink guard (audit #1785): a wp-content/wppo symlink
+				// whose target is anywhere inside WP_CONTENT_DIR could
+				// otherwise point the recursive delete at plugins/uploads.
+				// Reject symlinks outright and require realpath() to equal
+				// the canonical directory.
+				if ( is_link( $wppo_dir ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+				}
 				$resolved_wppo = realpath( $wppo_dir );
 				if ( false === $resolved_wppo || rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/' !== $content_dir . 'wppo/' ) {
-					// Allow symlink edge-cases only when the resolved path
-					// is still inside WP_CONTENT_DIR (fail-open otherwise).
-					if ( false === $resolved_wppo || 0 !== strpos( rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/', $content_dir ) ) {
-						return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
-					}
+					return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
 				}
 			}
 
@@ -2221,7 +2225,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// SSRF protection: reject URLs that do not pass WordPress HTTP validation.
-			// wp_http_validate_url() rejects loopback, private, and reserved addresses.
+			// wp_http_validate_url() enforces URL shape (valid host, no userinfo,
+			// sane port) — not private-range rejection; same-site safety comes
+			// from the host gate below.
 			if ( ! wp_http_validate_url( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
 			}
@@ -2243,18 +2249,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Telemetry::scan( $url, 'manual', $force );
 
 			if ( is_wp_error( $result ) ) {
-				// Strip local paths plus any embedded URLs (which may leak hostnames,
-				// IPs, or credentials from Telemetry/wp_remote errors) before the
-				// message is returned to the client and persisted via the activity log.
-				$detail = str_replace( array( ABSPATH, WP_CONTENT_DIR ), '', $result->get_error_message() );
-				$detail = preg_replace( '#https?://[^\s\'"]+#', '[url]', $detail );
-				if ( ! is_string( $detail ) ) {
-					$detail = '';
-				}
-				$detail = sanitize_text_field( $detail );
-				if ( '' === $detail ) {
-					$detail = __( 'Performance scan failed.', 'performance-optimisation' );
-				}
+				// Shared scan-error cleanup via Util::sanitize_scan_error()
+				// (audit #1785 review): strip local paths plus any embedded
+				// URLs (which may leak hostnames, IPs, or credentials from
+				// Telemetry/wp_remote errors) before the message is returned
+				// to the client and persisted via the activity log.
+				$detail = Util::sanitize_scan_error( $result->get_error_message() );
 				return $this->send_response( null, false, 500, $detail );
 			}
 
@@ -2304,7 +2304,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
 
-			// Reject loopback/private addresses.
+			// URL-shape validation (valid host, no userinfo, sane port);
+			// same-site membership is enforced by the host gate above, and the
+			// fetch itself is done by Google, not this server.
 			if ( ! wp_http_validate_url( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'PageSpeed cannot scan local or non-public URLs.', 'performance-optimisation' ) );
 			}

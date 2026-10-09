@@ -1221,6 +1221,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$block = 'cart';
 			}
 
+			// Transient-bloat guard (audit #1785): reject unknown block
+			// values before any throttle write. is_fragment_throttled()
+			// keys on md5(IP|block), so random block values would mint
+			// unlimited _transient_ rows without a persistent object cache.
+			// No transient read or write happens for unknown blocks.
+			// The list is filterable so sites serving custom fragments via
+			// the `wppo_esi_block` / `wppo_esi_fragment_html` extension
+			// points keep working; attackers cannot add filters without
+			// code execution, so the bloat guard is unaffected.
+			$default_blocks = array( 'cart', 'checkout', 'account', 'adminbar', 'admin_bar', 'admin-bar', 'nonce' );
+			/**
+			 * Filter the ESI fragment block allowlist.
+			 *
+			 * @since NEXT
+			 * @param string[] $default_blocks Allowed block names (lowercase).
+			 */
+			$allowed_blocks = apply_filters( 'wppo_esi_allowed_blocks', $default_blocks );
+			if ( ! is_array( $allowed_blocks ) ) {
+				$allowed_blocks = $default_blocks;
+			} else {
+				$clean = array();
+				foreach ( $allowed_blocks as $candidate ) {
+					if ( is_string( $candidate ) || is_numeric( $candidate ) ) {
+						$key = strtolower( (string) $candidate );
+						if ( '' !== $key ) {
+							$clean[] = $key;
+						}
+					}
+				}
+				$allowed_blocks = ! empty( $clean ) ? array_values( array_unique( $clean ) ) : $default_blocks;
+			}
+			if ( ! in_array( $block, $allowed_blocks, true ) ) {
+				self::emit_private_fail_closed();
+				if ( function_exists( 'wp_send_json_error' ) ) {
+					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+				}
+				return;
+			}
+
 			// POST body first (OLS hydration client); query-string fallback
 			// for Enterprise <esi:include> server-side GET sub-requests, whose
 			// src URL carries the _wpnonce embedded by render_esi_placeholder().

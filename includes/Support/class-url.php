@@ -686,8 +686,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * current URL minus its fragment. The resolved hop must then pass
 		 * the same-host policy ({@see is_same_site_url()}) so a same-host
 		 * response can never bounce the server into internal endpoints
-		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
-		 * crawler so the two copies of this logic cannot drift apart.
+		 * (e.g. link-local metadata). Used by Telemetry, the LiteSpeed
+		 * crawler, and the used-CSS/critical-CSS fetch paths so the copies
+		 * of this logic cannot drift apart.
 		 *
 		 * @since 2.4.0
 		 * @param string $location    Raw Location header value.
@@ -751,6 +752,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 				}
 
 				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Fetch a URL via wp_remote_get(), manually following same-site redirects.
+		 *
+		 * Single shared redirect-following fetch (audit #1785 review): the
+		 * manual hop loop previously lived in three copies (used-CSS page
+		 * fetch, critical-CSS page fetch, critical-CSS stylesheet fetch)
+		 * that would drift on future hardening, so hop-count and
+		 * status-code policy live here once. Requests are issued with
+		 * 'redirection' => 0 forced (WordPress never follows implicitly);
+		 * each Location is resolved through
+		 * {@see resolve_same_host_redirect()} before the next request, so a
+		 * same-site open redirect can never bounce the server into
+		 * internal endpoints (SSRF). Only 301/302/303/307/308 are
+		 * followed; an empty/missing Location terminates the walk and
+		 * returns the last response so the caller fails on its own
+		 * non-200 check. Never throws.
+		 *
+		 * @since NEXT
+		 * @param string $url      Initial URL to fetch.
+		 * @param array  $args     wp_remote_get() args (redirection is forced to 0).
+		 * @param int    $max_hops Maximum redirect hops to follow (>= 0).
+		 * @return array|\WP_Error|false Final response array, WP_Error on transport failure, or false on redirect-guard abort (off-site hop, unresolvable hop, or hop limit exceeded).
+		 */
+		public static function fetch_same_site_with_redirects( string $url, array $args, int $max_hops = 5 ): array|\WP_Error|false {
+			try {
+				if ( ! function_exists( 'wp_remote_get' ) ) {
+					return false;
+				}
+				$args['redirection'] = 0;
+				$max_hops            = max( 0, $max_hops );
+				$current_url         = $url;
+				$hops                = 0;
+				while ( $hops <= $max_hops ) {
+					$candidate = wp_remote_get( $current_url, $args );
+					if ( is_wp_error( $candidate ) ) {
+						return $candidate;
+					}
+					if ( ! is_array( $candidate ) ) {
+						return false;
+					}
+					$code = function_exists( 'wp_remote_retrieve_response_code' ) ? (int) wp_remote_retrieve_response_code( $candidate ) : 0;
+					if ( ! in_array( $code, array( 301, 302, 303, 307, 308 ), true ) ) {
+						return $candidate;
+					}
+					$location = function_exists( 'wp_remote_retrieve_header' ) ? wp_remote_retrieve_header( $candidate, 'location' ) : null;
+					if ( ! is_string( $location ) || '' === trim( $location ) ) {
+						return $candidate;
+					}
+					$next = self::resolve_same_host_redirect( trim( $location ), $current_url );
+					if ( ! is_string( $next ) || '' === $next ) {
+						return false;
+					}
+					$current_url = $next;
+					++$hops;
+					if ( $hops > $max_hops ) {
+						return false;
+					}
+				}
+				// Hop budget exhausted without a terminal response: fail
+				// closed rather than returning a mid-chain redirect.
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

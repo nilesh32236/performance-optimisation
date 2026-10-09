@@ -3959,7 +3959,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( 0 === $page_timeout ) {
 				return false;
 			}
-			$response = wp_remote_get(
+			// Redirect-hop guard (audit #1785): WP follows redirects
+			// transparently, so a same-site open redirect could route this
+			// server-side fetch to internal/loopback services (SSRF).
+			// Hops are followed via the single shared Util helper (max 5);
+			// a false return means the guard aborted the fetch.
+			$response = Util::fetch_same_site_with_redirects(
 				$url,
 				array(
 					'timeout'             => $page_timeout,
@@ -3967,8 +3972,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// materialize fully in memory before truncation (issue #1235).
 					'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
 					'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-				)
+				),
+				5
 			);
+			if ( false === $response ) {
+				return false;
+			}
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return false;
@@ -4233,9 +4242,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Own-host fetches may legitimately target loopback/private addresses
 			// (localhost / private-IP dev sites); every other host goes through
 			// the safe API so redirect hops are re-validated against private ranges.
-			$response = self::is_same_site_host( $url )
-			? wp_remote_get( $url, $args )
-			: wp_safe_remote_get( $url, $args );
+			// Same-site hops are followed via the single shared Util helper
+			// (audit #1785): WP would otherwise follow a same-site open
+			// redirect off-site transparently (SSRF). A false return means
+			// the guard aborted the fetch.
+			if ( self::is_same_site_host( $url ) ) {
+				$response = Util::fetch_same_site_with_redirects( $url, $args, 5 );
+				if ( false === $response ) {
+					return '';
+				}
+			} else {
+				$response = wp_safe_remote_get( $url, $args );
+			}
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return '';
