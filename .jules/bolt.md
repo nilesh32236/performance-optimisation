@@ -113,3 +113,6 @@
 ## 2026-09-04 - Parallelize React Initial Data Fetching
 **Learning:** Sequential async API requests in React `useEffect` hooks cause unnecessary UI latency by delaying the resolution of independent fetch calls.
 **Action:** Use `Promise.allSettled()` to fetch independent data streams (like activity logs, server rules, and status checks) concurrently, ensuring faster component initialization without blocking on individual request failures.
+## 2024-05-24 - Remove redundant stats fetching in admin dashboard
+**Learning:** `Cache::get_cache_stats()` is highly optimized and natively caches both cache size and cached pages count. Re-implementing redundant object cache and transient reads to extract just the count independently duplicates effort and misses the optimizations built into the canonical function.
+**Action:** When a unified stats object is already fetched in the local scope, reuse its array keys instead of trying to selectively fetch specific properties again from the cache/database.

@@ -3184,6 +3184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), $asset_data['version'], 'all' );
+			wp_style_add_data( 'performance-optimisation-style', 'rtl', 'replace' );
 			wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
 
 			$this->add_available_post_types_to_options();
@@ -3218,33 +3219,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Disk-safe slice (issue #1428): cached-page file count for the
-			// dashboard size/count surface. Fail-open to 0; multisite-safe
-			// via Util::transient_key().
-			$cache_count = 0;
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_stats' ) ) {
-					if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
-						$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', $cache_salt );
-						if ( is_array( $cached_stats ) && isset( $cached_stats['count'] ) ) {
-							$cache_count = (int) $cached_stats['count'];
-						} else {
-							$stats       = Cache::get_cache_stats();
-							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
-						}
-					} else {
-						$cached_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
-						if ( false !== $cached_count && is_numeric( $cached_count ) ) {
-							$cache_count = (int) $cached_count;
-						} else {
-							$stats       = Cache::get_cache_stats();
-							$cache_count = (int) ( $stats['cached_pages'] ?? 0 );
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$cache_count = 0;
-			}
+			// dashboard size/count surface. Reuses unified stats to avoid
+			// redundant cache reads or filesystem traversals.
+			$cache_count = (int) ( $cache_stats['cached_pages'] ?? 0 );
 
 			// Clone options and redact sensitive keys before exposing to the client.
 			$safe_options = $this->get_options();
@@ -4925,7 +4902,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Regex-per-line when wrapped in valid delimiters; invalid regex fails open to substring.
 					if ( strlen( $line ) > 2 && '#' === $line[0] && false !== strrpos( $line, '#', 1 ) ) {
 						$valid = false;
-						set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex validation.
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from user-supplied regex validation.
+						set_error_handler(
+							static function (): bool {
+								return true;
+							}
+						);
 						try {
 							$valid = false !== preg_match( $line, '' );
 						} catch ( \Throwable $e ) {
@@ -4934,7 +4916,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 						restore_error_handler();
 						if ( $valid ) {
-							set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex matching.
+							// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress warnings from user-supplied regex matching.
+							set_error_handler(
+								static function (): bool {
+									return true;
+								}
+							);
 							try {
 								$matched = preg_match( $line . 'i', $request_uri );
 							} catch ( \Throwable $e ) {
