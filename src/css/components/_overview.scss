@@ -101,8 +101,14 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	justify-content: flex-start;
-	text-align: start;
+}
+
+// In-sentence links reset to inline display to avoid inflating line heights
+.wppo-overview__stale .wppo-button--link,
+.wppo-overview__action-hint .wppo-button--link {
+	display: inline;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
 // Deliberately NO focus rule here.
@@ -174,13 +180,6 @@
 	.wppo-overview__card:nth-of-type( 2 ) {
 		grid-column: 2;
 		grid-row: 1;
-	}
-}
-
-// Touch targets on the action links.
-@media ( max-width: 782px ) {
-	.wppo-overview__links .wppo-button--link {
-		min-height: 44px;
 	}
 }
 
