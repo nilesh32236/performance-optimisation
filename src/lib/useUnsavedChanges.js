@@ -86,13 +86,10 @@ const useUnsavedChanges = ( settings, baseline ) => {
 	// Audit #1420: guard a missing provider — destructuring undefined
 	// crashes every effect in every form using this hook.
 	const unsavedContext = useContext( UnsavedChangesContext );
-	const setIsDirty = useMemo(
-		() =>
-			unsavedContext && typeof unsavedContext.setIsDirty === 'function'
-				? unsavedContext.setIsDirty
-				: () => {},
-		[ unsavedContext ]
-	);
+	const setIsDirty =
+		unsavedContext && typeof unsavedContext.setIsDirty === 'function'
+			? unsavedContext.setIsDirty
+			: () => {};
 
 	const baselineKey = useMemo(
 		() => stableStringify( baseline ),
