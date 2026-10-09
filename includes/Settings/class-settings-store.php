@@ -171,6 +171,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 		}
 
 		/**
+		 * Sanitize a single CDN mapping entry.
+		 *
+		 * @since NEXT
+		 * @param array $entry Raw CDN mapping entry.
+		 * @return array|null Sanitized entry or null if invalid.
+		 */
+		private static function sanitize_cdn_mapping_entry( array $entry ): ?array {
+			$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
+			if ( '' === $cdn_url ) {
+				return null;
+			}
+			$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
+			$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
+			$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
+			if ( '' !== $ori_dir ) {
+				$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+				$valid = array();
+				foreach ( $parts as $p ) {
+					if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
+						$valid[] = $p;
+					}
+				}
+				$ori_dir = implode( '|', $valid );
+			}
+			$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
+			$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
+			if ( '' !== $include_filetypes ) {
+				$include_filetypes = strtolower( $include_filetypes );
+				$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
+				$parts             = array_filter( $parts );
+				$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
+				$include_filetypes = implode( ',', $parts );
+			}
+			$data = array(
+				'cdn_url'           => $cdn_url,
+				'include_dirs'      => $include_dirs,
+				'include_filetypes' => $include_filetypes,
+			);
+			if ( '' !== $ori ) {
+				$data['ori'] = $ori;
+			}
+			if ( '' !== $ori_dir ) {
+				$data['ori_dir'] = $ori_dir;
+			}
+			if ( '' !== $cdn_attr ) {
+				$data['cdn_attr'] = $cdn_attr;
+			}
+			if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
+				$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
+				if ( ! empty( $cdns ) ) {
+					$data['cdn_urls'] = $cdns;
+				}
+			} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
+				$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
+				if ( ! empty( $cdns ) ) {
+					$data['cdn_urls'] = $cdns;
+				}
+			}
+			/**
+			 * Filter single CDN mapping entry post-sanitize.
+			 *
+			 * @since 2.0.0
+			 * @param array $data Sanitized entry.
+			 */
+			return (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
+		}
+
+		/**
 		 * Sanitize the one-to-many CDN mapping list.
 		 *
 		 * Per-tab sanitizer extracted from {@see sanitize_settings_recursively()}.
@@ -190,66 +258,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				if ( ! is_array( $entry ) || $count >= $max ) {
 					continue;
 				}
-				$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
-				if ( '' === $cdn_url ) {
-					continue;
+				$sanitized_entry = self::sanitize_cdn_mapping_entry( $entry );
+				if ( null !== $sanitized_entry ) {
+					$mapping[] = $sanitized_entry;
+					++$count;
 				}
-				$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
-				$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
-				$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
-				if ( '' !== $ori_dir ) {
-					$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
-					$valid = array();
-					foreach ( $parts as $p ) {
-						if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
-							$valid[] = $p;
-						}
-					}
-					$ori_dir = implode( '|', $valid );
-				}
-				$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
-				$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
-				if ( '' !== $include_filetypes ) {
-					$include_filetypes = strtolower( $include_filetypes );
-					$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
-					$parts             = array_filter( $parts );
-					$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
-					$include_filetypes = implode( ',', $parts );
-				}
-				$data = array(
-					'cdn_url'           => $cdn_url,
-					'include_dirs'      => $include_dirs,
-					'include_filetypes' => $include_filetypes,
-				);
-				if ( '' !== $ori ) {
-					$data['ori'] = $ori;
-				}
-				if ( '' !== $ori_dir ) {
-					$data['ori_dir'] = $ori_dir;
-				}
-				if ( '' !== $cdn_attr ) {
-					$data['cdn_attr'] = $cdn_attr;
-				}
-				if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
-					$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
-					if ( ! empty( $cdns ) ) {
-						$data['cdn_urls'] = $cdns;
-					}
-				}
-				/**
-				 * Filter single CDN mapping entry post-sanitize.
-				 *
-				 * @since 2.0.0
-				 * @param array $data Sanitized entry.
-				 */
-				$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
-				$mapping[] = $data;
-				++$count;
 			}
 			/**
 			 * Filter CDN mapping array.
@@ -972,24 +985,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'                       => false,
-					'use_wp_ai_client'              => false,
-					'field_lcp_min_samples'         => 20,
-					'dismissed_suggestions'         => array(),
-					'anomaly_cooldown_days'         => 7,
-					'anomaly_min_samples'           => 10,
-					'css_refresh_on_lcp_regression' => false,
-					'css_refresh_cooldown_days'     => 7,
-					'speculation_autotune_enabled'  => false,
-					'speculation_min_samples'       => 20,
-					'speculation_max_urls'          => 5,
-					'anomaly_tolerance_pct'         => 5.0,
-					'anomaly_tolerance_abs'         => 0.01,
-					'anomaly_persistence_windows'   => 3,
-					'anomaly_p75_min_samples'       => 10,
-					'anomaly_band_window'           => 10,
-					'anomaly_recovery_days'         => 3,
-					'deploy_notes'                  => array(),
+					'enabled'                              => false,
+					'use_wp_ai_client'                     => false,
+					'field_lcp_min_samples'                => 20,
+					'dismissed_suggestions'                => array(),
+					'anomaly_cooldown_days'                => 7,
+					'anomaly_min_samples'                  => 10,
+					'css_refresh_on_lcp_regression'        => false,
+					'css_refresh_cooldown_days'            => 7,
+					'css_refresh_require_no_recent_deploy' => false,
+					'speculation_autotune_enabled'         => false,
+					'speculation_min_samples'              => 20,
+					'speculation_max_urls'                 => 5,
+					'anomaly_tolerance_pct'                => 5.0,
+					'anomaly_tolerance_abs'                => 0.01,
+					'anomaly_persistence_windows'          => 3,
+					'anomaly_p75_min_samples'              => 10,
+					'anomaly_band_window'                  => 10,
+					'anomaly_recovery_days'                => 3,
+					'deploy_notes'                         => array(),
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -1237,6 +1251,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			}
 			if ( ! isset( $options['ai_adaptive']['css_refresh_cooldown_days'] ) ) {
 				$options['ai_adaptive']['css_refresh_cooldown_days'] = 7;
+			}
+			// Deploy-correlation soft gate (issue #1704, default permissive).
+			if ( ! isset( $options['ai_adaptive']['css_refresh_require_no_recent_deploy'] ) ) {
+				$options['ai_adaptive']['css_refresh_require_no_recent_deploy'] = false;
 			}
 			// RUM-segmented speculation auto-tune keys (issue #1425).
 			if ( ! isset( $options['ai_adaptive']['speculation_autotune_enabled'] ) ) {

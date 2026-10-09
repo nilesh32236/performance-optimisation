@@ -173,8 +173,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 		 * `shop/basket` and subdirectory / multisite prefixes such as
 		 * `/subsite/cart`; intentionally fail-safe — a non-Woo page like
 		 * `/blog/checkout/` is also treated as dynamic rather than risk
-		 * caching checkout content) plus Store API routes. Fail-open: any
-		 * detection failure returns true (treated as dynamic, never fatal).
+		 * caching checkout content) plus Store API routes plus core Woo
+		 * order/account endpoint slugs (`order-pay`, `view-order`,
+		 * `downloads` (plus singular `download`, fail-safe),
+		 * `add-payment-method`, issue #1705). Endpoint slugs
+		 * are matched fail-safe as anywhere-segments: over-exclusion ships
+		 * as an audit list with manual toggles (safe mode + the
+		 * `wppo_woo_cacheable` override) rather than a silent stale-cart
+		 * breakage. Fail-open: any detection failure returns true
+		 * (treated as dynamic, never fatal).
 		 *
 		 * @since 2.0.0
 		 * @param string $path Request path (leading slash optional).
@@ -188,6 +195,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 				$normalized = strtolower( trim( (string) $path, '/' ) );
 				if ( '' === $normalized ) {
 					return false;
+				}
+				// Core Woo endpoint slugs (issue #1705): order-pay /
+				// view-order / downloads / add-payment-method URLs are
+				// per-order dynamic even when the page slug itself is not in
+				// the excluded-paths list (e.g. /checkout/order-pay/123/).
+				foreach ( array( 'order-pay', 'view-order', 'download', 'downloads', 'add-payment-method' ) as $endpoint ) {
+					if ( (bool) preg_match( '#/(?:' . preg_quote( $endpoint, '#' ) . ')(/|$)#i', '/' . $normalized ) ) {
+						return true;
+					}
 				}
 				foreach ( self::get_woo_excluded_paths() as $excluded ) {
 					$candidate = strtolower( trim( (string) $excluded, '/' ) );

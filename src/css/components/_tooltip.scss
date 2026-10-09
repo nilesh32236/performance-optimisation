@@ -54,6 +54,18 @@
 	border-radius: var(--wppo-radius-sm);
 	font-size: 0.75rem;
 	line-height: 1.4;
+	// `border-box`, not the default `content-box`. Both the width and the
+	// max-width above are written against this box, but the default applied them
+	// to the **content** only, so `200px` plus `padding: 8px 12px` laid the
+	// element out at **224px** — 12% wider than the rule says, and the first
+	// thing that stopped it fitting beside a right-edge trigger.
+	//
+	// This half was independently verified safe: the `::after` caret's
+	// `left: 50%; margin-left: -5px` resolves against the padding box and so
+	// stays centred under either sizing, no other rule assumes content-box here,
+	// RTLCSS mirrors it correctly, and measured heights (32.8px / 83.2px) show
+	// no vertical overflow.
+	box-sizing: border-box;
 	width: 200px;
 	max-width: min(200px, calc(100vw - 32px));
 	text-align: center;
@@ -62,7 +74,7 @@
 	visibility: hidden;
 	transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 	pointer-events: none;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	box-shadow: var(--wppo-shadow, 0 4px 12px -2px rgb(0 0 0 / 0.09), 0 2px 8px -2px rgb(0 0 0 / 0.06));
 	overflow-wrap: break-word;
 	word-break: normal;
 

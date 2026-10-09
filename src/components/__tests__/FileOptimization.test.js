@@ -23,6 +23,10 @@ import FileOptimization, {
 	isSafePresetActive,
 	getServerPresetBundle,
 	resolvePresetBundle,
+	RISKY_TOGGLE_NAMES,
+	snapshotRiskyToggles,
+	newlyEnabledRiskyToggles,
+	getRiskyToggleCopy,
 } from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
@@ -259,6 +263,10 @@ describe( 'FileOptimization Component', () => {
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		// Issue #1702: enabling a risky toggle opens the confirm gate first.
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 		expect( screen.getByText( 'Safelist Selectors' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'Regenerate Used CSS' ) ).toBeInTheDocument();
 	} );
@@ -313,9 +321,12 @@ describe( 'FileOptimization Component', () => {
 			screen.queryByText( 'Safelist Selectors' )
 		).not.toBeInTheDocument();
 
-		// Toggle Remove Unused CSS on.
+		// Toggle Remove Unused CSS on (confirming the aggressive-toggle gate).
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 
 		// Now safelist and regenerate button should appear.
 		expect( screen.getByText( 'Safelist Selectors' ) ).toBeInTheDocument();
@@ -367,6 +378,9 @@ describe( 'FileOptimization Component', () => {
 
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 
 		const regenerateButton = screen.getByText( 'Regenerate Used CSS' );
 		fireEvent.click( regenerateButton );
@@ -397,6 +411,9 @@ describe( 'FileOptimization Component', () => {
 
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 
 		await waitFor( () => {
 			expect(
@@ -418,6 +435,9 @@ describe( 'FileOptimization Component', () => {
 
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 
 		const purgeButton = await screen.findByText(
 			'Purge Page Cache + Used CSS'
@@ -445,6 +465,9 @@ describe( 'FileOptimization Component', () => {
 
 		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
 		fireEvent.click( switchField );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Enable Anyway/i } )
+		);
 
 		const regenerateButton = screen.getByText( 'Regenerate Used CSS' );
 		fireEvent.click( regenerateButton );
@@ -2706,6 +2729,197 @@ describe( 'FileOptimization Component', () => {
 				} );
 			} );
 			expect( onCcssRefresh ).toHaveBeenCalled();
+		} );
+	} );
+
+	describe( 'aggressive toggles: risk labels, confirm gate, one-click revert (issue #1702)', () => {
+		it( 'exposes the three risky-toggle names with snapshot/diff helpers', () => {
+			expect( [ ...RISKY_TOGGLE_NAMES ].sort() ).toEqual(
+				[ 'deferJS', 'delayJS', 'removeUnusedCSS' ].sort()
+			);
+			expect(
+				snapshotRiskyToggles( {
+					delayJS: true,
+					deferJS: 0,
+					removeUnusedCSS: 'yes',
+					minifyJS: true,
+				} )
+			).toEqual( {
+				delayJS: true,
+				deferJS: false,
+				removeUnusedCSS: true,
+			} );
+			expect(
+				newlyEnabledRiskyToggles(
+					{ delayJS: true, deferJS: false, removeUnusedCSS: true },
+					{ delayJS: false, deferJS: false, removeUnusedCSS: true }
+				)
+			).toEqual( [ 'delayJS' ] );
+			expect(
+				newlyEnabledRiskyToggles(
+					{ delayJS: false },
+					{ delayJS: false }
+				)
+			).toEqual( [] );
+		} );
+
+		it( 'provides per-toggle risk copy for tooltips and dialogs', () => {
+			for ( const name of RISKY_TOGGLE_NAMES ) {
+				const copy = getRiskyToggleCopy( name );
+				expect( copy.tooltip ).toMatch( /aggressive/i );
+				expect( copy.dialogTitle ).toBeTruthy();
+				expect( copy.dialogMessage ).toBeTruthy();
+			}
+			expect( getRiskyToggleCopy( 'delayJS' ).dialogTitle ).toMatch(
+				/Delay JavaScript/
+			);
+			expect( getRiskyToggleCopy( 'deferJS' ).dialogTitle ).toMatch(
+				/Defer JavaScript/
+			);
+			expect(
+				getRiskyToggleCopy( 'removeUnusedCSS' ).dialogTitle
+			).toMatch( /Remove Unused CSS/ );
+		} );
+
+		it( 'renders an Aggressive badge and risk tooltip on every risky toggle', () => {
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+			// Assets tab: Remove Unused CSS badge + tooltip copy.
+			expect( screen.getAllByText( 'Aggressive' ) ).toHaveLength( 1 );
+			expect(
+				screen.getByText( /removes page-level unused CSS/i )
+			).toBeInTheDocument();
+			// Scripts tab: Delay + Defer badges + tooltip copy.
+			fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+			expect( screen.getAllByText( 'Aggressive' ) ).toHaveLength( 2 );
+			expect(
+				screen.getByText( /delays scripts until user interaction/i )
+			).toBeInTheDocument();
+			expect(
+				screen.getByText( /defers scripts until the page renders/i )
+			).toBeInTheDocument();
+		} );
+
+		it( 'gates Delay JS enable behind a confirm dialog with a working cancel path', () => {
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+			fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+			const delaySwitch = screen.getByLabelText(
+				/Delay JavaScript Execution/i
+			);
+			expect( delaySwitch ).not.toBeChecked();
+
+			// Off->on opens the confirm dialog without staging the change.
+			fireEvent.click( delaySwitch );
+			expect(
+				screen.getByText( 'Enable Delay JavaScript?' )
+			).toBeInTheDocument();
+			expect( delaySwitch ).not.toBeChecked();
+
+			// Cancel closes the dialog and preserves the prior state.
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Cancel/i } )
+			);
+			expect(
+				screen.queryByText( 'Enable Delay JavaScript?' )
+			).not.toBeInTheDocument();
+			expect( delaySwitch ).not.toBeChecked();
+			// The gate itself performs no save (mount-time reads like
+			// sandbox_preview are unrelated).
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'update_settings',
+				expect.anything()
+			);
+		} );
+
+		it( 'passes disabling a risky toggle straight through without a dialog', () => {
+			render(
+				<FileOptimization
+					options={ { delayJS: true } }
+					serverRules={ {} }
+				/>
+			);
+			fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+			const delaySwitch = screen.getByLabelText(
+				/Delay JavaScript Execution/i
+			);
+			expect( delaySwitch ).toBeChecked();
+			fireEvent.click( delaySwitch );
+			expect( delaySwitch ).not.toBeChecked();
+			expect(
+				screen.queryByText( 'Enable Delay JavaScript?' )
+			).not.toBeInTheDocument();
+		} );
+
+		it( 'offers a one-click revert in the success notice that restores prior values', async () => {
+			apiCall
+				.mockResolvedValueOnce( {
+					success: true,
+					message: 'Settings updated successfully.',
+				} )
+				.mockResolvedValueOnce( {
+					success: true,
+					message: 'Aggressive setting reverted.',
+				} );
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+			fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+			// Confirm the gate: the toggle stages on.
+			const delaySwitch = screen.getByLabelText(
+				/Delay JavaScript Execution/i
+			);
+			fireEvent.click( delaySwitch );
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Enable Anyway/i } )
+			);
+			expect( delaySwitch ).toBeChecked();
+
+			// Save: the success notice carries the revert action.
+			await act( async () => {
+				fireEvent.click(
+					screen.getByRole( 'button', { name: /Save Settings/i } )
+				);
+			} );
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith(
+					'update_settings',
+					expect.objectContaining( { tab: 'file_optimisation' } )
+				);
+			} );
+			const revertButtons = screen.getAllByRole( 'button', {
+				name: 'Revert',
+			} );
+			expect( revertButtons.length ).toBeGreaterThan( 0 );
+
+			// Revert restores the prior toggle state via update_settings.
+			const updateCallsBefore = apiCall.mock.calls.filter(
+				( call ) => call[ 0 ] === 'update_settings'
+			).length;
+			await act( async () => {
+				fireEvent.click( revertButtons[ 0 ] );
+			} );
+			await waitFor( () => {
+				const updateCalls = apiCall.mock.calls.filter(
+					( call ) => call[ 0 ] === 'update_settings'
+				);
+				expect( updateCalls.length ).toBe( updateCallsBefore + 1 );
+			} );
+			const updateCalls = apiCall.mock.calls.filter(
+				( call ) => call[ 0 ] === 'update_settings'
+			);
+			const revertCall = updateCalls[ updateCalls.length - 1 ];
+			expect( revertCall[ 1 ] ).toEqual(
+				expect.objectContaining( { tab: 'file_optimisation' } )
+			);
+			expect( revertCall[ 1 ].settings.delayJS ).toBe( false );
+			await waitFor( () => {
+				expect(
+					screen.getByLabelText( /Delay JavaScript Execution/i )
+				).not.toBeChecked();
+			} );
+			await waitFor( () => {
+				expect(
+					screen.getAllByText( 'Aggressive setting reverted.' ).length
+				).toBeGreaterThan( 0 );
+			} );
 		} );
 	} );
 } );

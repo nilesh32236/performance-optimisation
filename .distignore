@@ -82,3 +82,15 @@
 # Tracked internal agent artifacts that must not reach the public ZIP.
 /wppo-agent-rules.md
 /empty_commit.sh
+
+# Added 2026-10-02. These shipped in a release candidate package.
+#
+# .ux-shots/ holds full-page PNG screenshots of the admin UI on a LIVE site -
+# unredacted, showing real settings, real paths and real site content. They
+# were never tracked in git, but nothing excluded them from the release
+# package either, so build-release.sh's rsync staged them and the zip carried
+# them to every download. Measured at 3.1 MB across ~7 files.
+#
+# coverage/ is a test artifact of the same kind: local, large, never shipped.
+/.ux-shots/
+/coverage/

@@ -12,18 +12,27 @@
  * ```js
  * const { notice, notify, dismiss } = useNotice();
  * notify( { type: 'success', message: 'Saved.', durationMs: 5000 } );
+ * // With a one-click action rendered by NoticeBanner's `action` slot:
+ * notify( { type: 'success', message: 'Saved.', action: { label: 'Revert', onClick } } );
  * ```
  *
  * @since 1.10.0
+ * @since NEXT `notify()` accepts an optional `action` object
+ *              (`{ label, onClick, disabled?, isBusy? }`) stored on the notice
+ *              and rendered by `NoticeBanner`.
  * @return {{ notice: ?Object, notify: Function, dismiss: Function }}
- *   - `notice`:  `{ type, message }` or `null`.
- *   - `notify`:  `( { type, message, durationMs? } )` — shows a notice and
+ *   - `notice`:  `{ type, message, action? }` or `null`.
+ *   - `notify`:  `( { type, message, durationMs?, action? } )` — shows a notice and
  *                optionally auto-dismisses it after `durationMs`.
  *   - `dismiss`: `() => void` — clears the notice and any pending timer.
  */
 import { useState, useCallback, useEffect, useRef } from '@wordpress/element';
+import { publish as publishNotice } from './noticeBus';
 
 const useNotice = () => {
+	// Published to the app-level message region so the outcome is visible
+	// wherever this card sits. The inline banner still renders for context.
+	const publish = useCallback( ( payload ) => publishNotice( payload ), [] );
 	const [ notice, setNotice ] = useState( null );
 	const timerRef = useRef( null );
 
@@ -49,11 +58,19 @@ const useNotice = () => {
 	 * @param {string} opts.type         'error' | 'success' | 'warning' | 'info'.
 	 * @param {string} opts.message      Notice text.
 	 * @param {number} [opts.durationMs] Optional auto-dismiss delay in milliseconds.
+	 * @param {Object} [opts.action]     Optional one-click action
+	 *                                   `{ label, onClick, disabled?, isBusy? }`
+	 *                                   rendered by `NoticeBanner`.
 	 */
 	const notify = useCallback(
-		( { type, message, durationMs } ) => {
+		( { type, message, durationMs, action } ) => {
 			clearTimer();
-			setNotice( { type, message } );
+			// Keep master's noticeBus publish (it landed after this branch was
+			// cut) AND carry the optional one-click action through both the
+			// local state and the bus payload.
+			const next = { type, message, ...( action ? { action } : {} ) };
+			setNotice( next );
+			publish( next );
 			if ( durationMs ) {
 				timerRef.current = setTimeout( () => {
 					timerRef.current = null;
@@ -61,7 +78,7 @@ const useNotice = () => {
 				}, durationMs );
 			}
 		},
-		[ clearTimer ]
+		[ clearTimer, publish ]
 	);
 
 	useEffect( () => {

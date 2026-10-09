@@ -256,6 +256,39 @@
 		align-items: center;
 		position: relative;
 		z-index: 1;
+
+		// The action is a flex item with the default `min-width: auto`, and
+		// `.wppo-button` sets `white-space: nowrap`. Together those two mean the
+		// button's min-content **is** its whole label, so it cannot shrink — and
+		// `.wppo-stat-item` is `overflow: hidden`, so the excess is silently cut.
+		//
+		// Measured on All diagnostics at 1280px: "Manage ->" painted to x=671
+		// inside a card that ends at x=648, losing 11-23px of the label depending
+		// on what else was on the page. No scrollbar, no indication — the text
+		// simply stops.
+		//
+		// `nowrap` is the real blocker: `overflow-wrap: anywhere` was already on
+		// the button and is inert against it, the same trap as the
+		// `min-width: 0`-only half-fix found in round 34.
+		//
+		// An independent review measured the first version of this fix
+		// (`min-width: 0` + `white-space: normal`) and it was **worse at 1024px**:
+		// the grid is still four columns there, so cards are 109px and footers
+		// 63px, and the two labels were shredded into 39x98px and 36x112px
+		// slivers with the card growing 21px. The reviewer's criterion was
+		// "0 clipped elements", which that version satisfied by shredding rather
+		// than by laying out.
+		//
+		// Wrapping the footer and holding each label at its natural width fixes
+		// it at **every** width with no height change: at 1024 the two buttons
+		// stack, 99.8x30 and 85.5x30, card height unchanged.
+		flex-wrap: wrap;
+
+		> .wppo-button {
+			// Natural width, so a short label is never squeezed; the *row*
+			// wraps instead.
+			min-width: max-content;
+		}
 	}
 
 	.wppo-stat-link {

@@ -482,13 +482,17 @@ const ObjectCache = ( { options = {} } ) => {
 		}
 		if ( ! cacheStatus.enabled ) {
 			return {
-				level: 'error',
+				// `poor`, not `error`: the badge vocabulary is
+				// good / warning / poor, and `--success` / `--error` have no
+				// rules in the stylesheet, so "Connected" and "Disconnected"
+				// rendered identically apart from their glyph and word.
+				level: 'poor',
 				text: `○ ${ __( 'Disconnected', 'performance-optimisation' ) }`,
 			};
 		}
 		if ( cacheStatus.redis_reachable ) {
 			return {
-				level: 'success',
+				level: 'good',
 				text: `● ${ __( 'Connected', 'performance-optimisation' ) }`,
 			};
 		}

@@ -82,8 +82,8 @@ class RestCacheSettingsParityTest extends \PHPUnit\Framework\TestCase {
 	public function test_route_table_preserves_slugs_methods_and_callback_targets(): void {
 		$routes = $this->get_routes();
 
-		// Same route count as the pre-extraction registrar (RestTest pins 47).
-		$this->assertCount( 47, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Same route count as the pre-extraction registrar (RestTest pins 48).
+		$this->assertCount( 48, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		$moved = array(
 			'clear_cache'          => array( Rest_Cache::class, 'clear_cache', 'POST' ),

@@ -771,12 +771,29 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			</div>
 
 			<div className="wppo-mt-40">
-				<h4 className="wppo-section-title">
+				{ /* An `<h4>`, not an `<h3>`: this is a DOM **sibling** of the
+				     two `<h3>` cards above, so it is an outline child of
+				     whichever precedes it. The ten type headings below were
+				     also `<h3>`, so the outline ran
+				     `H2 -> H3 -> H3 -> H4 -> H3…` — a level skip back *up*,
+				     and ten peer sections where there is one list.
+
+				     Correcting it to a peer `<h3>` gives
+				     `H2 -> H3 -> H3 -> H3 -> H4 x10`: no skips, and every
+				     type name **keeps its navigation stop**. An earlier
+				     attempt of this fix turned the ten into `<p>` elements,
+				     which removed ten named heading nodes and replaced them
+				     with ten *anonymous* paragraphs - verified through
+				     Chrome's accessibility tree - while the "one list" never
+				     reached the tree at all, because nothing emitted a list
+				     role. That made the screen worse on exactly the axis it
+				     was fixing. */ }
+				<h3 className="wppo-section-title">
 					{ __(
 						'Granular Cleanup Options',
 						'performance-optimisation'
 					) }
-				</h4>
+				</h3>
 				<div className="wppo-grid-2-col wppo-mt-20">
 					{ CLEANUP_TYPES.map( ( item ) => {
 						const risk = RISK_BADGE_MAP[ item.key ];
@@ -800,6 +817,18 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									'Clean',
 									'performance-optimisation'
 								) }
+								// Ten rows, ten buttons, and without this every
+								// accessible name is the bare string "Clean" — a
+								// screen-reader user hears ten identical actions and
+								// has no way to tell which row each belongs to.
+								aria-label={ sprintf(
+									// translators: %s: the kind of database cleanup, e.g. "Post Revisions".
+									__(
+										'Clean %s',
+										'performance-optimisation'
+									),
+									item.label
+								) }
 								loadingLabel={ __(
 									'Cleaning',
 									'performance-optimisation'
@@ -810,6 +839,8 @@ const DatabaseCleanup = ( { options = {} } ) => {
 							<FeatureCard
 								key={ item.key }
 								title={ item.label }
+								// A level below the section, not a peer of it.
+								titleAs="h4"
 								actions={
 									<div className="wppo-cleanup-row__actions">
 										{ risk && (

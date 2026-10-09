@@ -631,6 +631,13 @@
 		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--wppo-text-main);
+		// The same URL, the same mechanism, the element **beside** the value.
+		// It is `flex: 1 1 0%` in the header row and inherits
+		// `overflow-wrap: break-word` from `.wppo-main`, which does not affect
+		// min-content sizing — so at 320px its ink reached 326.8px against a
+		// 320px viewport, 6.8px cut by `.wppo-feature-card`. An independent
+		// review found it by checking what else the card renders.
+		overflow-wrap: anywhere;
 	}
 
 	&__body {
@@ -645,8 +652,28 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--wppo-text-muted);
+		// This value is frequently a URL, and a long one is 329px of near
+		// unbreakable token. Measured on the All-diagnostics screen at 360px: it
+		// laid out at 329px inside a 227px body and ran 36px past the viewport,
+		// clipped by the container with no way to read it.
+		//
+		// `anywhere`, not `break-word`. `.wppo-main` (`_container.scss`) already
+		// sets `overflow-wrap: break-word`, and that is what the element inherits
+		// today — and it does **not** affect min-content sizing, so the value is
+		// held open at its longest token. `anywhere` is defined precisely to make
+		// min-content shrink, which is what actually closes the gap.
+		//
+		// An independent review measured four combinations on one page load at
+		// 320/360/390/414: `anywhere` alone reproduces the shipped geometry
+		// byte-for-byte, and `min-width: 0` alone is a broken half-fix — the box
+		// sits inside the viewport while the text still paints 76px past it, an
+		// element-rect check scoring that as a pass. So `min-width: 0` was
+		// **removed**: it contributed nothing, and the comment that justified it
+		// claimed a flex item is held at its longest token "regardless of what any
+		// wrapping property says", which is the exact behaviour `anywhere`
+		// exists to remove.
+		overflow-wrap: anywhere;
 	}
-
 	&__passing {
 		font-size: 0.8rem;
 		font-weight: 600;
@@ -815,6 +842,13 @@
 		padding: 10px 12px;
 		color: var(--wppo-text-main);
 		font-weight: 600;
+	}
+
+	&__description {
+		flex: 1;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--wppo-text-main);
 	}
 
 	&__status {

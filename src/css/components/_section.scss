@@ -34,7 +34,17 @@
 	gap: 4px;
 }
 
-.wppo-section__title {
+// Scoped by the mount id, not just the class.
+//
+// WordPress core ships an `h1` rule keyed to an **id**, and an id beats any
+// number of classes. So the declared weight and size were both being discarded
+// on every screen: `.wppo-section__title` declares `600` / `1.5rem` and the
+// heading computed **400 / 23px** at a 16px root. An independent review measured
+// the override on all eight screens.
+//
+// `#performance-optimisation` is this plugin's own mount node, so this wins on
+// specificity without `!important`.
+#performance-optimisation .wppo-section__title {
 	margin: 0;
 	font-size: 1.5rem;
 	font-weight: 600;
@@ -72,7 +82,7 @@
 	padding: 8px 12px;
 	border: 1px solid transparent;
 	border-block-end: 2px solid transparent;
-	border-radius: var(--wppo-radius-sm, 8px) var(--wppo-radius-sm, 8px) 0 0;
+	border-radius: var(--wppo-radius-sm, 6px) var(--wppo-radius-sm, 6px) 0 0;
 	background: transparent;
 	color: var(--wppo-text-muted, #475569);
 	font-size: 14px;
@@ -168,7 +178,7 @@
 	// false. Keeping the comment accurate matters more than keeping the rule:
 	// a comment that says a working base rule is unreliable invites redundant
 	// overrides in the next place someone cannot find their focus ring.
-	border-radius: var(--wppo-radius-sm, 8px);
+	border-radius: var(--wppo-radius-sm, 6px);
 }
 
 @media ( prefers-reduced-motion: reduce ) {
@@ -186,5 +196,127 @@
 	.wppo-subnav__tab {
 		min-height: 44px;
 		padding-inline: 12px;
+	}
+}
+
+// A titled, foldable group of panels.
+//
+// The All-diagnostics screen rendered 13 panels in one flat column — a measured
+// 9,053px, ten screens, 22 headings. This gives it the hierarchy it never had.
+// The toggle is a real button with a full-width target; the panel keeps a small
+// left border so the fold is legible without a heavy rule.
+.wppo-panel-group {
+	margin-bottom: 24px;
+
+	&--spaced {
+		margin-top: 20px;
+	}
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		// 44px, not the ~30px a bare text button would be: this is the
+		// primary control for a third of the screen's content.
+		min-height: 44px;
+		padding: 10px 14px;
+		margin-bottom: 12px;
+		text-align: left;
+		cursor: pointer;
+		background: var(--wppo-bg-card, #fff);
+		border: 1px solid var(--wppo-border, #e2e8f0);
+		border-radius: var(--wppo-radius-sm, 4px);
+
+		&:hover {
+			border-color: var(--wppo-border-hover, #cbd5e1);
+			background: var(--wppo-switch-hover, #f1f5f9);
+		}
+
+		// The one focus treatment for the whole plugin.
+		&:focus-visible {
+			outline: solid 2px var(--wppo-primary, #2271b1);
+			outline-offset: 2px;
+		}
+	}
+
+	&__heading {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		// A flex item must be allowed to shrink, or the long summary sets the
+		// floor and the button overflows its card at 360px.
+		min-width: 0;
+	}
+
+	&__title {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--wppo-text-main, #0f172a);
+	}
+
+	&__summary {
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--wppo-text-muted, #475569);
+		overflow-wrap: anywhere;
+	}
+
+	// The HTML `hidden` attribute is `display: none` from the UA stylesheet, and
+	// **any author `display` beats it**. `.wppo-stacked-cards` sets one, so
+	// folding the group did nothing at all: the page measured 9,306px with the
+	// "Advanced tuning" group reported collapsed. This restores the attribute's
+	// meaning, scoped to this component.
+	&__panel[hidden] {
+		display: none;
+	}
+
+	&__chevron {
+		flex-shrink: 0;
+		font-size: 0.75rem;
+		color: var(--wppo-text-muted, #475569);
+	}
+}
+
+// On the All-diagnostics screen an action is **contextual**, not primary.
+//
+// Measured across the eight screens, that screen carried **12**
+// `wppo-button--primary` at once — "Purge All Cache", "Apply Balanced", "Save
+// Page Cache Settings", "Save CDN Purge", "Save Settings", "Run Scan", "Run
+// PageSpeed Scan", "Save LLMs.txt Settings", "Save AI Settings", "Save Edge
+// Cache", "Optimize All" and one more. Twelve blue buttons is twelve things
+// shouting at once, which is what "there is no visual hierarchy" and "I cannot
+// tell what to click" look like from the outside.
+//
+// The distinction is the screen's job, not the panel's: a **settings** screen
+// has one thing to commit, so its Save keeps the primary weight. A
+// **reporting** screen has none — an action belongs to the panel it sits in, so
+// it takes the secondary weight and the measurements lead the page.
+//
+// Scoped to that one view, so the settings screens keep their single primary
+// action and this cannot drift per panel.
+.wppo-dashboard .wppo-panel-group .wppo-button--primary {
+	background: var(--wppo-bg-card);
+	border: 1px solid var(--wppo-border);
+	box-shadow: none;
+	// `.wppo-button--secondary` already exists and is the canonical
+	// non-primary button. An independent review measured this rule rendering
+	// **blue** text where the real secondary renders `#0f172a` — a third
+	// appearance for the same idea, with the DOM class still claiming
+	// `primary`. Matching the token instead means there is one secondary
+	// button in the plugin, not two.
+	color: var(--wppo-text-main);
+
+	// Without this the button lifted 1px on hover and changed nothing else —
+	// no background, no colour — because `_section.scss` loads after
+	// `_forms.scss` and wins the specificity tie on `background` while never
+	// declaring `transform`. Measured: rest and hover were identical apart
+	// from `translateY(-1px)`, so aiming at "Run Scan" gave no feedback.
+	&:hover {
+		background: var(--wppo-switch-hover);
+		border-color: var(--wppo-border-hover);
+		transform: none;
 	}
 }

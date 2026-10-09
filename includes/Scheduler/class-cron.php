@@ -210,13 +210,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * write). Such runs are downgraded to `running` only when there is
 		 * resumable work (queued/failed non-empty); a fully drained
 		 * zero-byte run reports `idle` so the dashboard never sticks on a
-		 * state with no recovery path. A `stalled` flag marks a `running`
-		 * queue untouched for 30+ minutes. Fail-open: cache failures leave
-		 * counters untouched.
+		 * state with no recovery path. Filesystem-reconciled (issue #1705):
+		 * `verified_done=min(done,cache_files)` plus `filesystem_matched`
+		 * (`done<=files`) expose counter-vs-filesystem drift, and a
+		 * `complete` run with `done>files` plus pending work is downgraded
+		 * to `running` so the SPA never shows a false 100%. Note
+		 * `cache_files` counts the whole static cache (all cached pages,
+		 * not just this queue's URLs), so on a warm site `done<=files` is
+		 * almost always true and the reconciliation is an honest heuristic,
+		 * not an exact per-URL audit — never treat `verified_done` as
+		 * proof that every queued URL has a file. A `stalled`
+		 * flag marks a `running` queue untouched for 30+ minutes.
+		 * Fail-open: cache failures leave counters untouched.
 		 *
 		 * @since 2.2.0
 		 * @since 2.3.0 Bytes-aware payload (issue #1428): `cache_bytes`/`cache_files`/`stalled` fields plus zero-byte downgrade.
-		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cache_bytes:int,cache_files:int,stalled:bool}
+		 * @since NEXT Filesystem-reconciled payload (issue #1705): `verified_done`/`filesystem_matched` fields plus done-vs-files downgrade.
+		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cache_bytes:int,cache_files:int,stalled:bool,verified_done:int,filesystem_matched:bool}
 		 */
 		public static function get_preload_status(): array {
 			$queue  = self::get_preload_queue();
@@ -250,6 +260,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( 'complete' === $status && $total > 0 && $bytes <= 0 ) {
 				$status = ( $queued > 0 || $failed > 0 ) ? 'running' : 'idle';
 			}
+			// Filesystem reconciliation (issue #1705): counters drift when a
+			// worker dies after bumping done but before writing the file, or
+			// when files are purged out-of-band. verified_done clamps to what
+			// the filesystem proves; filesystem_matched exposes the drift.
+			// A complete run claiming more done than files with pending work
+			// is not complete — downgrade to running so resume can recover.
+			$verified_done      = min( $done, max( 0, (int) $files ) );
+			$filesystem_matched = $done <= max( 0, (int) $files );
+			if ( 'complete' === $status && ! $filesystem_matched && ( $queued > 0 || $failed > 0 ) ) {
+				$status = 'running';
+			}
 			// Stalled detection: running with pending work but no queue
 			// mutation for 30+ minutes (e.g. killed mid-run).
 			$stalled = false;
@@ -263,15 +284,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				unset( $e );
 			}
 			return array(
-				'queued'      => $queued,
-				'done'        => $done,
-				'failed'      => $failed,
-				'total'       => $total,
-				'status'      => $status,
-				'failed_urls' => array_values( array_slice( $queue['failed'], 0, 50 ) ),
-				'cache_bytes' => max( 0, (int) $bytes ),
-				'cache_files' => max( 0, (int) $files ),
-				'stalled'     => $stalled,
+				'queued'             => $queued,
+				'done'               => $done,
+				'failed'             => $failed,
+				'total'              => $total,
+				'status'             => $status,
+				'failed_urls'        => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+				'cache_bytes'        => max( 0, (int) $bytes ),
+				'cache_files'        => max( 0, (int) $files ),
+				'stalled'            => $stalled,
+				'verified_done'      => max( 0, (int) $verified_done ),
+				'filesystem_matched' => $filesystem_matched,
 			);
 		}
 
@@ -282,10 +305,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * URLs are re-scheduled in chunks of 50 per `wppo_preload_url_batch`
 		 * event (staggered 0-300s) instead of one single event per URL, so a
 		 * resume of a 500-URL queue inserts ~10 cron rows instead of ~500
-		 * (wp-cron option bloat). Fail-open: scheduler failures simply leave
-		 * the queue untouched.
+		 * (wp-cron option bloat). Woo-dynamic URLs (issue #1705) are
+		 * filtered via the canonical `Woo_Detect::is_woo_excluded_url()` so
+		 * a resume never re-queues cart/checkout/Store API routes; the
+		 * queue stays bounded at 500 URLs. Saving the queue touches
+		 * `updated_at`, which clears the derived `stalled` flag.
+		 * Fail-open: scheduler failures simply leave the queue untouched.
 		 *
 		 * @since 2.2.0
+		 * @since NEXT Woo-dynamic re-filter on resume (issue #1705).
 		 * @return int Number of URLs re-scheduled.
 		 */
 		public static function resume_preload_queue(): int {
@@ -294,6 +322,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$queue   = self::get_preload_queue();
 				$pending = array_values( array_unique( array_merge( $queue['queued'], $queue['failed'] ) ) );
 				if ( empty( $pending ) ) {
+					return 0;
+				}
+				// Woo-safe resume (issue #1705): never re-queue dynamic
+				// routes. Canonical predicate, fail-open drops on detection
+				// failure (treated dynamic) so a broken detector cannot warm
+				// a cart. Static-safe: no instance state touched.
+				$filtered = array();
+				foreach ( $pending as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === trim( $candidate ) ) {
+						continue;
+					}
+					$excluded = false;
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Woo_Detect', 'is_woo_excluded_url' ) ) {
+							$excluded = Woo_Detect::is_woo_excluded_url( $candidate );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$excluded = true;
+					}
+					if ( ! $excluded ) {
+						$filtered[] = $candidate;
+					}
+				}
+				$pending = array_values( array_slice( $filtered, 0, 500 ) );
+				if ( empty( $pending ) ) {
+					// All pending URLs were Woo-dynamic: park the queue as
+					// complete without scheduling anything (still touch
+					// updated_at so stalled clears honestly). Recalculate
+					// total from the surviving counters so done/total stays
+					// honest instead of counting the dropped URLs.
+					$queue['queued'] = array();
+					$queue['failed'] = array();
+					$queue['total']  = (int) $queue['done'];
+					$queue['status'] = 'complete';
+					self::save_preload_queue( $queue );
 					return 0;
 				}
 				$chunks = array_chunk( $pending, self::PRELOAD_RESUME_CHUNK_SIZE );

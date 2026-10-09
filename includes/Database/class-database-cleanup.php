@@ -1615,8 +1615,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string,string> Map of option_name => prior autoload value.
 		 */
 		public static function get_remediated_options(): array {
-			$stored = get_option( self::REMEDIATED_OPTION, array() );
-			return is_array( $stored ) ? $stored : array();
+			if ( ! function_exists( 'get_option' ) ) {
+				return array();
+			}
+			try {
+				$stored = get_option( self::REMEDIATED_OPTION, array() );
+				return is_array( $stored ) ? $stored : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Export the autoload-remediation backup for archive/verify (read-only).
+		 *
+		 * Round-trip companion for apply/revert: returns the persisted
+		 * `wppo_autoload_remediated` prior-value map (what revert restores)
+		 * plus the current dry-run `backup` triples
+		 * (`option_name`/`size`/`prior`) so an operator can archive the exact
+		 * pre-apply state before running apply, and verify post-revert that
+		 * the map is empty. Changes nothing (no options, transients, or
+		 * files written). Fail-open: helper/DB failures yield empty lists,
+		 * never fatal. Privacy note: `remediated`/`backup` `prior` values
+		 * are autoload flags only (`yes`/`no`), never option payloads, so
+		 * admin-gated (`manage_options` + nonce) exposure is intentional.
+		 *
+		 * @since NEXT
+		 * @param int|null $threshold Optional threshold override (bytes).
+		 * @param int      $limit     Maximum number of candidates in the backup slice.
+		 * @return array{threshold:int,count:int,remediated:array<string,string>,backup:array<int,array{option_name:string,size:int,prior:string}>}
+		 */
+		public static function export_autoload_backup( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			try {
+				$threshold  = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
+				$limit      = max( 1, min( self::AUTOLOAD_LIMIT_MAX, $limit ) );
+				$remediated = self::get_remediated_options();
+				$backup     = array();
+				try {
+					$plan   = self::plan_autoload_remediation( $threshold, $limit );
+					$backup = isset( $plan['backup'] ) && is_array( $plan['backup'] ) ? array_values( $plan['backup'] ) : array();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$backup = array();
+				}
+				return array(
+					'threshold'  => $threshold,
+					'count'      => count( $remediated ),
+					'remediated' => $remediated,
+					'backup'     => $backup,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'threshold'  => 0,
+					'count'      => 0,
+					'remediated' => array(),
+					'backup'     => array(),
+				);
+			}
 		}
 
 		/**

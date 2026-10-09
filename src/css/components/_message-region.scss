@@ -1,0 +1,107 @@
+/**
+ * The app-level message region.
+ *
+ * Fixed to the bottom-right, above everything, so a confirmation is visible
+ * wherever the card that produced it sits. It carries the design system's
+ * hairlines rather than shadows, so it reads as part of the interface rather
+ * than as an overlay floating on top of it.
+ */
+
+.wppo-message-region {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	z-index: 100000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: min(360px, calc(100vw - 48px));
+	pointer-events: none;
+}
+
+.wppo-message-region__item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: var(--wppo-text-main, #0f172a);
+	background: var(--wppo-bg-card, #fff);
+	border: 1px solid var(--wppo-border, #e2e8f0);
+	border-left-width: 3px;
+	border-radius: 8px;
+	box-shadow: var(--wppo-shadow-lg, 0 12px 24px -6px rgb(0 0 0 / 0.12), 0 4px 12px -4px rgb(0 0 0 / 0.07));
+	pointer-events: auto;
+}
+
+.wppo-message-region__icon {
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	display: grid;
+	place-items: center;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--wppo-text-sidebar-active, #fff);
+	border-radius: 50%;
+	background: var(--wppo-text-light, #64748b);
+}
+
+.wppo-message-region__text {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* The left rule carries the tone; the icon repeats it, so neither is the only
+   signal — which also keeps it readable without relying on colour alone. */
+.wppo-message-region__item--success {
+	border-left-color: var(--wppo-success, #059669);
+}
+.wppo-message-region__item--success .wppo-message-region__icon {
+	background: var(--wppo-success, #059669);
+}
+
+.wppo-message-region__item--error {
+	border-left-color: var(--wppo-error, #dc2626);
+}
+.wppo-message-region__item--error .wppo-message-region__icon {
+	background: var(--wppo-error, #dc2626);
+}
+
+.wppo-message-region__item--warning {
+	border-left-color: var(--wppo-warning, #d97706);
+}
+.wppo-message-region__item--warning .wppo-message-region__icon {
+	background: var(--wppo-warning, #d97706);
+}
+
+.wppo-message-region__item--info {
+	border-left-color: var(--wppo-info, #0284c7);
+}
+.wppo-message-region__item--info .wppo-message-region__icon {
+	background: var(--wppo-info, #0284c7);
+}
+
+@media (max-width: 600px) {
+	.wppo-message-region {
+		left: 12px;
+		right: 12px;
+		bottom: 12px;
+		max-width: none;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.wppo-message-region__item {
+		animation: wppo-message-in 160ms ease-out;
+	}
+
+	@keyframes wppo-message-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+	}
+}

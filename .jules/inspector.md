@@ -82,3 +82,7 @@
 **Bug/Gap:** PHPStan throws `catch.neverThrown` errors in `includes/Scheduler/class-cron.php` and `includes/class-util.php`.
 **Root Cause:** Simple boolean checks and integer assignment/comparisons were wrapped in `try...catch (\Throwable)` blocks unnecessarily.
 **Test Added:** Static analysis will no longer fail on these files for `catch.neverThrown`.
+## 2026-10-04 - Strict callable signatures for set_error_handler
+**Bug/Gap:** `set_error_handler` callbacks returning `void` or missing explicit return types failed strict static analysis.
+**Root Cause:** PHP's `set_error_handler` requires a callable returning a boolean, where returning `false` continues to the standard error handler. A `void` return implicitly returns `null` (falsy), failing the strict `callable(...): bool` signature.
+**Test Added:** Fixed type signatures to `static function (): bool { return true; }` and ran PHPStan to verify.

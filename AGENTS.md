@@ -77,7 +77,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.php`. The installed site registers 48 route patterns including the namespace root, which represents 47 concrete endpoints. Administrative endpoints require `manage_options` + `X-WP-Nonce`; `rum_collect` stays public with token, IP, and global rate limits. `Rest::register_routes()` is authoritative; the table below highlights common endpoints.
+Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.php`. The installed site registers 49 route patterns including the namespace root, which represents 48 concrete endpoints. Administrative endpoints require `manage_options` + `X-WP-Nonce`; `rum_collect` stays public with token, IP, and global rate limits. `Rest::register_routes()` is authoritative; the table below highlights common endpoints.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -107,6 +107,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/Admin/class-rest.p
 | `rum_data` | GET | Aggregated real-user Web Vitals |
 | `autoloaded_options` | GET | Largest autoloaded options (option-bloat audit) |
 | `autoload_remediate` | POST | Autoload-bloat remediation (dry_run/apply/revert/revert_all) |
+| `autoload_backup` | GET | Autoload-remediation backup export (read-only prior map + dry-run triples) |
 | `expired_transients_export` | GET | Expired transients pre-run export (read-only JSON) |
 | `sandbox_preview` | GET | Staged sandbox settings + admin preview URL |
 | `sandbox_save` | POST | Stage sandbox asset settings |
@@ -141,7 +142,7 @@ The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes
 | `Scheduler/class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `Images/class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `Images/class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `Admin/class-rest.php` | REST registrar for 47 concrete endpoints (48 registered patterns including the namespace root) |
+| `Admin/class-rest.php` | REST registrar for 48 concrete endpoints (49 registered patterns including the namespace root) |
 | `Admin/class-admin-auth.php` | Shared administrative capability and `wp_rest` nonce policy for REST and Abilities |
 | `Insight/class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `Insight/class-insight-query.php` | Read-only cached telemetry/PageSpeed models; salted-transient fallback and PageSpeed suggestion augmentation |
@@ -311,7 +312,7 @@ Consequences worth knowing before changing anything:
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
 | `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
-| `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
+| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | TWO JOBS: `code-quality` runs the scanners with `contents:read`+`security-events:write`; `report` posts the PR comment with `issues:write`+`pull-requests:write` and checks out nothing. `parallel-lint` (PHP 8.2-8.5), `phpcs`, Psalm, class-inventory drift, Playground pin gate | Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |

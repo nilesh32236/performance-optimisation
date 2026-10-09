@@ -177,30 +177,27 @@ export const DETAIL_COPY = {
 	// implied the missing measurement was real-user data waiting to be
 	// collected. It is not collected by this source at all.
 	'vital-unmeasured': t(
-		// translators: 1: metric name, 2: advice on what to do about this metric.
+		// translators: %s: advice on what to do about this metric.
 		__(
-			'%1$s has no reading in the stored PageSpeed lab scan history yet. %2$s',
+			'No reading in the stored PageSpeed lab scan history yet. %s',
 			'performance-optimisation'
 		),
-		[ 'label', 'hint' ]
+		[ 'hint' ]
 	),
 	'vital-good': t(
-		// translators: 1: metric name, 2: the measured value, 3: source and device clause.
-		__( '%1$s is good at %2$s%3$s.', 'performance-optimisation' ),
-		[ 'label', 'value', 'source' ]
+		// translators: 1: the measured value, 2: source and device clause.
+		__( 'Good: %1$s%2$s.', 'performance-optimisation' ),
+		[ 'value', 'source' ]
 	),
 	'vital-attention': t(
-		// translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
-		__(
-			'%1$s could be better (%2$s%3$s). %4$s',
-			'performance-optimisation'
-		),
-		[ 'label', 'value', 'source', 'hint' ]
+		// translators: 1: the measured value, 2: source and device clause, 3: advice.
+		__( 'Could be better: %1$s%2$s. %3$s', 'performance-optimisation' ),
+		[ 'value', 'source', 'hint' ]
 	),
 	'vital-poor': t(
-		// translators: 1: metric name, 2: the measured value, 3: source and device clause, 4: advice.
-		__( '%1$s is poor (%2$s%3$s). %4$s', 'performance-optimisation' ),
-		[ 'label', 'value', 'source', 'hint' ]
+		// translators: 1: the measured value, 2: source and device clause, 3: advice.
+		__( 'Poor: %1$s%2$s. %3$s', 'performance-optimisation' ),
+		[ 'value', 'source', 'hint' ]
 	),
 };
 
@@ -228,16 +225,26 @@ export const DEVICE_COPY = {
  * @param {string} [device] `'desktop'`, `'mobile'`, or undefined.
  * @return {string} e.g. `" on desktop (PageSpeed lab scan)"`.
  */
-const sourceClause = ( device ) => {
+const deviceName = ( device ) => {
+	// `Object.hasOwn`, not a truthy lookup: a plain object literal inherits
+	// `toString`, `constructor` and `__proto__`, so an unrecognised device
+	// rendered "Loading (LCP) on function toString() { [native code] }". The
+	// same hole is already guarded in `renderDetail`.
+	//
+	// An unlabelled or unrecognised device is **not** guessed at: defaulting to
+	// a real one would attribute a number to hardware it was never measured on,
+	// which is the pooling defect, inverted.
+	return device && Object.hasOwn( DEVICE_COPY, device )
+		? DEVICE_COPY[ device ]
+		: null;
+};
+
+const sourceClause = () => {
 	const source = __( '(PageSpeed lab scan)', 'performance-optimisation' );
-	// An unlabelled source has no device, and an unrecognised one is not
-	// guessed at. Defaulting to a real device here would attribute a number to
-	// hardware it was never measured on - the pooling defect, inverted.
-	const name = device ? DEVICE_COPY[ device ] ?? null : null;
-	// An unrecognised device is not guessed at; only the proven source is said.
-	return name
-		? ` ${ __( 'on', 'performance-optimisation' ) } ${ name } ${ source }`
-		: ` ${ source }`;
+	// The device is named in the row's **label**, so the sentence carries only
+	// the source. Naming it in both places moved a duplication rather than
+	// removing one, and cost the sentence its subject.
+	return ` ${ source }`;
 };
 
 /**
@@ -299,7 +306,7 @@ const resolveVital = ( args = {} ) => {
 			VITAL_COPY[ args.labelKey ]?.hint ??
 			'',
 		// The device and provenance clause, built in one place.
-		source: sourceClause( args.device ),
+		source: sourceClause(),
 	};
 };
 
@@ -321,10 +328,20 @@ export const renderLabel = ( row ) => {
 	}
 	// A metric is keyed `lcp`/`cls`/`inp`; a row is keyed `page-cache`. Both
 	// are translated here, so no heading the user reads is English-only.
-	return (
+	const base =
 		VITAL_COPY[ key ]?.label ??
-		( Object.hasOwn( ROW_COPY, key ) ? ROW_COPY[ key ] : key )
-	);
+		( Object.hasOwn( ROW_COPY, key ) ? ROW_COPY[ key ] : key );
+	// The device is part of the label, not buried in the sentence. With six
+	// vitals rows the left column was `LCP, CLS, INP, LCP, CLS, INP` with
+	// byte-identical names, so a user scanning it learned nothing about the
+	// duplication and could reasonably conclude the numbers had collapsed.
+	const name = deviceName( row?.detailArgs?.device );
+	if ( ! name ) {
+		return base;
+	}
+	// translators: %1$s metric name, e.g. "Loading (LCP)"; %2$s device class.
+	const format = __( '%1$s on %2$s', 'performance-optimisation' );
+	return sprintf( format, base, name );
 };
 
 /**

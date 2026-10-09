@@ -758,9 +758,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * One-time backfill for anomaly detector v2 keys (issue #1313).
 		 *
 		 * Adds the additive `ai_adaptive.anomaly_band_window`,
-		 * `ai_adaptive.anomaly_recovery_days`, and
-		 * `ai_adaptive.deploy_notes` keys to stored settings that predate
-		 * them. Runs on `admin_init` (not the constructor) so a cacheable
+		 * `ai_adaptive.anomaly_recovery_days`,
+		 * `ai_adaptive.deploy_notes`, and (issue #1704)
+		 * `ai_adaptive.css_refresh_require_no_recent_deploy` keys to stored
+		 * settings that predate them. Runs on `admin_init` (not the constructor) so a cacheable
 		 * front-end request never triggers a settings write. Only installs
 		 * missing a key are backfilled; any stored explicit value is
 		 * preserved verbatim, and fresh installs with no stored option are
@@ -771,6 +772,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 *
 		 * @since 2.3.0
 		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_ai_anomaly_v2() (ARCH-004).
+		 * @since NEXT Backfills css_refresh_require_no_recent_deploy (default false).
 		 * @return void
 		 */
 		public function migrate_ai_anomaly_v2(): void {
@@ -782,7 +784,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				if ( isset( $memo['ai_adaptive'] ) && is_array( $memo['ai_adaptive'] )
 					&& array_key_exists( 'anomaly_band_window', $memo['ai_adaptive'] )
 					&& array_key_exists( 'anomaly_recovery_days', $memo['ai_adaptive'] )
-					&& array_key_exists( 'deploy_notes', $memo['ai_adaptive'] ) ) {
+					&& array_key_exists( 'deploy_notes', $memo['ai_adaptive'] )
+					&& array_key_exists( 'css_refresh_require_no_recent_deploy', $memo['ai_adaptive'] ) ) {
 					return;
 				}
 				// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -807,6 +810,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				if ( ! array_key_exists( 'deploy_notes', $ai ) ) {
 					$ai['deploy_notes'] = array();
 					$changed            = true;
+				}
+				if ( ! array_key_exists( 'css_refresh_require_no_recent_deploy', $ai ) ) {
+					$ai['css_refresh_require_no_recent_deploy'] = false;
+					$changed                                    = true;
 				}
 				if ( ! $changed ) {
 					return;

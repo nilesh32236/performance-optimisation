@@ -2346,12 +2346,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// core's own cancel path) already closed our buffer, the level no
 			// longer matches and this is a no-op, never fatal. Fail-open on
 			// any throwable so shutdown can never white-screen the response.
-			try {
-				if ( ob_get_level() === $level ) {
-					ob_end_flush();
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( ob_get_level() === $level ) {
+				ob_end_flush();
 			}
 		}
 
@@ -2986,6 +2982,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return true;
+			}
+
+			// Unconditional (issue #1705): wc-ajax XHRs are dynamic JSON and must
+			// never be cached, even when safe mode is off. Checked before the
+			// toggle so wooSafeMode=false cannot re-allow cart fragments.
+			try {
+				if ( $this->is_wc_ajax_request() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+
+			// Unconditional (issue #1705): Woo endpoint URLs (order-pay,
+			// view-order, downloads, …) are dynamic. Checked before the toggle
+			// so wooSafeMode=false cannot serve a stale order/pay page.
+			if ( function_exists( 'is_wc_endpoint_url' ) ) {
+				try {
+					if ( is_wc_endpoint_url() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
 			}
 
 			// Feature toggle: explicit false disables safe mode; absent key = true for BC.
@@ -3007,17 +3030,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			try {
 				$excluded = false;
 
-				// Woo endpoint URLs (order-pay, view-order, downloads, …) are dynamic.
-				if ( function_exists( 'is_wc_endpoint_url' ) ) {
-					try {
-						if ( is_wc_endpoint_url() ) {
-							$excluded = true;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$excluded = true;
-					}
-				}
+				// Note (issue #1705): is_wc_endpoint_url() + wc-ajax are
+				// already enforced unconditionally above the safe-mode gate;
+				// the gated checks below cover cart/checkout/account paths,
+				// cookies, add-to-cart and faceted queries only.
 
 				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
 
@@ -3074,12 +3090,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				if ( ! $excluded ) {
-					if ( $this->is_wc_ajax_request() ) {
-						$excluded = true;
-					}
-				}
-
-				if ( ! $excluded ) {
+					// Note (issue #1705): wc-ajax already enforced unconditionally
+					// above the safe-mode gate; no duplicate check here.
 					if ( isset( $_GET['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
 						$excluded = true;
 					} elseif ( ! empty( $_SERVER['QUERY_STRING'] ) && preg_match( '/(?:^|&)(add-to-cart)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) ) {

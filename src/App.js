@@ -39,6 +39,7 @@ const areaItemIds = ( sectionId ) =>
 	itemsForSection( sectionId ).map( ( item ) => item.id );
 
 import { __ } from '@wordpress/i18n';
+import MessageRegion from './components/common/MessageRegion';
 
 const Overview = lazy( () =>
 	import(
@@ -416,8 +417,10 @@ const App = () => {
 			first.focus();
 		}
 
-		// Audit #1420: document-level trap (overlay button + outside focus
-		// cannot escape) with Escape-to-close returning focus to the toggle.
+		// Audit #1420: document-level trap so focus cannot escape the drawer while
+		// it is open, with Escape-to-close returning focus to the toggle. The
+		// out-of-sidebar recovery branch below is what enforces it; the overlay is
+		// no longer a focusable control, so it is not part of the trap.
 		const handleKeyDown = ( e ) => {
 			if ( e.key === 'Escape' ) {
 				setMobileMenuOpen( false );
@@ -630,6 +633,10 @@ const App = () => {
 
 	return (
 		<UnsavedChangesContext.Provider value={ unsavedContextValue }>
+			{ /* One visible place for every notice, wherever its card sits.
+			     See MessageRegion for why this is aria-hidden. */ }
+			<MessageRegion />
+
 			<div className="wppo-container">
 				{ /* Mobile Top Header */ }
 				<div className="wppo-mobile-header">
@@ -669,14 +676,10 @@ const App = () => {
 
 				{ /* Sidebar Overlay */ }
 				{ mobileMenuOpen && (
-					<button
-						type="button"
+					<div
 						className="wppo-sidebar-overlay"
 						onClick={ toggleMobileMenu }
-						aria-label={ __(
-							'Close Menu',
-							'performance-optimisation'
-						) }
+						aria-hidden="true"
 					/>
 				) }
 

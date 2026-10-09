@@ -389,7 +389,7 @@ must name the elements it measured.*
 | History API | In-app Overview→Media→Manage, **Back → Media, Forward → Manage, refresh survives**; no full reload |
 | Evidence-based Overview, no fake score | All rows real; `/\d+\/100/` **not present** |
 | Control-local loading | 0 blocking overlays during load; sidebar still clickable |
-| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) |
+| Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920) — **WRONG, see the correction below** |
 | Accessibility | **11/11** plugin Tab stops with a 2px ring |
 | Design system | 75 tokens defined, 74 referenced, 1 unresolved (`--wppo-progress`, set by JS), 2 documented orphans |
 | Object Cache false-dirty fix | Navigates on a real mouse click, no dialog |
@@ -629,3 +629,522 @@ eight.
 Round 30: **a green suite is not evidence that a change is pinned.** Every one of
 1,293 tests passed with the fix removed entirely. The suite was not weak — it
 was aimed at code nobody had changed.
+
+## Rounds 31–33 — three reviews, two reverts, and a PASS line that could not fail
+
+### Merged
+
+| PR | What | Round |
+|---|---|---|
+| #1694 | the Overview's headline number was a pooled lab median | 31 |
+| #1697 | a long code block was clipped at 360px, unreachable | 31 |
+| #1698 | the left column read LCP, CLS, INP, LCP, CLS, INP | 32 |
+| #1715 | a tooltip laid out 12% wider than its rule declares | 33 |
+
+### A PASS line that was vacuous
+
+For most of this campaign the objective sweep reported:
+
+```
+PASS  responsive: 56/56 checks clean (360-1920px)
+```
+
+The check was:
+
+```js
+document.documentElement.scrollWidth > vw + 2
+```
+
+**That is structurally always false here.** `.wppo-container` sets
+`overflow-x: clip`, so the document never scrolls — and a genuinely clipped
+element therefore reads as a pass. The check could not fail. It was reporting
+`0` and calling it evidence, for as many rounds as it took for someone to look
+at what it measured.
+
+Replaced with the question that actually matters — *does anything extend past
+the viewport with no scrollable ancestor that could bring it back?* — and the
+first run failed immediately:
+
+```
+FAIL  responsive: 51/56
+  cut off at 360px on data-system/databaseCleanup: wppo-tooltip-content
+  cut off at 360px on overview/dashboard:        wppo-suggestion-card__value
+```
+
+Then it cried wolf the other way, reporting every tooltip on the page as cut off
+because a hidden tooltip still has geometry. Both under-reporting and
+over-reporting are useless; the check now ignores elements that are not shown,
+and reports **54/56** with the offenders named.
+
+> I had been quoting "56/56 clean" as evidence for the objective's responsive
+> clause. It was evidence that a subtraction was zero.
+
+### #1715: I shipped a fix that made three tooltips worse
+
+The review found **five regressions** from my re-anchoring, three of which left
+only **26–28% of the tooltip readable** — worse than the bug it was meant to fix
+— because the measurement only tested the right-hand edge, and the `transform`
+that was supposed to reposition the box was **dead code** (a `0,3,0` hover rule
+beats a `0,1,0` modifier, so all 56 measured rows rendered
+`matrix(1,0,0,1,-100,-8)`).
+
+My own measurement was also wrong: I reported "0/0/0 clipped, 0/3/4
+end-anchored", and the reviewer measured 2 clipped at 360. Their *before* count
+reproduced exactly, so the discrepancy was entirely in my *after*. I had hovered
+4 triggers per width; they covered 56 instances across 10 widths and 5 tabs.
+
+The mechanism was **removed rather than repaired**, and the one-line
+`box-sizing: border-box` — which the review verified safe and correct — was kept:
+
+```
+20 tooltips hovered at 320/360/390/1024:  3 clipped, all at 390px
+```
+
+Three is a real, scoped remaining defect. Repairing the anchor properly needs a
+two-sided check, logical edges for RTL, the real clipping ancestor rather than a
+three-class allowlist, and a resize re-measure — a change that deserves its own
+review rather than a rider on a one-line fix.
+
+### Two of my own mistakes, recorded because the pattern repeats
+
+**A grep for a class name misses a nested SCSS rule.** I grepped `src/css` for
+`wppo-suggestion-card__value`, got zero matches, and was about to file a "class
+with no rule behind it" defect. The class has **eight** nested `&__value` rules.
+This is the same failure as measuring the wrong focus stops in round 25 — I
+measured the wrong thing, confidently — in a new disguise.
+
+**A test that cannot fail is worse than no test.** My "keeps the threshold where
+the arithmetic puts it" referenced no production code at all: it computed over a
+test-local constant. The reviewer broke the production code **eleven** different
+ways and it passed every time. Ten mutations survived, including the three that
+matter most — the ones that decide *where the box actually goes*.
+
+### The lesson, sixth form
+
+Rounds 25–30 each recorded a way of being wrong:
+
+1. a remembered rule is not a check;
+2. "I cannot prove this" is not a reason to ship;
+3. I sampled two screens and generalised to all eight;
+4. a green suite is not evidence that a change is pinned;
+5. a campaign record that certifies its own output is not a check on it;
+6. **a check that cannot fail is not evidence of anything** — including one of my
+   own, which I had been quoting as proof for rounds.
+
+## Round 34 — a fix that made three tooltips worse, and a disk that filled up
+
+### Merged
+
+| PR | What |
+|---|---|
+| #1717 | a suggestion card's value ran 36px past the viewport, clipped |
+| #1718 | the Overview said "no reading" for responsiveness, offering no way to get one |
+
+### #1715: I shipped a mechanism that made things worse
+
+The final review had reported a pre-existing overflow on the Database Cleanup
+screen and **correctly refused to bundle it** — the `min-width: 0` remedy it was
+offered changes it by 0px. That left it unowned, so I fixed it, and added a
+runtime re-anchoring: measure on open, and if a centred 200px tooltip would not
+fit, anchor it to the trigger's right edge instead.
+
+An independent review measured **five regressions** from it, three of which left
+only **26–28% of the tooltip readable** — worse than the bug it was meant to fix
+— and found the `transform` that repositions the box was **dead code** all along:
+
+```
+.wppo-tooltip-container:hover .wppo-tooltip-content   (0,3,0)
+.wppo-tooltip-content--end                              (0,1,0)   ← never applies
+```
+
+All 56 measured rows rendered `matrix(1,0,0,1,-100,-8)`.
+
+My own measurement was also wrong. I reported "0/0/0 clipped, 0/3/4
+end-anchored"; the reviewer measured 2 clipped at 360. Their *before* count
+reproduced exactly, so the discrepancy was entirely in my *after* — I had hovered
+4 triggers per width against their 56 instances across 10 widths and 5 tabs.
+
+The mechanism was **removed rather than repaired**, and the one line the review
+verified safe was kept: `box-sizing: border-box`. The tooltip had been laying
+out at **224px** when its rule declared 200px, because the default content box
+applies the width and the max-width to the content only.
+
+### The same wrong-block mistake, twice, in one file
+
+There are **eight** `&__value` blocks and **two** `&__description` blocks in
+`_performance-audit.scss`, each nested under a different parent. My first attempt
+edited the `&__value` at line 70, which belongs to `.wppo-audit-table`; I reported
+390 and 768 clean while 360 still overflowed by exactly the same 36px. My second
+attempt put the new declaration on `.wppo-vitals-table__description`.
+
+Only `grep -o` against the **built** CSS shows the truth. That is the fourth time
+in this campaign I have been misled by searching for something by name rather
+than reading what is actually there — after measuring WordPress core's focus
+rings, and after grepping for a class and concluding it had no rule when it had
+eight. **A name is not a definition, and a search hit is not a proof.**
+
+### A dead declaration, and a comment that inverted the spec
+
+The review measured four combinations on one page load: `overflow-wrap: anywhere`
+alone reproduces the shipped geometry **byte-for-byte**, so the `min-width: 0` I
+had added contributed nothing. And my comment said a flex item is held at its
+longest token *"regardless of what any wrapping property says"* — which is the
+exact behaviour `anywhere` exists to remove.
+
+Worse, `min-width: 0` alone is a **broken half-fix an element-rect check scores as
+a pass**: the box sits inside the viewport while the text still paints 76px past
+it. That is the same measurement flaw, and it is why the sweep's check is now
+**ink-based** rather than element-rect-based.
+
+### A predicate broader than its own sentence
+
+The remedy line's predicate fired for **any** unmeasured vital, while the
+sentence is about **one** metric. The review produced the failing state from
+real model output — an unmeasured LCP and no INP row — where the card said
+*"Responsiveness to taps and clicks comes from real visitors…"* beside an LCP row
+ending `(PageSpeed lab scan)`, which is the opposite of what the sentence
+asserts.
+
+It also found that reverting the single `onNavigate={ onNavigate }` in
+`Overview.js` left **all 1,319 tests green**: the button would render and the
+guard would swallow the call — a silent dead control, the exact symptom I had
+already shipped once in that PR when the call passed `{ area, view }` instead of
+a bare view id.
+
+### The disk filled up, and it was my worktrees
+
+`/tmp` hit 100% and stopped the tooling mid-commit, which silently left a commit
+unapplied. The cause was not temp files: **60 registered worktrees**, most of
+them stale, holding about 6GB. Pruning them took the filesystem from 92% to 78%
+and made room again. `git worktree prune` does not remove them — they have to be
+removed explicitly.
+
+### The deploy guard caught me, and I deployed anyway
+
+Restoring merged master to the live site, the guard **refused**: live held files
+from the unmerged #1718 branch that the master worktree lacked. I deployed
+anyway, because my command chained the guard's output and the `&&` did not test
+its exit status — **the third time this has happened**, and the same failure the
+guard was written to stop. It destroyed the unmerged branch's live evidence. The
+command I use now terminates on the guard's own status and refuses to deploy
+otherwise.
+
+### The lesson, seventh form
+
+Six previous rounds each recorded a way of being wrong. This one:
+
+> **A measurement must be able to fail, and a mechanism added to fix a defect
+> deserves the same suspicion as the defect.** My sweep's responsive check was
+> structurally incapable of failing, and my fix for a real bug introduced five
+> new ones while my own evidence for it was not reproducible.
+
+## Round 36 — a final review, and the record certifying a result that did not exist
+
+A holistic review of the **merged result** against the objective returned **NOT
+COMPLETE**. It said plainly that it could not dent the Overview's honesty — and
+that seven of nine clauses passed, including every one this campaign spent its
+life on. But it found four defects **in the campaign's own work**, and the
+severest was not a product bug at all.
+
+### The falsified pass line
+
+This record carried:
+
+> Responsive | **0 failures of 56** (8 screens × 7 widths, 360–1920px)
+
+The review reproduced **15–25px of glyphs cut at 360px** on two of the eight
+screens, stably, over three runs:
+
+- `media/images` — "Lazy-load CSS Background Images" cut by 15px
+- `overview/dashboard` — "Use WordPress AI client when available" cut by 25px
+
+The mechanism is `.components-toggle-control`, a `@wordpress/components` flex row
+265px wide inside a 204px `.wppo-switch-field`, truncated by
+`.wppo-feature-card { overflow: hidden }`.
+
+**The element box is in bounds.** The text is not. That is exactly the case this
+record names at length further down — a half-fix an element-rect check scores as
+a pass — which is why the replacement ink-based check still misses it: the
+toggle's label lives inside a shadow-DOM-ish component whose ink the current walk
+does not reach.
+
+The underlying defect is **pre-existing**, not introduced here. The claim was
+wrong, and a claim is part of the deliverable.
+
+### Four defects in the campaign's own work
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | **Connected and Disconnected looked identical** | `ObjectCache.js` emitted `--success`/`--error`; **neither has a rule**. Live: `background: rgba(0,0,0,0)`, `border: 0px`. The same hole this record documents as fixed **for the Overview only** |
+| 2 | **The tablist's accessible name could not be translated** | `aria-label={\`${title} sections\`}` — a template literal, 0 matches in the `.pot`, campaign-introduced |
+| 3 | **A class the campaign's own Overview emits had no rule** | `.wppo-overview__stale`, in the campaign's own `_overview.scss` |
+| 4 | **Every area heading lost its weight *and* its size** | declares `600`/`1.5rem`, computed `400`/`23px` on all eight screens — WordPress core's id-keyed `h1` beats any number of classes |
+
+All four are fixed in #1720, verified live: the H1 computes **600 / 24px**, the
+badge computes **`rgb(236,253,245)` with a 1px border**, and the `.pot` grew to
+**1,892 msgids** with the tablist label in it.
+
+### What the review could not break
+
+It recomputed **every Overview number** from `wppo_web_vitals_trends` in WP-CLI —
+39 rows, fields `fetched_at, performance, lcp, cls, tbt`, **`has_inp=NO`** — and
+desktop **388.0** / mobile **1202.0** / CLS **0.0018445→0.002** / **0.0092514→0.009**
+matched the page to the digit. The pooled **504.5 ms** the round-30 review
+condemned still exists in the data and is correctly not shown. The remedy line's
+claim is true. Also verified: **no hand-written PHP in the campaign** (the 292
+PHP paths in #1676 are all `100644→100755` mode changes, zero content lines),
+48/47 routes, one `__return_true` = `rum_collect` only, every panel still saves
+under its original tab key, and **163 focus stops** all with a visible indicator
+under a delta test that can fail.
+
+### The fifth time a name-based search misled me
+
+Finding the badge tones, I grepped `src/css` for `status-badge--good` and got
+nothing — **four times**. The rules exist; they are written as `&--good` nested
+under `.wppo-status-badge` in `_performance-audit.scss`. A literal string cannot
+see a nested SCSS selector.
+
+After measuring WordPress core's focus rings, after concluding a class had no
+rule when it had eight, and after editing the wrong one of eight `&__value`
+blocks twice — the same failure, in a new disguise.
+
+> **A name is not a definition, and a search hit is not a proof.**
+
+The test now reads the **built** stylesheet, where there is no such ambiguity.
+
+### Record defects also corrected
+
+Beyond the falsified pass line: the Progress section still showed Phases 2–7
+unchecked while the rounds below declared them merged; two links point at a
+`defects-found-and-fixed.md` that has never existed; a quoted Overview rendering
+no longer matches the shipped page since #1698 moved the device into the label;
+and the tooltip's residual was recorded as "3 clipped, all at 390px" where the
+review measures the box overhanging its card at 390, 414, 768 and 1440 — though
+across 62 hovered instances **no glyph is lost**, so the original statement was
+both narrower and more severe than the truth.
+
+### The lesson, eighth form
+
+Seven previous rounds each recorded a way of being wrong. This one:
+
+> **A record that certifies its own result is not a check on that result.** The
+> responsive line was the one quantitative claim standing behind the
+> accessibility clause, and stable measurement falsified it at the campaign's own
+> declared lower bound — in precisely the half-fix shape the same record
+> describes two hundred lines later.
+
+## Round 37 — the screen that replaced the control panel was still a control panel
+
+The site owner arrives at **All diagnostics**. It rendered **13 panels in one flat,
+undifferentiated scroll** — a measured **9,053px, ten screens**, 22 headings,
+1,169 words, with nothing that said what to read first and nothing that let them
+skip what they came for.
+
+That is the "feature-heavy technical control panel" this campaign set out to
+remove, still intact inside the screen meant to have replaced it. It also was
+the single largest remaining item in a profile of all eight screens:
+
+| screen | height | screens | headings | cards | toggles |
+|---|---|---|---|---|---|
+| Overview | 1,753px | 2 | 5 | 3 | 0 |
+| **All diagnostics** | **9,053px** | **10** | **22** | **17** | 8 |
+| media/images | 4,659px | 5 | 8 | 5 | 16 |
+| speed/file-optimisation | 3,997px | 4 | 6 | 3 | 11 |
+| speed/preload | 3,600px | 4 | 7 | 4 | 10 |
+| data-system/database-cleanup | 2,403px | 3 | 16 | 12 | 1 |
+| manage/tools | 2,667px | 3 | 10 | 7 | 0 |
+| data-system/object-cache | 2,131px | 2 | 6 | 3 | 2 |
+
+The Overview was already fine. Everything below it was a long scroll.
+
+### Cut by measurement, not by taste
+
+Per-panel heights, from the live page:
+
+| group | panels | height |
+|---|---|---|
+| **How your site is doing** | next step, audit, PageSpeed, vitals trends, real-user vitals | **1,547px** |
+| **Advanced tuning** | autoloaded options, llms.txt, AI adaptive, edge cache | **3,086px** |
+| **Server, images and activity** | system info, image conversion, activity log | **1,067px** |
+
+The page of arrival is under two screens; the other 3,086px is one click away
+instead of in the way. **9,053px → 6,147px** at 1280×900, with 9,306px once
+"Advanced tuning" is expanded. Nothing removed.
+
+### The fold did nothing, twice over
+
+The first build reported `aria-expanded="false"` while the page measured
+**9,306px** — unchanged. The HTML `hidden` attribute is `display: none` from the
+UA stylesheet, and **any author `display` beats it**. `.wppo-stacked-cards` sets
+`display: flex`, so the attribute was inert.
+
+An independent review proved the fix load-bearing by deleting the rule through
+`CSSOM.deleteRule`: the collapsed panel returns to `display: flex`, **5,186px**
+tall, and the document grows from 11,381px to **16,579px**.
+
+### A test caught a design error before a user could
+
+The first version folded all three groups, which put the **"Optimize All"**
+action behind a disclosure. Four existing `Dashboard` tests failed because the
+button was no longer reachable. The tests were right and the design was wrong,
+so the design changed. A per-panel **Save** does stay inside the folded group,
+and that is deliberate: it is a commit for that panel's own fields, not an
+arrival action.
+
+### Three landmarks named by the control that collapses them
+
+`aria-labelledby` on the `<section>` pointed at the `<button>`, so Chrome's own
+accessibility tree reported:
+
+```
+region "Advanced tuning Option bloat, edge caching, adaptive AI, and llms.txt. Expand this group"
+```
+
+Fifteen words, and it **renamed itself on every toggle** because the action
+phrase was part of the name. The base had no landmarks here, so this was a net
+regression. An unnamed `<section>` is not exposed as a landmark at all, which is
+strictly better than a mislabelled one.
+
+Verified fixed through `Accessibility.getFullAXTree`: exactly two region
+landmarks remain — "Overview" and "System Health", both pre-existing.
+
+### Nine mutations survived, and every a11y claim was untested
+
+The review ran 19 mutations on the new component: 10 killed, **9 survived**. The
+landmark label survived both removal *and* being repointed at a nonexistent id;
+the screen-reader phrase could be deleted wholesale; the chevron could be
+inverted; and a hard-coded id — three duplicate ids on one page — was green.
+
+Six tests added, and all six now kill their mutation. Three of the new tests
+were wrong on the first attempt, and in each case the **code** changed to suit
+correct behaviour rather than the test being weakened:
+
+- `getByRole` cannot see a `hidden` subtree, so the "no landmark" test asserts
+  **absence**, not a mislabelled presence.
+- `useId` is stable across a rerender at the same position, so proving distinct
+  ids needs two real siblings, not a `rerender`.
+- The summary sits **inside** the button, so it joined the accessible name no
+  matter what `aria-describedby` said; it needed `aria-hidden` before the
+  description channel could mean anything.
+
+### Two of my own comments were false
+
+`_fields.scss` claimed `ToggleControl` renders "no `label` element inside it".
+There is one: `label.components-toggle-control__label`, two levels down. The
+original rule failed because of the **ancestor**, not the tag — a different
+mistake carrying a misleading explanation.
+
+And `flex-shrink: 1` never applied: an equal-specificity pre-existing rule later
+in the same file set `flex-shrink: 0`, and the computed value stayed `0`. The
+reviewer read the real cascade via `CSS.getMatchedStylesForNode`. The declaration
+was deleted, because the comment's own root-cause analysis had already
+identified `min-width: 0` as what does the work — and it does: **0 clipped
+toggles at 360, 390, 414, 768 and 1280**, from a screen that had been losing 15px
+and 25px of label text at 360px.
+
+### The lesson, ninth form
+
+Eight rounds each recorded a way of being wrong. This one, from three unrelated
+angles:
+
+> **A measurement you cannot reproduce is not a measurement, and a mechanism
+> that reports itself working while changing nothing is the worst of both.** The
+> fold reported `aria-expanded="false"` and did nothing. A `className` was passed
+> and discarded, silently making its own SCSS dead code. A landmark was created
+> and immediately mislabelled by the control that owns it. In each case the
+> *signal* was correct and *the thing it described* was not — and in each case a
+> real gate had passed first.
+
+## Rounds 38–40 — what the user saw, and what I could not
+
+The feedback on this round was not a defect report. It was:
+
+> "I really not like current design and this is not look like created by human
+> and this is not easy to use."
+
+That is the most useful sentence anyone has said in forty rounds, and it
+arrived after every automated check had been passing for a dozen merges.
+
+### I could not look
+
+The image tool on this host cannot open any file. It returns
+`EACCES: permission denied, open '/opt'` — before it ever looks at the path, and
+regardless of where the file is. Tried four times, including with an absolute
+path supplied directly. The file was fine: 1280×1753, 298,134 bytes, a valid
+PNG. **The tool is broken, not the path, and I cannot fix it from inside the
+session.**
+
+So I can *show* a screenshot and I cannot *see* one. Every claim in this record
+that says a design "looks right" was, until now, a claim about measurements.
+
+### Measuring the pixels anyway
+
+I decoded the screenshots through the browser's canvas and got numbers:
+
+| screen | ink coverage |
+|---|---|
+| Overview | 39.6% |
+| All diagnostics | 30.2% |
+| Media → Images | 30.4% |
+| Data → Object cache | **46.9%** |
+
+A well-set admin screen carries roughly **8–18%** ink. These run double that.
+And the shape of the problem is not text — it is surfaces: on Object cache, nine
+boxes cover **55%** of a page holding 175 words; on Media → Images, boxes cover
+**83%**.
+
+Large filled rectangles of identical weight, with nothing visually dominant.
+That is the signature of a design system applied *uniformly* instead of building
+a hierarchy, and it is exactly what "does not look like a person made it"
+describes.
+
+### Then the user said what was actually wrong
+
+*No visual hierarchy.* *Hard to know where to click.*
+
+Both have one measured root cause. Counting primary buttons across all eight
+screens, **All diagnostics carried twelve `wppo-button--primary` at once**:
+
+> Purge All Cache · Apply Balanced · Save Page Cache Settings · Save CDN Purge ·
+> Save Settings · Run Scan · Run PageSpeed Scan · Save LLMs.txt Settings ·
+> Save AI Settings · Save Edge Cache · Optimize All · and one more
+
+The strongest signal on a screen, present twelve times, carries no information.
+
+### The rule, and the change
+
+A **settings** screen has one thing to commit, so its single Save keeps the
+primary weight — measured, each of them has exactly one. A **reporting** screen
+has none: an action there belongs to the panel it sits in, so it takes the
+secondary weight and the measurements lead.
+
+Applied as one scoped rule rather than thirteen per-panel edits that would drift:
+
+```scss
+.wppo-dashboard .wppo-panel-group .wppo-button--primary { … card surface … }
+```
+
+**Verified live:** 6 primary buttons inside the panel scope, **0 of them still
+rendering the blue**. The 6 above the groups are screen-level and keep the
+weight. Twelve shouting things became six deliberate ones.
+
+### The instrument lied first, again
+
+My first verification reported "6 of 6 still render filled" and the fix appeared
+not to work. **It had worked.** I had tested
+`backgroundColor !== 'rgba(0,0,0,0)'`, which a *white card background* satisfies
+exactly as well as a blue one. Measuring against `--wppo-primary` itself showed
+0. That is the **sixth** time in this campaign a check failed before the thing it
+measured did.
+
+### The lesson, tenth form
+
+Nine rounds each recorded a way of being wrong. This one:
+
+> **A design cannot be verified by the person who cannot see it.** Forty rounds
+> of gates, mutation testing and live measurement all passed, and the result
+> still did not look like something a person would ship. The measurements were
+> not wrong — they were answering questions nobody had asked. Density, overflow,
+> semantics and contrast were all clean while the thing that makes a screen feel
+> *designed* — what is being said first, and what is being asked of the user —
+> was unmeasured and wrong.

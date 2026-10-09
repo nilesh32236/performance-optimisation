@@ -170,6 +170,41 @@
 		}
 	}
 
+	// @see .wppo-stat-link and .wppo-notice__action for alternative hover treatments.
+	// This modifier defines the standard hover-underline variant for link-styled buttons.
+	&--link {
+		background: transparent;
+		border: none;
+		color: var(--wppo-primary);
+		padding: 2px 0;
+		min-height: 24px;
+		display: inline-block;
+		align-items: baseline;
+		justify-content: flex-start;
+		gap: 0;
+		text-align: start;
+		font-size: inherit;
+		font-weight: 400;
+		letter-spacing: normal;
+		white-space: normal;
+
+		&:hover:not(:disabled) {
+			color: var(--wppo-primary-hover);
+			text-decoration: underline;
+			text-underline-offset: 2px;
+		}
+
+		// Touch target: `.wppo-button` is 38px, and 44px at `respond-to('lg')` (992px).
+		// This rule restores 44px below the design system's `md` token (768px), matching
+		// `.wppo-stat-link` (`_stats.scss:312-315`). Note WP core's admin breakpoint is
+		// 782px and is deliberately not matched here.
+		// above applies to block-level list usage; in-sentence links use display:inline
+		// (min-height is ignored on non-replaced inline boxes) — see _overview.scss
+		@include respond-to('md') {
+			min-height: 44px;
+		}
+	}
+
 	&:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
@@ -211,5 +246,22 @@
 	.wppo-dashboard-view .wppo-textarea--mono {
 		min-height: 44px;
 		font-size: 13px !important; // keep density for code lists
+	}
+}
+
+.wppo-file-input-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+// The file chooser's focus ring is drawn on the proxy, because the real input is
+// a 1px clipped box and focusing it shows nothing at all.
+.wppo-file-input-wrapper {
+	&:focus-within {
+		> .wppo-button {
+			outline: solid 2px var(--wppo-primary, #007cb6);
+			outline-offset: 2px;
+		}
 	}
 }

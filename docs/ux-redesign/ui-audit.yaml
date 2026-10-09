@@ -1,0 +1,315 @@
+# Admin UI audit — Performance Optimisation
+#
+# Method: all eight screens captured at 1280px on master 43951e6e and reviewed
+# visually, plus DOM and computed-style measurement for anything a picture
+# cannot settle. Severity is from a site owner's seat, not an engineer's.
+#
+#   blocker  the screen is hard to use correctly
+#   major    the user cannot tell what to do, or is shown developer output
+#   minor    visibly unconsidered, or inconsistent with the rest of the UI
+#
+# This file was machine-validated with PyYAML. An earlier draft was committed
+# while still invalid — five scalars that opened with a quote, and wrapped
+# values without a block indicator. A record that does not parse is not a
+# record, and that is the same failure as a pass line nothing measured.
+
+meta:
+  audited_at_commit: 43951e6e
+  viewport: 1280x1000
+  browser: chromium-1234
+  screens_reviewed: 8
+  method: screenshot review plus DOM measurement
+  design_system: docs/ux-redesign/DESIGN.md
+
+# ---------------------------------------------------------------------------
+# Systemic — these repeat, and they are the core of the reported complaint
+# ---------------------------------------------------------------------------
+systemic:
+  - id: SYS-01
+    severity: blocker
+    title: Developer log output is shown to site owners as page content
+    screens: [overview, all-diagnostics, manage-tools]
+    problem: >-
+      The Overview's largest block is the recent activity feed, which renders
+      raw operational log lines: a full URL-encoded PageSpeed API request,
+      "Blocked cache path traversal probe" three times over, and a raw
+      performance score. It occupies roughly forty per cent of the landing page
+      and is the second thing a new user reads.
+    why_it_matters: >-
+      It is the plugin's internals narrated to someone who asked how their site
+      is doing. It also trains the eye to skip the card, so the real status
+      above it is skimmed too.
+    fix: >-
+      Move the activity log off the Overview, or reduce it to three human
+      sentences. Never render a URL or an internal probe name in a feed a site
+      owner reads.
+    evidence: screenshot a-overview.png, lower half
+
+  - id: SYS-02
+    severity: blocker
+    title: Several primary buttons and no single obvious action
+    screens: [manage-tools, data-object-cache, speed-file-optimisation]
+    problem: >-
+      Manage and Tools carries six buttons, two of them primary blue: Save
+      Settings, Save Auto-rescan, Save Monitoring, Undo Last Change, Download
+      JSON, Import Settings. Each saves a different section and nothing on the
+      page says which is which. Object cache and file optimisation both carry
+      three primaries.
+    why_it_matters: >-
+      A user editing their PageSpeed key has three plausible buttons and no way
+      to know that the wrong one silently ignores their change. This is the
+      "hard to know where to click" complaint stated precisely.
+    fix: >-
+      One commit bar per screen, sticky, named for the section it saves.
+      Demote every non-committing action.
+    evidence: screenshot h-manage-tools.png
+
+  - id: SYS-03
+    severity: major
+    title: The plugin sidebar is roughly half empty
+    screens: all
+    problem: >-
+      Below the five area links the dark sidebar is blank down to the version
+      string, about 650px on the Overview and 450px on Tools. The navigation
+      occupies the top fifth of a full-height dark column.
+    why_it_matters: >-
+      A large empty dark block reads as an unfinished layout, and it is the
+      first thing on screen on every page.
+    fix: >-
+      Let the sidebar end at its content, or give the space to something worth
+      reading, such as a count of outstanding items.
+    evidence: screenshots a-overview.png, h-manage-tools.png
+
+  - id: SYS-04
+    severity: major
+    title: Notices render inside their card with no global message region
+    screens: all
+    problem: >-
+      Twenty components own their notice state through useNotice, and the
+      banner renders inline inside the owning card. There is no toast, snackbar
+      or portal anywhere in the app.
+    why_it_matters: >-
+      Press a button in a card near the top of a four-thousand-pixel page and
+      the confirmation renders far above the viewport. Press one near the bottom
+      and it appears below. Either way the user sees nothing unless they
+      already know to look.
+    fix: >-
+      Keep the inline banner for context and add one app-level polite live
+      region that mirrors every notice as it fires.
+    evidence: >-
+      twenty useNotice call sites; no createPortal or global message region in
+      App.js
+
+  - id: SYS-05
+    severity: minor
+    title: Screens use one column and waste the rest of the width
+    screens: [overview]
+    problem: >-
+      The Overview's right column ends about a third of the way down, leaving
+      roughly 1150px of empty page beneath it while the left column continues.
+    fix: Balance the columns, or move the short card under the long one.
+
+  - id: SYS-06
+    severity: minor
+    title: Status copy explains the data model instead of the situation
+    screens: [overview]
+    problem: >-
+      Both responsiveness rows read as having no reading in the stored lab scan
+      history. That describes where the plugin keeps numbers, not what the user
+      should do. The actionable sentence exists but sits below the list as a
+      footnote.
+    fix: >-
+      Lead with the meaning, keep the storage detail as the secondary line.
+    evidence: screenshot a-overview.png, rows six and nine
+
+# ---------------------------------------------------------------------------
+# Per screen
+# ---------------------------------------------------------------------------
+screens:
+  overview:
+    - id: OVW-01
+      severity: major
+      title: Nine status rows of identical weight, so nothing leads
+      problem: >-
+        Page cache, object cache, compatibility and six speed rows are all the
+        same size, colour and badge. A slow page and a healthy page look alike
+        at a glance.
+      fix: >-
+        Group them, and let the two numbers a site owner actually cares about
+        lead at a larger size.
+
+    - id: OVW-02
+      severity: minor
+      title: The same working badge appears seven times in a row
+      problem: >-
+        Repetition across the whole list adds no information. The absence of a
+        problem is the message.
+      fix: Show the badge only on the rows that are not working.
+
+    - id: OVW-03
+      severity: minor
+      title: The tab strip is visually detached
+      problem: >-
+        The two view tabs use stock admin tab styling and do not match the card
+        language used everywhere else on the page.
+      fix: Restyle as the same segmented control used elsewhere.
+
+    - id: OVW-04
+      severity: minor
+      title: Quick actions is internally inconsistent
+      problem: >-
+        One primary button with a description, then three grey buttons with
+        none.
+      fix: Give all four the same treatment, or make the first one not primary.
+
+  all-diagnostics:
+    - id: DSH-01
+      severity: major
+      title: A ten-link grid of equal blue links doing a navigation job
+      problem: >-
+        The find-a-setting card lists ten actions, all identical weight, all
+        primary blue, including four near-identical improve-a-metric links.
+      fix: >-
+        Reduce to the three or four that matter here and group them by intent.
+
+    - id: DSH-02
+      severity: major
+      title: Raw internal state is displayed as content
+      problem: >-
+        The page cache card shows a JSON blob containing a purge timestamp, a
+        purge count and an empty ports field, to a site owner.
+      fix: >-
+        Render it as a sentence, for example when it was last cleared and how
+        many times.
+
+    - id: DSH-03
+      severity: minor
+      title: Charts are small and labelled in raw acronyms
+      problem: >-
+        Two small sparklines with a five-acronym legend.
+      fix: >-
+        Name two metrics in plain language, drop the rest from the legend, and
+        give the chart room to be read.
+
+  manage-tools:
+    - id: TOL-01
+      severity: blocker
+      title: Three save buttons, none of which says what it saves
+      problem: >-
+        Save Settings, Save Auto-rescan and Save Monitoring are equally styled
+        on one page, so an edit can be lost by pressing the wrong one.
+      fix: One commit per section, each named for its section.
+
+    - id: TOL-02
+      severity: major
+      title: An export is styled as a primary action
+      problem: >-
+        Download JSON carries the same weight as saving, on a screen where two
+        other buttons already claim primary.
+      fix: Secondary.
+
+    - id: TOL-03
+      severity: major
+      title: The import card carries a red border with no error
+      problem: >-
+        A red left rule is the visual language for a validation failure, and it
+        is showing on a card in its normal state.
+      fix: Reserve red for actual errors.
+
+    - id: TOL-04
+      severity: major
+      title: A native file input breaks the visual language
+      problem: >-
+        The browser's own file chooser sits inside a designed card, styled by
+        neither the plugin nor the design system.
+      fix: Hide it behind a plugin-styled button.
+
+    - id: TOL-05
+      severity: minor
+      title: The export and import cards are a different width from the rest
+      problem: >-
+        The two-column grid at the foot of the page is visibly narrower than
+        the single-column cards above it, with no reason given.
+      fix: Make the grid consistent with the rest of the page.
+
+  media-images:
+    - id: MED-01
+      severity: fixed
+      title: Field labels shouted in all caps
+      problem: >-
+        An all-caps label sat directly above a sentence-case description on
+        every field in the plugin.
+      status: >-
+        Fixed. The strings were always sentence case; one CSS rule was
+        shouting them, on all eight screens.
+
+    - id: MED-02
+      severity: minor
+      title: Explanations describe internals rather than outcomes
+      problem: >-
+        Two settings explain the WordPress REST API, a third-party test suite
+        and core image processing behaviour. That is written for a developer.
+      fix: >-
+        One line on what the setting does; move the reasoning into a tooltip.
+
+  speed-file-optimisation:
+    - id: SPD-01
+      severity: major
+      title: Revealed options are not bound to the switch that reveals them
+      problem: >-
+        When the critical-CSS switch is on, five fields and a status panel
+        appear in the same column as the switch, with nothing connecting them.
+        With eighteen hundred pixels of revealed options on the screen, the user
+        has to guess which fields belong to which switch.
+      fix: >-
+        Indent the revealed block under its switch, or wrap the switch and its
+        options in one unit with a connecting rule.
+
+  data-object-cache:
+    - id: OBJ-01
+      severity: minor
+      title: Highest ink density in the plugin, lowest word count
+      problem: >-
+        Measured ink coverage of 46.9 per cent against 175 words of content.
+        Nine boxes carry almost no text.
+      fix: Reduce the surface area and let the values lead.
+
+# ---------------------------------------------------------------------------
+# Cross-cutting behaviour
+# ---------------------------------------------------------------------------
+behaviour:
+  loading_state:
+    status: verified
+    result: >-
+      Control-local busy confirmed with a slowed round trip: one busy element,
+      no full-screen overlays, one live region announcing once. The clicked
+      control alone goes busy. This clause of the original brief works.
+
+  dirty_state:
+    status: verified
+    result: >-
+      Eight of eight untouched forms navigate freely; unsaved edits are
+      guarded.
+
+  routing:
+    status: verified
+    result: >-
+      History API navigation, back, forward, refresh, deep link and invalid-tab
+      fallback all confirmed on the live site.
+
+  notices:
+    status: fail
+    reference: SYS-04
+
+# ---------------------------------------------------------------------------
+# Defects that are not visual
+# ---------------------------------------------------------------------------
+open_defects:
+  - id: RSP-01
+    severity: major
+    title: Four responsive clipping findings still open
+    detail: >-
+      The sweep measures text ink against its clipping ancestor rather than
+      the viewport, which is stricter than the check that previously reported
+      fifty-six of fifty-six. It now reports fifty-two of fifty-six: a toggle at
+      360 pixels on Media, and three button cases on All diagnostics.
