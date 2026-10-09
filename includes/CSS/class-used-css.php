@@ -3890,37 +3890,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// same-site-checked by callers, and WP follows redirects
 				// transparently — a same-site open redirect could otherwise
 				// route this server-side fetch to internal/loopback
-				// services (SSRF). Follow hops manually (max 5), aborting
-				// unless every Location stays same-site.
-				$response      = null;
-				$current_url   = $permalink;
-				$redirect_hops = 0;
-				while ( $redirect_hops <= 5 ) {
-					$response = wp_remote_get( $current_url, $fetch_args );
-					if ( is_wp_error( $response ) ) {
-						break;
-					}
-					$code = wp_remote_retrieve_response_code( $response );
-					if ( ! in_array( $code, array( 301, 302, 303, 307, 308 ), true ) ) {
-						break;
-					}
-					$location = wp_remote_retrieve_header( $response, 'location' );
-					if ( ! is_string( $location ) || '' === trim( $location ) ) {
-						break;
-					}
-					// Single shared redirect resolver (audit #1785 review):
-					// Util handles bare-relative/query-only targets with
-					// case-insensitive host comparison; a non-string result
-					// means abort the fetch.
-					$next = Util::resolve_same_host_redirect( trim( $location ), $current_url );
-					if ( ! is_string( $next ) || '' === $next ) {
-						return '';
-					}
-					$current_url = $next;
-					++$redirect_hops;
-					if ( $redirect_hops > 5 ) {
-						return '';
-					}
+				// services (SSRF). Hops are followed via the single shared
+				// Util helper (max 5); a false return means the guard
+				// aborted the fetch.
+				$response = Util::fetch_same_site_with_redirects( $permalink, $fetch_args, 5 );
+				if ( false === $response ) {
+					return '';
 				}
 
 				if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {

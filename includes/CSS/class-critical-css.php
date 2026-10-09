@@ -3962,47 +3962,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Redirect-hop guard (audit #1785): WP follows redirects
 			// transparently, so a same-site open redirect could route this
 			// server-side fetch to internal/loopback services (SSRF).
-			// Follow hops manually, aborting unless every Location stays
-			// same-site (max 5 hops).
-			$response    = false;
-			$current_url = $url;
-			$hops        = 0;
-			while ( $hops <= 5 ) {
-				$candidate = wp_remote_get(
-					$current_url,
-					array(
-						'timeout'             => $page_timeout,
-						'redirection'         => 0,
-						// Bound the HTTP layer so a multi-MB page can never
-						// materialize fully in memory before truncation (issue #1235).
-						'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
-						'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-					)
-				);
-				if ( is_wp_error( $candidate ) ) {
-					$response = $candidate;
-					break;
-				}
-				$code = wp_remote_retrieve_response_code( $candidate );
-				if ( ! in_array( $code, array( 301, 302, 303, 307, 308 ), true ) ) {
-					$response = $candidate;
-					break;
-				}
-				$location = wp_remote_retrieve_header( $candidate, 'location' );
-				// Single shared redirect resolver (audit #1785 review):
-				// Util handles bare-relative/query-only targets with
-				// case-insensitive host comparison; a non-string result
-				// means abort the fetch.
-				$redirect = ( is_string( $location ) && '' !== trim( $location ) ) ? Util::resolve_same_host_redirect( trim( $location ), $current_url ) : '';
-				$next     = is_string( $redirect ) ? $redirect : '';
-				if ( '' === $next ) {
-					return false;
-				}
-				$current_url = $next;
-				++$hops;
-				if ( $hops > 5 ) {
-					return false;
-				}
+			// Hops are followed via the single shared Util helper (max 5);
+			// a false return means the guard aborted the fetch.
+			$response = Util::fetch_same_site_with_redirects(
+				$url,
+				array(
+					'timeout'             => $page_timeout,
+					// Bound the HTTP layer so a multi-MB page can never
+					// materialize fully in memory before truncation (issue #1235).
+					'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
+					'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
+				),
+				5
+			);
+			if ( false === $response ) {
+				return false;
 			}
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
@@ -4268,40 +4242,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Own-host fetches may legitimately target loopback/private addresses
 			// (localhost / private-IP dev sites); every other host goes through
 			// the safe API so redirect hops are re-validated against private ranges.
-			// Same-site hops are followed manually with a same-site-only guard
+			// Same-site hops are followed via the single shared Util helper
 			// (audit #1785): WP would otherwise follow a same-site open
-			// redirect off-site transparently (SSRF).
+			// redirect off-site transparently (SSRF). A false return means
+			// the guard aborted the fetch.
 			if ( self::is_same_site_host( $url ) ) {
-				$args['redirection'] = 0;
-				$response            = null;
-				$sheet_url           = $url;
-				$sheet_hops          = 0;
-				while ( $sheet_hops <= 5 ) {
-					$candidate = wp_remote_get( $sheet_url, $args );
-					if ( is_wp_error( $candidate ) ) {
-						$response = $candidate;
-						break;
-					}
-					$sheet_code = wp_remote_retrieve_response_code( $candidate );
-					if ( ! in_array( $sheet_code, array( 301, 302, 303, 307, 308 ), true ) ) {
-						$response = $candidate;
-						break;
-					}
-					$sheet_location = wp_remote_retrieve_header( $candidate, 'location' );
-					// Single shared redirect resolver (audit #1785 review),
-					// as above: a non-string result means abort the fetch.
-					$sheet_redirect = ( is_string( $sheet_location ) && '' !== trim( $sheet_location ) ) ? Util::resolve_same_host_redirect( trim( $sheet_location ), $sheet_url ) : '';
-					$sheet_next     = is_string( $sheet_redirect ) ? $sheet_redirect : '';
-					if ( '' === $sheet_next ) {
-						return '';
-					}
-					$sheet_url = $sheet_next;
-					++$sheet_hops;
-					if ( $sheet_hops > 5 ) {
-						return '';
-					}
-				}
-				if ( null === $response ) {
+				$response = Util::fetch_same_site_with_redirects( $url, $args, 5 );
+				if ( false === $response ) {
 					return '';
 				}
 			} else {

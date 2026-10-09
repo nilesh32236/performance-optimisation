@@ -2137,6 +2137,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Fetch a URL via wp_remote_get(), manually following same-site redirects.
+		 *
+		 * Facade proxy: fetch ownership lives in {@see \PerformanceOptimise\Inc\Url}.
+		 *
+		 * Single shared redirect-following fetch (audit #1785 review) so the
+		 * used-CSS/critical-CSS fetch paths share one hop policy.
+		 *
+		 * @since NEXT
+		 * @param string $url      Initial URL to fetch.
+		 * @param array  $args     wp_remote_get() args (redirection is forced to 0).
+		 * @param int    $max_hops Maximum redirect hops to follow (>= 0).
+		 * @return array|\WP_Error|false Final response array, WP_Error on transport failure, or false on redirect-guard abort.
+		 */
+		public static function fetch_same_site_with_redirects( string $url, array $args, int $max_hops = 5 ): array|\WP_Error|false {
+			return Url::fetch_same_site_with_redirects( $url, $args, $max_hops );
+		}
+
+		/**
 		 * Normalize a raw host value into a safe cache-key domain.
 		 *
 		 * Lowercases, converts IDN to ASCII, strips any port, and applies the
@@ -4023,9 +4041,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				$message = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $message ) : trim( $message );
 				// Bound the length so a verbose backend error cannot smuggle
-				// unbounded detail to the client.
+				// unbounded detail to the client. Multibyte-safe: substr()
+				// could split a UTF-8 sequence at the boundary and emit
+				// invalid UTF-8.
 				if ( strlen( $message ) > 500 ) {
-					$message = substr( $message, 0, 500 );
+					$message = function_exists( 'mb_substr' ) ? mb_substr( $message, 0, 500, 'UTF-8' ) : substr( $message, 0, 500 );
 				}
 				if ( '' === $message ) {
 					$message = function_exists( '__' ) ? __( 'Performance scan failed.', 'performance-optimisation' ) : 'Performance scan failed.';
