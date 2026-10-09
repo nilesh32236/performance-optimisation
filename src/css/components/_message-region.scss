@@ -46,7 +46,7 @@
 	line-height: 1;
 	color: var(--wppo-text-sidebar-active, #fff);
 	border-radius: 50%;
-	background: var(--wppo-text-light, #64748b);
+	background: var(--wppo-icon-neutral, #64748b);
 }
 
 .wppo-message-region__text {
@@ -60,7 +60,7 @@
 	border-left-color: var(--wppo-success, #059669);
 }
 .wppo-message-region__item--success .wppo-message-region__icon {
-	background: var(--wppo-success, #059669);
+	background: var(--wppo-success-strong, #047857);
 }
 
 .wppo-message-region__item--error {
@@ -74,14 +74,14 @@
 	border-left-color: var(--wppo-warning, #d97706);
 }
 .wppo-message-region__item--warning .wppo-message-region__icon {
-	background: var(--wppo-warning, #d97706);
+	background: var(--wppo-warning-strong, #8a5a00);
 }
 
 .wppo-message-region__item--info {
 	border-left-color: var(--wppo-info, #0284c7);
 }
 .wppo-message-region__item--info .wppo-message-region__icon {
-	background: var(--wppo-info, #0284c7);
+	background: var(--wppo-info-strong, #0b6e75);
 }
 
 @media (max-width: 600px) {
