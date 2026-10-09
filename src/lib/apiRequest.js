@@ -400,7 +400,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// Computed lazily inside the GET path: POSTs never consume the
 		// key, so computing it up front paid a JSON.stringify on every
 		// mutating call for a value that was never read.
-		inflightKey = getInflightKey( action, null );
+		inflightKey = getInflightKey( action, body );
 		const shared = inflightGets.get( inflightKey );
 		if ( shared ) {
 			if ( ! signal ) {
