@@ -3167,14 +3167,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 9419,
+        "lines": 9424,
         "methods": 188,
         "public_methods": 44,
         "large_methods": 15,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "add_delay_load_img",
-            "line": 7902,
+            "line": 7907,
             "lines": 498
         },
         "method_prefixes": {
@@ -3356,14 +3356,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 4776,
+        "lines": 4797,
         "methods": 79,
         "public_methods": 74,
         "large_methods": 10,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "apply_occlusion_fetchpriority_low",
-            "line": 835,
+            "line": 837,
             "lines": 163
         },
         "method_prefixes": {

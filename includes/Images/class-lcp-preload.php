@@ -167,9 +167,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * Whether a responsive LCP preload already emitted this response.
 		 *
 		 * Single-high invariant (issue #1429): `emit_responsive_lcp_preload()`
-		 * sets this once a `<link ... fetchpriority="high">` is produced so
-		 * a second call in the same response degrades to '' instead of a
-		 * second high hint. Reset via `clear_runtime_caches()`.
+		 * and `emit_lcp_preload()` (issue #1703) share this one per-response
+		 * high-preload budget — whichever emitter produces a
+		 * `<link ... fetchpriority="high">` first sets it, and any later
+		 * call from either emitter in the same response degrades to ''
+		 * instead of a second high hint. Reset via `clear_runtime_caches()`.
 		 *
 		 * @since 2.3.0
 		 * @var bool
@@ -1870,6 +1872,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * prefer this emitter instead of reimplementing the OD → RUM →
 		 * single-high flow.
 		 *
+		 * Shares one per-response high-preload budget with
+		 * `emit_lcp_preload()` (issue #1703) via
+		 * `$responsive_lcp_preload_emitted`: whichever emitter runs first
+		 * wins, the second degrades to '' in the same response.
+		 *
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
 		 * @return string The preload `<link>` tag, or empty string when skipped.
@@ -1964,6 +1971,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		 * or missing signals emit nothing (fail-open, never fatal).
 		 * Multisite-safe: per-site options, no cross-site state.
 		 *
+		 * Shares one per-response high-preload budget with
+		 * `emit_responsive_lcp_preload()` via
+		 * `$responsive_lcp_preload_emitted`: whichever emitter runs first
+		 * wins, the second degrades to '' in the same response.
+		 *
+		 * Gate-first ordering: the manual picker and both auto toggles are
+		 * resolved before the buffer scan, so a toggle-off request with no
+		 * manual pin returns '' without paying for the
+		 * `response_already_has_high_preload()` buffer scan.
+		 *
 		 * @since NEXT
 		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The preload `<link>` tag, or empty string when skipped.
@@ -1972,9 +1989,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		public function emit_lcp_preload( ?string $buffer = null ): string {
 			try {
 				if ( self::$responsive_lcp_preload_emitted ) {
-					return '';
-				}
-				if ( $this->response_already_has_high_preload( $buffer ) ) {
 					return '';
 				}
 				try {
@@ -1988,8 +2002,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				$preload_settings   = $lcpown_options['preload_settings'] ?? array();
 				$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
 				$new_on             = ! empty( $preload_settings['autoLcpPreload'] );
-				$lcp_url            = '';
-				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
+				$has_manual         = '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual );
+				if ( ! $has_manual && ! $legacy_on && ! $new_on ) {
+					return '';
+				}
+				if ( $this->response_already_has_high_preload( $buffer ) ) {
+					return '';
+				}
+				$lcp_url = '';
+				if ( $has_manual ) {
 					$lcp_url = $manual;
 				} else {
 					try {
