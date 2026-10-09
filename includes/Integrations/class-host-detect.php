@@ -150,6 +150,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 		}
 
 		/**
+		 * Whether the slug has a real purge adapter in Host_Purger.
+		 *
+		 * Custom filter-provided slugs survive detect() (filter
+		 * extensibility) but fail open downstream: Host_Purger no-ops on
+		 * unknown slugs. Callers that advertise the purge route (e.g.
+		 * System_Info::get_host()) must consult this so the SPA never
+		 * reports a host purge that never happens.
+		 *
+		 * @since NEXT
+		 * @param string $slug Host slug to check.
+		 * @return bool True for kinsta/wpengine/siteground/cloudways.
+		 */
+		public static function has_purge_adapter( string $slug ): bool {
+			return in_array( $slug, self::KNOWN_SLUGS, true );
+		}
+
+		/**
 		 * Whether the detected host bans an overlapping WPPO page cache.
 		 *
 		 * @since NEXT
@@ -239,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 			}
 
 			try {
-				if ( function_exists( 'kinsta_cache_purge_all' ) || function_exists( 'kinsta_cache_purge' ) ) {
+				if ( function_exists( 'kinsta_cache_flush_all' ) || function_exists( 'kinsta_cache_purge_all' ) || function_exists( 'kinsta_cache_purge' ) ) {
 					return 'kinsta';
 				}
 				if ( function_exists( 'wpe_clear_cache' ) || function_exists( 'wpe_purge_cache' ) ) {

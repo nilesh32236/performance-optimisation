@@ -140,7 +140,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 			$purge_target = 'wppo';
 			if ( 'none' !== $slug ) {
-				$purge_target = 'wppo+host:' . $slug;
+				$has_adapter = false;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Host_Detect', 'has_purge_adapter' ) ) {
+						$has_adapter = Host_Detect::has_purge_adapter( $slug );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Only advertise a host purge for slugs with a real adapter;
+				// custom filter-provided slugs no-op in Host_Purger, so
+				// report them honestly instead of overclaiming.
+				if ( $has_adapter ) {
+					$purge_target = 'wppo+host:' . $slug;
+				} else {
+					$purge_target = 'wppo(+custom-host:' . $slug . ', no-op)';
+				}
 			}
 			if ( $apo_active ) {
 				$purge_target .= '+cloudflare';
@@ -582,11 +597,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		/**
 		 * Reset per-request system information memos without mutating site data.
 		 *
+		 * Also clears the Host_Detect / Apo_Detect per-request verdicts: the
+		 * APO probe reads the site-specific 'cloudflare' option, so a
+		 * switch_to_blog() mid-request must not serve the previous site's
+		 * verdict. Wiring the reset here (rather than adding new
+		 * Runtime_State owners) keeps the six-owner registry contract intact
+		 * while making the memos blog-switch aware via the existing
+		 * System_Info owner entry.
+		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function reset_runtime_state(): void {
 			self::$litespeed_request_cache = null;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) && is_callable( array( 'PerformanceOptimise\Inc\Host_Detect', 'reset_cache' ) ) ) {
+					Host_Detect::reset_cache();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) && is_callable( array( 'PerformanceOptimise\Inc\Apo_Detect', 'reset_cache' ) ) ) {
+					Apo_Detect::reset_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

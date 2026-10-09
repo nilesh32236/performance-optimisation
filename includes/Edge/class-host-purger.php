@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 		private static function purge_host( string $slug ): bool {
 			switch ( $slug ) {
 				case 'kinsta':
-					return self::fire_host_hook( 'kinsta_cache_flush_all', 'kinsta-cache/purge' );
+					return self::purge_kinsta();
 				case 'wpengine':
 					return self::fire_host_hook( 'wpe_clear_cache', 'wpe_purge_cache' );
 				case 'siteground':
@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 		private static function purge_single( string $slug, $url_path ): bool {
 			switch ( $slug ) {
 				case 'kinsta':
-					return self::fire_host_hook( 'kinsta_cache_flush_all', 'kinsta-cache/purge' );
+					return self::purge_kinsta();
 				case 'wpengine':
 					return self::fire_host_hook( 'wpe_clear_cache', 'wpe_purge_cache' );
 				case 'siteground':
@@ -123,6 +123,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 				default:
 					return true;
 			}
+		}
+
+		/**
+		 * Purge Kinsta, trying every probed function name in order.
+		 *
+		 * Host_Detect::probe() detects Kinsta via kinsta_cache_flush_all,
+		 * kinsta_cache_purge_all, or kinsta_cache_purge; the purge leg must
+		 * call whichever of those exists so detection and purge line up.
+		 * Falls back to the host hooks when no function exists.
+		 * Fire-and-forget by design (no observable failure channel).
+		 *
+		 * @since NEXT
+		 * @return bool Always true (no observable failure channel).
+		 */
+		private static function purge_kinsta(): bool {
+			try {
+				foreach ( array( 'kinsta_cache_flush_all', 'kinsta_cache_purge_all', 'kinsta_cache_purge' ) as $candidate ) {
+					if ( function_exists( $candidate ) ) {
+						call_user_func( $candidate );
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return self::fire_host_hook( 'kinsta_cache_flush_all', 'kinsta-cache/purge' );
 		}
 
 		/**
@@ -178,7 +204,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 				if ( is_string( $url_path ) && '' !== trim( $url_path ) ) {
 					$candidate = trim( $url_path );
 					if ( 0 === strpos( $candidate, 'http://' ) || 0 === strpos( $candidate, 'https://' ) ) {
-						$target = $candidate;
+						// Absolute URLs are internal (save_post/cache-clear
+						// fan-out), but a future caller must not turn this
+						// PURGE leg into SSRF: only allow targets on the
+						// home host, otherwise fall back to home_url().
+						$target = self::constrain_to_home_host( $candidate );
 					} elseif ( function_exists( 'home_url' ) ) {
 						$target = home_url( '/' . ltrim( $candidate, '/' ) );
 					}
@@ -222,9 +252,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return true;
+				// Honest failure (issue #1651): the transport itself threw,
+				// so the Varnish purge observably did not happen. Report
+				// false rather than a false-success true.
+				self::log_failure( 'transport exception' );
+				return false;
 			}
 			return true;
+		}
+
+		/**
+		 * Constrain an absolute PURGE target to the home host.
+		 *
+		 * Returns the candidate unchanged when its host matches home_url()'s
+		 * host (case-insensitive); otherwise falls back to home_url('/') so
+		 * an off-site URL can never become a PURGE-method SSRF target. When
+		 * home_url() is unavailable or either URL is unparseable, returns ''.
+		 *
+		 * @since NEXT
+		 * @param string $candidate Absolute candidate URL.
+		 * @return string Same-host URL, home_url('/'), or ''.
+		 */
+		private static function constrain_to_home_host( string $candidate ): string {
+			try {
+				if ( ! function_exists( 'home_url' ) ) {
+					return '';
+				}
+				$parse     = function_exists( 'wp_parse_url' ) ? 'wp_parse_url' : 'parse_url';
+				$cand_host = call_user_func( $parse, $candidate, PHP_URL_HOST );
+				$home_host = call_user_func( $parse, home_url( '/' ), PHP_URL_HOST );
+				if ( ! is_string( $cand_host ) || '' === $cand_host || ! is_string( $home_host ) || '' === $home_host ) {
+					return home_url( '/' );
+				}
+				if ( strtolower( $cand_host ) !== strtolower( $home_host ) ) {
+					return home_url( '/' );
+				}
+				return $candidate;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**
