@@ -87,7 +87,7 @@ jobs:
         (
           github.event_name == 'issue_comment' &&
           github.event.issue.pull_request == null &&
-          contains(github.event.comment.body || '', '/fix') &&
+          startsWith(github.event.comment.body || '', '/fix') &&
           (
             github.event.comment.author_association == 'OWNER' ||
             github.event.comment.author_association == 'MEMBER' ||
@@ -133,7 +133,7 @@ jobs:
           npm ci || npm install
 
       - name: Fix Issue
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): upstream opencode releases
@@ -260,7 +260,7 @@ jobs:
           npm ci || npm install
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: review
           # Fail-open checksum (Sep 2026): see fix job above.
@@ -488,7 +488,7 @@ jobs:
           retention-days: 30
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         if: failure()
         with:
           mode: review
@@ -563,7 +563,7 @@ jobs:
         (
           github.event_name == 'issue_comment' &&
           github.event.issue.pull_request != null &&
-          contains(github.event.comment.body || '', '/fix') &&
+          startsWith(github.event.comment.body || '', '/fix') &&
           (
             github.event.comment.author_association == 'OWNER' ||
             github.event.comment.author_association == 'MEMBER' ||
@@ -633,7 +633,7 @@ jobs:
           npm ci || npm install
 
       - name: Autofix Review Loop
-        uses: nilesh32236/opencode-ai-reviewer@e76f051a8a19d26cd8b384f82e54b063902d76b5 # v1.23.0+e76f051a — pinned commit SHA: a tag can be moved or deleted, a commit cannot
+        uses: nilesh32236/opencode-ai-reviewer@359db9f61d5f98ddfc7ef4f0eb3ab791463d069c # v1.23.3 — pinned commit SHA: a tag can be moved or deleted, a commit cannot
         with:
           mode: fix
           # Fail-open checksum (Sep 2026): see first fix job above.
@@ -677,10 +677,21 @@ jobs:
   # warning (the hourly orchestrator / a later label event retries).
   auto-merge:
     name: Auto-Merge Approved PR
+    # Runs on the label event AND right after the autofix loop approves, so a
+    # cancelled/duplicate label event can no longer strand an approved PR.
+    needs: [autofix]
     if: |
-      github.event_name == 'pull_request' &&
-      github.event.action == 'labeled' &&
-      github.event.label.name == 'autofix:ready'
+      always() && (
+        (
+          github.event_name == 'pull_request' &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'autofix:ready'
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          needs.autofix.result == 'success'
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -688,11 +699,16 @@ jobs:
       - name: Wait for green checks, then squash merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Bind the decision to the exact head the reviewer approved.
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_NUMBER="${{ github.event.pull_request.number || github.event.issue.number }}"
           REPO="${{ github.repository }}"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::notice::No PR number on this event — nothing to merge"
+            exit 0
+          fi
+          # Bind the decision to the exact head the reviewer approved. Read it
+          # here (not from the event) so both trigger paths share one code path.
+          PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
           ATTEMPTS=0
           PENDING=1
           FAILED=0
@@ -740,6 +756,18 @@ jobs:
           # that had never run CI at all.
           if [ "$TOTAL" -eq 0 ]; then
             echo "::warning::Auto-merge blocked — PR #${PR_NUMBER} reported no checks; refusing to merge unverified code"
+            exit 0
+          fi
+          # Only a PR the reviewer approved is eligible. Guards the post-autofix
+          # sweep from merging a PR the loop did not approve. Re-checked here,
+          # after the poll, because the label can be removed while we wait.
+          # `index()` yields a number or null — never the string "true" — so the
+          # old `| grep -q true` could never match and silently skipped every
+          # merge. Test for PRESENCE instead. `(.labels // [])` keeps jq from
+          # erroring on a PR whose labels come back null.
+          if [ "$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels \
+                 --jq '[(.labels // [])[]?.name] | any(. == "autofix:ready")')" != "true" ]; then
+            echo "::notice::PR #${PR_NUMBER} is not autofix:ready — nothing to merge"
             exit 0
           fi
           echo "All $TOTAL check(s) green — merging PR #${PR_NUMBER} (autofix:ready)..."

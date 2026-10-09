@@ -11,6 +11,8 @@ on:
       - 'scripts/architecture/*.php'
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
+      - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   pull_request:
     branches: ["master"]
     paths:
@@ -21,6 +23,8 @@ on:
       - 'scripts/architecture/*.php'
       - 'docs/architecture/class-inventory.json'
       - 'docs/architecture/DEPENDENCY-GRAPH.json'
+      - 'docs/site/playground.html'
+      - '.wordpress-org/playground/blueprint.json'
   schedule:
     - cron: "28 13 * * 0"
   # Manual re-run. The path filters below mean a change to psalm.xml, the
@@ -29,13 +33,6 @@ on:
   # waiting for the weekly run.
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-  actions: read
-  security-events: write
-
 jobs:
   code-quality:
     name: WPCS & Psalm Security Scan
@@ -43,9 +40,22 @@ jobs:
     # 20m ceiling: single-pass WPCS checkstyle + psalm scan + SARIF upload,
     # no retries — guardrail only, far above normal runtimes.
     timeout-minutes: 20
+    # NO issues:write and NO pull-requests:write. Every step in this job runs
+    # code from the pull request — composer install, phpcs, a docker run of
+    # the Psalm image, and the Playground pin verifier — so a same-repo branch
+    # that lands a malicious composer/npm lifecycle script would otherwise
+    # execute holding comment- and issue-write scope. `permissions:` is only
+    # settable at job level or on a `uses:` step, never on a `run:` step,
+    # which is why this had to become two jobs.
+    # security-events: write is retained: upload-sarif cannot write results
+    # without it, and dropping it would silently break code scanning.
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up PHP
         uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -185,14 +195,31 @@ jobs:
           fi
           echo "exists=${exists}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Security Analysis results
-        # always() so a failed scan still uploads its report; the outcome and
-        # existence guards keep a skipped or SARIF-less run from calling the
-        # action with nothing to read.
-        if: always() && steps.psalm.outcome != 'skipped' && steps.psalm_report.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939 # v4
-        with:
-          sarif_file: reports/psalm.sarif
+
+      - name: Verify the Playground demo pin resolves
+        # id is REQUIRED: reports/status.txt is derived only from wpcs.xml and
+        # psalm.sarif, so without this a red gate still produced a PR comment
+        # reading "All code quality checks passed!".
+        id: playground_pin
+        run: |
+          # Gate on the PAGE, not the script. The script and the page it verifies
+          # arrive together in #1773; until then this step ran php against a file that
+          # does not exist, exited 1, and - because a failed step skips later steps
+          # carrying no if: condition - took the Psalm security scan and the SARIF
+          # upload down with it. A PR that hardens security must not be what disables it.
+          #
+          # Skipping when the SCRIPT is absent would fail open on deletion, which is
+          # exactly when the gate must still run - so a page without its script is a hard
+          # failure, not a skip.
+          if [ ! -f docs/site/playground.html ]; then
+            echo "no Playground page; pin gate not applicable"
+            exit 0
+          fi
+          if [ ! -f scripts/verify-playground-blueprint.php ]; then
+            echo "::error::Playground page exists but the verifier script is missing"
+            exit 1
+          fi
+          php scripts/verify-playground-blueprint.php
 
       - name: Fix Reports Permissions
         if: always()
@@ -209,6 +236,20 @@ jobs:
           table = "| Tool | File | Line | Message |\n| --- | --- | --- | --- |\n"
           has_errors = False
 
+          # Sanitise PR-controlled text BEFORE it is written to summary.md. summary.md is
+          # consumed by a SEPARATE job holding issues:write and pull-requests:write that
+          # never checks out this repository, so that job posts content whose every field
+          # came from files this pull request controls. Escaping only the table pipe leaves
+          # markdown metacharacters intact. Escaping happens HERE, on the low-trust side of
+          # the boundary, so what crosses is already inert. Not a claim that this is
+          # exploitable - a hostile filename does not become a link in the comment. This is
+          # about provenance, not about a rendered payload.
+          def cell(value):
+              text = str(value).replace(chr(13), '').replace(chr(10), ' ')[:200]
+              for ch in (chr(92), '`', '*', '_', '{', '}', '[', ']', '(', ')', '<', '>', '|', '#', '+', '-', '!', '&'):
+                  text = text.replace(ch, chr(92) + ch)
+              return text
+
           # WPCS
           wpcs_file = 'reports/wpcs.xml'
           if os.path.exists(wpcs_file):
@@ -217,18 +258,18 @@ jobs:
                   for file_node in root.findall('file'):
                       full_path = file_node.get('name')
                       rel_path = os.path.relpath(full_path, start=os.getcwd()) if os.path.isabs(full_path) else full_path
-                      filename = rel_path.split('/')[-1]
+                      filename = cell(rel_path.split('/')[-1])
                       for error in file_node.findall('error'):
                           has_errors = True
-                          line = error.get('line')
+                          line = cell(error.get('line'))
                           col = error.get('column', '1')
                           raw_msg = error.get('message', '')
-                          msg = raw_msg.replace('|', '\\|')
+                          msg = cell(raw_msg)
                           table += f"| WPCS | {filename} | {line} | {msg} |\n"
                           clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                           print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
               except Exception as e:
-                  table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
 
           # Psalm
           psalm_file = 'reports/psalm.sarif'
@@ -240,20 +281,39 @@ jobs:
                           for result in run.get('results', []):
                               has_errors = True
                               raw_msg = result.get('message', {}).get('text', '')
-                              msg = raw_msg.replace('|', '\\|')
+                              msg = cell(raw_msg)
                               for loc in result.get('locations', []):
                                   phys = loc.get('physicalLocation', {})
                                   rel_path = phys.get('artifactLocation', {}).get('uri', '')
                                   if rel_path.startswith('file://'):
                                       rel_path = rel_path[7:]
                                   rel_path = os.path.relpath(rel_path, start=os.getcwd()) if os.path.isabs(rel_path) else rel_path
-                                  filename = rel_path.split('/')[-1]
-                                  line = phys.get('region', {}).get('startLine', '?')
+                                  filename = cell(rel_path.split('/')[-1])
+                                  line = cell(phys.get('region', {}).get('startLine', '?'))
                                   table += f"| Psalm | {filename} | {line} | {msg} |\n"
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                                   print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
               except Exception as e:
-                  table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
+                  has_errors = True  # a report we could not parse is not a clean result
+
+          # A missing report means the scanner produced nothing to parse.
+          # That is NOT a clean result, it is an absent one. This step runs
+          # under `if: always()`, so a skipped or silent scanner used to leave
+          # has_errors False and the job posted 'All code quality checks
+          # passed!' Having proved a check can fail, also prove it can be absent.
+          wpcs_present  = os.path.exists('reports/wpcs.xml')
+          psalm_present = os.path.exists('reports/psalm.sarif')
+          if not wpcs_present and not psalm_present:
+              has_errors = True
+              table = ('| Scanner | - | - | Neither reports/wpcs.xml nor '
+                       'reports/psalm.sarif was produced. No scan ran, so no '
+                       'result can be called clean. |\n')
+          elif not wpcs_present:
+              has_errors = True
+              table += '| WPCS | - | - | reports/wpcs.xml missing; no report |\n'
+          elif not psalm_present:
+              has_errors = True
+              table += '| Psalm | - | - | reports/psalm.sarif missing; no report |\n'
 
           if not has_errors:
               table = "All checks passed! 🎉"
@@ -264,15 +324,147 @@ jobs:
           with open('reports/status.txt', 'w') as f:
               f.write("failure" if has_errors else "success")
 
+      # The Playground gate runs outside the scanners, so its outcome has to
+      # reach the posting job somehow. Writing it into reports/ is what lets it
+      # cross the job boundary: `steps.playground_pin.outcome` is a step-scoped
+      # value and does not exist in the next job. Anything NOT written here is
+      # read as failure by the consumer, so an absent file stays fail-closed.
+      - name: Record the Playground pin outcome for the posting job
+        if: always()
+        run: |
+          if [ "${{ steps.playground_pin.outcome }}" != "success" ]; then
+            echo "failure" > reports/playground_pin.txt
+          else
+            echo "success" > reports/playground_pin.txt
+          fi
+
+      - name: Upload the scan summary for the posting job
+        # The reports directory is the ONLY thing crossing into the posting
+        # job. The posting job never re-runs a scanner and never re-parses a
+        # report; it reads a verdict this job already computed.
+        #
+        # BOTH files are required, not just status.txt: the comment body on a
+        # red gate is reports/summary.md. Shipping status.txt alone would make
+        # every failing run post an empty table.
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: code-quality-summary
+          path: |
+            reports/status.txt
+            reports/summary.md
+            reports/playground_pin.txt
+            reports/psalm.sarif
+          retention-days: 7
+          # Without this, gh run rerun re-executes the producer and
+          # upload-artifact v4 returns 409 Conflict on the duplicate name,
+          # so sarif and report would consume the PREVIOUS run's data.
+          overwrite: true
+          if-no-files-found: error
+
+  sarif:
+    # Holds security-events:write and nothing else. GitHub scopes `permissions`
+    # to the workflow or a job, never to a step, so this scope cannot be narrowed
+    # inside code-quality without splitting it out - which is what this job is.
+    #
+    # It consumes reports/psalm.sarif as an artefact and checks out NOTHING, so
+    # no pull-request-controlled code ever runs here either.
+    name: Upload SARIF
+    needs: code-quality
+    if: always() && needs.code-quality.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      # The source tree is REQUIRED here, not optional. upload-sarif computes
+      # result fingerprints by hashing the analysed source files; with no checkout
+      # it cannot, and results arrive untracked. Measured, not assumed - see the
+      # commit message.
+      #
+      # A checkout copies files. It does not execute them, so this does not undo
+      # the split: nothing in this job runs composer, npm, phpcs or the Psalm
+      # image. persist-credentials: false so the clone leaves no usable token.
+      - name: Checkout code for fingerprinting
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Download the SARIF report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: code-quality-summary
+          path: reports
+          # NOT a download-artifact input - it belongs to upload-artifact and is
+          # silently ignored here. A no-op guard reads as protection, which is worse
+          # than none. The producer uploads with if-no-files-found: error, so a
+          # missing artefact already fails loudly where it went wrong.
+
+      - name: Upload Security Analysis results
+        uses: github/codeql-action/upload-sarif@fddeee1a7ece751b577e409a89057319e3172939
+        with:
+          sarif_file: reports/psalm.sarif
+          # NOT an upload-sarif input - it belongs to upload-artifact. Passing an
+          # unrecognised input makes the action raise ConfigurationError, turning a
+          # soft skip into a hard failure on every run.
+
+
+  report:
+    name: Post the scan summary
+    needs: [code-quality]
+    # always() so a red gate still posts its comment. If job A could not start
+    # at all, there is no summary and this job posts the failure itself rather
+    # than staying silent.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # This job holds the write scopes. It checks out NOTHING and runs no code
+    # from the pull request: it downloads one artefact this workflow produced
+    # and posts a comment. That is the whole reason the split exists.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download the scan summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: code-quality-summary
+          path: reports/
+          # NOT a download-artifact input - it belongs to upload-artifact and is
+          # silently ignored here. A no-op guard reads as protection, which is worse
+          # than none. The producer uploads with if-no-files-found: error, so a
+          # missing artefact already fails loudly where it went wrong.
+
       - name: Manage GitHub PR Comment or Issue
         id: manage_issue
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # ref_name is branch-controlled; pass through env, never the run body.
+          # This job deliberately checks out nothing, so there is no git remote and
+          # no working directory for `gh` to infer the repository from. Without this
+          # every gh call below fails to resolve, the comment is never posted, and
+          # the job that exists to REPORT failures reports nothing while going
+          # green. A stubbed gh would not catch this: a stub always resolves.
+          GH_REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
         run: |
+          # The Playground gate reports separately from the scanners. Fold its
+          # outcome in here so a red pin can never be posted as a clean run.
+          # It arrives as a file because steps.playground_pin.outcome does not
+          # cross the job boundary. A missing file is a failure.
+          PIN="$(cat reports/playground_pin.txt 2>/dev/null || echo failure)"
+          if [ "$PIN" != "success" ]; then
+            echo "playground_pin=failure" >> "$GITHUB_OUTPUT"
+          else
+            echo "playground_pin=success" >> "$GITHUB_OUTPUT"
+          fi
+
           STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
+          if [ "$PIN" != "success" ]; then
+            STATUS=failure
+          fi
           EVENT_NAME="${{ github.event_name }}"
 
           if [[ "$STATUS" == "success" ]]; then
@@ -280,7 +472,7 @@ jobs:
 
           ✅ All code quality checks passed! 🎉"
           else
-            SUMMARY=$(cat reports/summary.md)
+            SUMMARY=$(cat reports/summary.md 2>/dev/null || echo "The scan job did not produce a summary; see the workflow run for details.")
             BODY="### Code Quality Issues Detected in $BRANCH
 
           $SUMMARY
