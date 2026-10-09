@@ -2089,7 +2089,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					if ( $preload_on && ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
 						$missing_expected[] = 'wppo_page_cron_hook';
 					}
-					if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
+					$convert_img_on = ! empty( $stored['image_optimisation']['convertImg'] );
+					if ( $convert_img_on && ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
 						$missing_expected[] = 'wppo_img_conversion';
 					}
 					$db_schedule = isset( $stored['database_cleanup']['dbSchedule'] ) ? (string) $stored['database_cleanup']['dbSchedule'] : '';

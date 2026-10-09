@@ -115,13 +115,19 @@ class SchedulerCronPrimitivesTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function all_features_enabled_settings(): array {
 		return array(
-			'preload_settings'  => array(
+			'preload_settings'   => array(
 				'enablePreloadCache' => true,
 			),
-			'llms_txt'          => array(
+			'image_optimisation' => array(
+				// Now that the image-conversion schedule is gated on this
+				// setting, the "all features enabled" fixture must actually
+				// enable it (same precedent as the criticalCSS note below).
+				'convertImg' => true,
+			),
+			'llms_txt'           => array(
 				'enabled' => true,
 			),
-			'file_optimisation' => array(
+			'file_optimisation'  => array(
 				'removeUnusedCSS' => true,
 				// The fixture is named "all features enabled" but omitted this
 				// key, so the Critical CSS event was scheduled unconditionally
