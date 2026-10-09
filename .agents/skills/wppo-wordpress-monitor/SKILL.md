@@ -109,9 +109,11 @@ After analysis, create a markdown summary with:
 When this skill drives an automated monitor run whose output is parsed by
 CI (see `.github/workflows/wordpress-monitor.yml` and
 `.github/schemas/wppo-findings.schema.json`), the markdown report above is
-NOT the deliverable. The final message must be exactly ONE JSON document —
-no prose before or after, no markdown fences. Its first line must begin
-with `{"schema_version"` so CI's extraction anchor finds it.
+NOT the deliverable. The final message SHOULD be exactly ONE compact
+single-line JSON document starting with `{"schema_version"` (canonical
+form) — no prose before or after, no markdown fences. The extractor
+tolerates pretty-printed, indented, CRLF, BOM-prefixed, or fenced output by
+scanning for complete JSON values, but compact output is preferred.
 
 **Authoritative contract:** `.github/schemas/wppo-findings.schema.json`
 wins on any conflict with the summary below. The schema sets
@@ -140,11 +142,13 @@ numeric `queries`, `frontend_kb`, `request_ms`), `measured_impact: null`
 on first submission, `fallback` (string), `acceptance_criteria[]`
 (non-empty strings).
 
-Emit compact single-line JSON (`jq -c`): the CI extractor anchors on the
-first `"schema_version":` line and backtracks to its opening brace, keeping
-the last complete document — compact single-line output is canonical, and
-pretty-printed, indented, CRLF, BOM-prefixed, or fenced output is tolerated,
-not preferred. Before stopping, self-verify with
+Emit compact single-line JSON (`jq -c`): the CI extractor collects every
+complete JSON value in the stream and keeps the last object containing
+`schema_version` with a `findings` array — compact single-line output is
+canonical, and pretty-printed, indented, CRLF, BOM-prefixed, or fenced
+output is tolerated, not preferred. Do NOT emit the JSON twice with prose
+in between as a "verification echo": if you self-verify, verify the same
+string you already emitted without re-printing a second copy. Before stopping, self-verify with
 `echo '<json>' | jq -e .` and
 `echo '<json>' | jq -e 'type == "object" and (.findings | type == "array")'` —
 both must exit 0. If the JSON risks truncation, shorten prose fields

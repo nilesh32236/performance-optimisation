@@ -38,57 +38,91 @@ norm="$(mktemp)"
 trap 'rm -f -- "$narrow" "$norm"' EXIT
 
 # 1. Normalise: strip UTF-8 BOM (first line only), CR bytes (CRLF files),
-#    and markdown fences. Fences are stripped AFTER anchoring would
-#    otherwise see them, so strip them first here. A fence that shares its
-#    line with the JSON start (e.g. '```json {"schema_version"...') has the
-#    marker stripped as a prefix so the document survives; bare fence lines
-#    are deleted outright.
+#    and markdown fences. Fences are stripped BEFORE scanning so they never
+#    hide a document. A fence that shares its line with the JSON start
+#    (e.g. '```json {"schema_version"...') has the marker stripped as a
+#    prefix so the document survives; bare fence lines are deleted outright.
 sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r//g' \
 	-e '/^[[:space:]]*```[[:space:]]*$/d' \
 	-e 's/^[[:space:]]*```[a-zA-Z0-9_-]*[[:space:]]*//' "$INPUT" >"$norm"
 
-# 2. Anchor on the FIRST '"schema_version":' line (quoted + colon-terminated
-#    so prose chatter mentioning the field name cannot match), then walk back
-#    at most 10 lines to the nearest opening brace. The backtrack is what
-#    lets pretty-printed multi-line documents ('{\n  "schema_version"...')
-#    extract; single-line compact JSON anchors directly. Starting from the
-#    FIRST match (not the last) preserves last-complete-doc semantics below:
-#    `jq -c` drops an incomplete truncated tail and `tail -1` keeps the final
-#    complete document.
-anchor="$(grep -n -E -m 1 '"schema_version"[[:space:]]*:' "$norm" | cut -d: -f1 || true)"
-
-if [ -z "${anchor:-}" ]; then
-	: >"$narrow"
+# 2. Collect every complete JSON value in the normalised stream and keep the
+#    LAST object containing "schema_version". Scanning complete values (not
+#    anchoring on the first matching line) is what makes prose safe: a chatter
+#    line quoting '"schema_version":' is not valid JSON so it can never
+#    poison a later real document, and prose between two echoes is skipped
+#    instead of aborting the parse. Pretty-printed, indented, and multi-doc
+#    streams all collapse to the final complete document; a truncated tail
+#    is simply never complete so it is dropped.
+clean=""
+if command -v python3 >/dev/null 2>&1; then
+	clean="$(python3 - "$norm" <<'EOF' 2>/dev/null || true
+import sys
+import json
+with open(sys.argv[1], encoding='utf-8', errors='replace') as f:
+    text = f.read()
+dec = json.JSONDecoder()
+docs = []
+i = 0
+n = len(text)
+while i < n:
+    if text[i] not in '{[':
+        i += 1
+        continue
+    try:
+        obj, j = dec.raw_decode(text, i)
+    except Exception:
+        i += 1
+        continue
+    docs.append(obj)
+    i = j
+cands = [d for d in docs if isinstance(d, dict) and 'schema_version' in d]
+if cands:
+    print(json.dumps(cands[-1], separators=(',', ':')), end='')
+EOF
+)"
 else
-	start="$anchor"
-	anchor_line="$(sed -n "${anchor}p" "$norm")"
-	case "$anchor_line" in
-		*\{*'"schema_version"'*) ;;
-		*)
-			s="$anchor"
-			while [ "$s" -gt 1 ] && [ $(( anchor - s )) -lt 10 ]; do
-				s=$(( s - 1 ))
-				prev="$(sed -n "${s}p" "$norm")"
-				case "$prev" in
-					*\{*) start="$s"; break ;;
-				esac
-			done
-			;;
-	esac
-	tail -n +"$start" "$norm" >"$narrow"
+	# Fallback when python3 is unavailable: anchor on the LAST
+	# '"schema_version":' line (quoted + colon-terminated), backtrack at
+	# most 10 lines to the nearest opening brace for pretty-printed docs,
+	# then keep the last complete `jq` document. Scanning anchors last to
+	# first keeps quoted prose before the real doc from poisoning it.
+	mapfile -t anchors < <(grep -n -E '"schema_version"[[:space:]]*:' "$norm" | cut -d: -f1 || true)
+	clean=""
+	for (( idx=${#anchors[@]} - 1; idx >= 0; idx-- )); do
+		anchor="${anchors[idx]}"
+		start="$anchor"
+		anchor_line="$(sed -n "${anchor}p" "$norm")"
+		case "$anchor_line" in
+			*\{*'"schema_version"'*) ;;
+			*)
+				s="$anchor"
+				while [ "$s" -gt 1 ] && [ $(( anchor - s )) -lt 10 ]; do
+					s=$(( s - 1 ))
+					prev="$(sed -n "${s}p" "$norm")"
+					case "$prev" in
+						*\{*) start="$s"; break ;;
+					esac
+				done
+				;;
+		esac
+		tail -n +"$start" "$norm" >"$narrow"
+		candidate="$(jq -c . "$narrow" 2>/dev/null | head -1 || true)"
+		if [ -n "$candidate" ] && printf '%s' "$candidate" | grep -q '"schema_version"'; then
+			if printf '%s' "$candidate" | jq -e 'type == "object" and (.findings | type == "array")' >/dev/null 2>&1; then
+				clean="$candidate"
+				break
+			fi
+			# Keep the last schema_version doc even when the shape gate
+			# will reject it, so callers get the shape error, not silence.
+			clean="$candidate"
+			break
+		fi
+	done
 fi
 
-# 3. Keep the LAST COMPLETE document: repeated self-verification echoes and
-#    multi-doc captures collapse to one doc. `jq -c` drops incomplete tails;
-#    `tail -1` keeps the final complete one.
-clean="$(jq -c . "$narrow" 2>/dev/null | tail -1 || true)"
-
 if [ -z "$clean" ]; then
-	err="$(jq -e . "$narrow" 2>&1 >/dev/null | head -c 500 || true)"
-	if [ -z "$err" ]; then
-		err='no JSON document found (output empty, or no "schema_version" field present)'
-	fi
-	printf '%s\n' "$err" >&2
+	printf 'no JSON document found (output empty, or no "schema_version" field present)\n' >&2
 	exit 1
 fi
 

@@ -122,6 +122,28 @@ else
 	bad "unreadable input gave rc=$rc out=$out"
 fi
 
+# 14. Prose interleaved between two JSON echoes keeps the LAST document
+#     (the skill self-verifies by echoing JSON, printing prose, echoing
+#     JSON again — `jq -c . | tail -1` used to abort at the prose line and
+#     return the FIRST doc).
+other='{"schema_version": 1, "run": {"commit":"old","wordpress_target":"6.2+","php_target":"8.2+","date":"2026-10-08"}, "lanes": [], "findings": []}'
+out=$( printf '%s\nSome prose between docs\n%s\n' "$other" "$DOC" | bash "$EXTRACT" 2>/dev/null ); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"commit":"abc"'; then
+	ok "keeps the last doc when prose sits between two echoes"
+else
+	bad "interleaved prose kept the wrong doc (rc=$rc out=$out)"
+fi
+
+# 15. Prose quoting '"schema_version":' before the real doc does not poison
+#     extraction (the old first-anchor match landed on the prose line and
+#     aborted with a jq parse error).
+out=$( printf 'I will now emit "schema_version": 1 as required\n%s\n' "$DOC" | bash "$EXTRACT" 2>/dev/null ); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"schema_version"'; then
+	ok "ignores prose quoting the schema_version field name"
+else
+	bad "quoted prose poisoned the anchor (rc=$rc)"
+fi
+
 echo
 [ "$fails" -eq 0 ] && echo "extract-wppo-findings: all tests passed" || echo "extract-wppo-findings: $fails FAILED"
 exit "$fails"
