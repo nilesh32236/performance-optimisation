@@ -7,17 +7,9 @@ produced that evidence, and the **commit SHA that evidence was produced on**.
 better than a plausible number, because a missing row is visible and a plausible number is not.
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
-**Exemption (cross-branch run records, recorded 2026-10-06):** C-04 and C-05 cite
-check-run records on `72cd755c` (`release/2.4.1`), and C-13 cites probe results on
-`origin/design/variant-c-redesign`, because GitHub check-runs and unmerged-branch probe
-output cannot be reproduced from this branch's tree. Each such row names the foreign SHA
-on its face, is marked re-verification-needed on any workflow change, and must never be
-read as same-branch evidence. No same-branch substitute exists; absent this written
-exemption those three rows would fail the rule above.
-
-**Last reviewed:** 2026-10-06
-**Baseline commit (this branch):** `644556a5f3663e517a9ae12f47cd30dda84ffb7c` (`growth/fix-wcag-claim-and-register`)
-**Live listing version at review time:** 2.4.1, uploaded 2026-10-03
+**Last reviewed:** 2026-10-05
+**Baseline commit (this branch):** `66fd4914164d135d0176a45243748d7af6eee44e` (`growth/claims-register`)
+**Live listing version at review time:** 2.4.0, uploaded 2026-09-24
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
 without discussion.
 
@@ -75,6 +67,20 @@ look healthy. The CI workflow in `webpack.yml` carries `paths-ignore` for `**.md
 result is not a pass. Always read the check **names** that came back, not just the count.
 
 ---
+### C-15 — The Playground demo installs v2.4.1, pinned to a commit that a CI gate keeps honest
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/playground.html` publishes a code-executing WordPress Playground link whose blueprint installs Performance Optimisation 2.4.1. |
+| **Verdict** | **TRUE, with the load-bearing limits stated** |
+| **Evidence — the artifact** | `plugins[0].url` in `.wordpress-org/playground/blueprint.json` names `performance-optimisation-2.4.1.zip`. Downloaded and read: HTTP 200, 3,146,799 bytes, 434 entries, `Version: 2.4.1` in the shipped plugin file. |
+| **Evidence — the gate** | `php scripts/verify-playground-blueprint.php` asserts the SHA resolves, the blueprint parses, the plugin URL is absolute https, **and that the blueprint at the pinned SHA still matches the working tree**. That last check is the stale-pin detection. |
+| **Limit — not booted** | The 2.4.1 install has **NOT** been booted and re-verified. The last executed run was 2026-10-02 against 2.4.0; `blueprint.json` carries no committed snapshot of it. Treat the sandbox behaviour as unproven. |
+| **Limit — no artefact** | No output of that run is committed, so none of it can be re-derived from this repository. |
+| **Evidence — the absence** | The drop-in / page-cache situation and the unbounded-cache default are recorded separately and are **not** implied by this row. |
+| **Verified** | 2026-10-05 on `feat/playground-blueprint-minimal` (#1773) |
+
+
 
 ## Claims
 
@@ -89,7 +95,6 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | `Requires at least: 6.2`; constant at `:46`; gate at `:275`. Test: **15 tests, 37 assertions, 0 failures**. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
-| **Re-verified** | 2026-10-06 on `644556a5` (`growth/fix-wcag-claim-and-register`): this branch touches `readme.txt:298` only; header lines 1–12 byte-identical, `WPPO_REQUIRES_WP` still at `performance-optimisation.php:46`, gate at `:275`. |
 | **Expires** | Never. It is a code constant, not a test result. Re-verify on any change to `performance-optimisation.php`. |
 
 ### C-02 — "Tested up to" is 7.1
@@ -104,7 +109,6 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | API: `tested: 7.1.2`. SVN trunk `readme.txt:6`: `Tested up to: 7.1`. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
-| **Re-verified** | 2026-10-06 on `644556a5`: `readme.txt:6` still reads `Tested up to: 7.1`; live API still `tested 7.1.2` / version 2.4.1. |
 | **Expires** | On the next WordPress core release. Until then this row is the only thing standing between "7.1" and whatever the directory displays. |
 
 ### C-03 — Minimum PHP version is 8.2
@@ -118,7 +122,6 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Result** | `Requires PHP: 8.2`; `composer.json:13: "php": ">=8.2",`; `55: "platform": {` / `56: "php": "8.2"`. Test: **15 tests, 37 assertions, 0 failures**. |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
-| **Re-verified** | 2026-10-06 on `644556a5`: `readme.txt:5` still `Requires PHP: 8.2`; `composer.json:13` still `"php": ">=8.2"`, platform still `8.2`. |
 | **Expires** | Never. Code + manifest constant. |
 
 ### C-04 — PHPUnit runs on PHP 8.2 in CI
@@ -194,7 +197,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 |---|---|
 | **Claim** | "There is no automated multi-WordPress-version install matrix in this plugin's CI." |
 | **Verdict** | **TRUE** |
-| **Evidence** | `grep -rn "wordpress-version\|wp-env\|playground" .github/workflows/` returns **no output** (exit 1). The widened form including `wordpress_version` and `WP_VERSION` also returns nothing. No workflow declares a `wordpress-version` input or matrix key. The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
+| **Evidence** | `grep -rnE "wordpress-version\|wp-env \(start\|run\)\|playground \(run\|cli\)\|wp core install\|wordpress-setup-action" .github/workflows/` returns **no output** (exit 1) — no workflow declares a `wordpress-version` input or matrix key, nor a test-service install. The plain-string form `grep -rn "wordpress-version\|wp-env\|playground"` **now returns five lines**, all of them this repository's own Playground path filters and the verifier step added by #1773. Those are references to a demo blueprint, not a version matrix. **Re-verified 2026-10-05 on #1773.** The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
 | **Command** | `grep -rn "wordpress-version\|wordpress_version\|WP_VERSION\|wp-env\|playground" .github/workflows/` |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
@@ -218,73 +221,44 @@ result is not a pass. Always read the check **names** that came back, not just t
 | Field | Value |
 |---|---|
 | **Claim** | Listing facts, recorded so that a later reader can tell what changed and when. |
-| **Verdict** | **TRUE** (snapshot) — **re-fetched 2026-10-05; the previous numbers were stale** |
-| **Evidence** | WordPress.org API, re-fetched **2026-10-05**: `version 2.4.1`, `tested 7.1.2`, `requires 6.2`, `requires_php 8.2`, `rating 100`, `num_ratings 4`, `active_installs 0`, `last_updated 2026-10-03 9:56am GMT`, `added 2025-02-24`, tags `cache, core-web-vitals, optimization, pagespeed, performance`. |
-| **What changed since the 2026-10-03 snapshot** | **A release shipped between the two fetches.** `version` went `2.4.0` → **`2.4.1`**; `last_updated` went `2026-09-24` → **`2026-10-03 9:56am GMT`**; and the tag set changed to the five intended tags — the old listing was still serving `cache, minify, pagespeed, performance, speed`. Unchanged: `tested`, `requires`, `requires_php`, `rating`, `num_ratings`, `active_installs`. |
+| **Verdict** | **TRUE** (snapshot) |
+| **Evidence** | WordPress.org API, re-fetched 2026-10-03: `version 2.4.0`, `tested 7.1.2`, `requires 6.2`, `requires_php 8.2`, `rating 100`, `num_ratings 4`, `active_installs 0`, `last_updated 2026-09-24 1:10am GMT`, `added 2025-02-24`, tags `cache, minify, pagespeed, performance, speed`. |
 | **Command** | `curl -sS "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=performance-optimisation" \| python3 -m json.tool` |
-| **SHA / date** | Live API, re-checked 2026-10-06 from `644556a5f3663e517a9ae12f47cd30dda84ffb7c`: still `version 2.4.1`, `last_updated 2026-10-03 9:56am GMT`, `tested 7.1.2` |
-| **Verified** | 2026-10-06 |
-| **Expires** | Any release — and a release happened inside this register's own lifetime, which is the proof. **Never quote these numbers without re-running the command.** |
+| **SHA / date** | Live API, 2026-10-03 |
+| **Verified** | 2026-10-03 |
+| **Expires** | Any release. Never quote these numbers without re-running the command. |
 | **Do not repackage** | `rating 100` is computed from **`num_ratings 4`**. Four ratings cannot support a quality claim. Never surface `rating` without `num_ratings` beside it, and never use either in copy. `active_installs` is **0** — the listing shows **fewer than 10 active installs**, and no copy may imply otherwise. |
 
-### C-12 — "Fully compatible with popular themes and page builders" — was FALSE, was served, is now fixed
+### C-12 — "Fully compatible with popular themes and page builders" — FALSE, and still served
 
-**This was the plugin's single most public compatibility claim, and it was false. As of 2026-10-03 it
-is no longer served. This row is retained as a regression tripwire, not as an open defect.**
+**This is the plugin's single most public compatibility claim, and it is false.**
 
-| Where | Claim | State as of 2026-10-05 |
+| Where | Claim | State |
 |---|---|---|
-| `readme.txt` (repo) | "includes compatibility safeguards for…" | Corrected wording. |
-| **WordPress.org listing** | **"Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress, Kadence…)"** | **No longer present.** Ships 2.4.1. |
+| `readme.txt:101` (repo) | "includes compatibility safeguards for…" | Corrected wording. PR #1760. |
+| **WordPress.org listing** | **"Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress, Kadence…)"** | **Still served, 2.4.0.** |
 
-**Evidence as it stood when the row was first written (2026-10-03):** the API returned `"version":"2.4.0"`
-and `sections.description` contained the overclaim. See the correction-status block below for the
-re-verification that closed it.
+**Evidence — the live listing, re-fetched 2026-10-03:**
 
-**Why it was false as stated.** "Fully compatible" is a claim about the behaviour of software this
+```sh
+curl -sS -A "Mozilla/5.0" \
+  "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=performance-optimisation"
+```
+
+Returns `"version":"2.4.0"`, and `sections.description` contains:
+
+> is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity.
+> **Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress,
+> Kadenc…**
+
+**Why it is false as stated.** "Fully compatible" is a claim about the behaviour of software this
 plugin does not control. Nothing in this repository can establish it, and no test suite here exercises
 a third party's themes or page builders. The plugin ships *safeguards* — guards against known conflicts
 — which is a real and much smaller claim, and the size of the difference is the whole point.
 
-### Correction status — RESOLVED 2026-10-03. This row is now RETIRED, not merely pending.
-
-The previous revision of this row said the release had not been cut and that the listing still served
-2.4.0's text. **That is no longer true.** Re-fetched 2026-10-05:
-
-| Field | Before (2026-10-03) | Now (2026-10-05) |
-|---|---|---|
-| Listing version | 2.4.0 | **2.4.1** |
-| `last_updated` | 2026-09-24 1:10am GMT | **2026-10-03 9:56am GMT** |
-| `"Fully compatible"` in `sections.description` | present | **absent** |
-
-```sh
-curl -sS "https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request%5Bslug%5D=performance-optimisation" \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['version'], d['last_updated'], 'Fully compatible' in d['sections']['description'])"
-```
-
-**Output:** `2.4.1 2026-10-03 9:56am GMT False`
-
-The live description now opens:
-
-> **Performance Optimisation** is a free WordPress performance plugin for site owners who want faster
-> pages without a complex stack of separate tools. It combines page caching, CSS and JavaScript
-> optimization, image optimization, and Core Web Vitals monitoring in one clear dashboard.
-
-Cross-checked against the deployed file itself, not only the API:
-
-```sh
-curl -sS "https://plugins.svn.wordpress.org/performance-optimisation/trunk/readme.txt" | grep -n "Fully compatible"
-```
-
-The only surviving occurrence of the phrase is at **line 235, inside the 2.4.1 changelog entry**, where
-it is quoted as the withdrawn claim — "the previous text read 'Fully compatible with popular themes and
-page builders', which is a claim about the behaviour of software this plugin does not control". That is
-a correction notice, not a claim.
-
-**What this row is now for.** The defect it described is fixed and verified. The row is retained
-because a register that deletes rows when they go stale stops being a register. Anyone re-running the
-command above will get `False`; if it ever returns `True`, the release process has regressed and
-`readme.txt` must be checked before anything else.
+**Correction status.** PR #1760 (`release/2.4.1`, head `72cd755c`) carries the corrected wording. **The
+SVN release has not been cut**, so the listing still serves 2.4.0's text and **this row remains true for
+users**. It moves to corrected only when the release is live and the API returns a different `version`.
 
 ### C-13 — Accessibility: what was measured, and what was not
 
@@ -294,7 +268,7 @@ command above will get `False`; if it ever returns `True`, the release process h
 | **Verdict** | **TRUE**, with the measurements below |
 | **The narrow, real measurement** | On `design/variant-c-redesign`, two WCAG criteria were measured to zero failures in a real browser against the live admin: **1.4.3 Contrast (Minimum)** (Level AA) and **1.4.12 Text Spacing** (Level AA). |
 | **Command** | `git show origin/design/variant-c-redesign:scripts/probe-text-spacing.mjs`, and the commit bodies of `77e89ce1` and `38d5f15d` for the contrast and text-spacing results. |
-| **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". Found-then-fixed: `c97ee033` recorded 35 AA text-contrast failures first; `77e89ce1` recorded their closure to TOTAL 0 (see the withdrawn-claims table below for the finding half). |
+| **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". |
 | **SHA** | `c97ee033…`, `77e89ce1…`, `38d5f15d…` on `origin/design/variant-c-redesign` — **not merged into `master`** |
 | **NOT measured — do not claim** | **2.4.7 Focus Visible**, **2.4.11 Focus Not Obscured** and **2.4.13 Focus Appearance** have probe scripts on that branch (`probe-focus.mjs`, `probe-focus-ring.mjs`) but **no recorded result was found in the repository**. `2.4.13` is **Level AAA**, not AA. `probe-forced-colors.mjs` tests a rendering *condition*, not a numbered criterion. `probe-inspector.mjs`, `probe-save.mjs` and `probe-tokens.mjs` are **not WCAG criteria** at all. |
 | **NOT a conformance claim** | There is no automated WCAG conformance scan: `axe-core` is not a dependency. No probe result artifact is committed — only screenshots. The recorded results exist **solely in commit messages**, which is weaker evidence than a run log. |
@@ -336,8 +310,7 @@ Copy that is not backed by anything in this file. Fix the copy or add the eviden
 
 | Location | Text | Status |
 |---|---|---|
-| `readme.txt:298` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **WITHDRAWN 2026-10-05.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch, so the shipped 2.0.0 claim was contradicted by the project's own measurement. Found-then-fixed: the 35 were found in `c97ee033` and closed to TOTAL 0 in `77e89ce1` (see C-13 for the closure half). The clause has now been removed from `readme.txt` and replaced with a note that the claim was never measured and is withdrawn, matching the 2.4.1 changelog's own correction style. It is still live on the listing at `trunk/readme.txt:298` and will clear on the next release. |
-| `changelog.md:48` | "- **Redesigned dashboard and all settings tabs** with WCAG AA contrast, equal-height metrics, segmented tabs, full mobile/RTL support and 44×44 touch targets." (verbatim) | **STILL PRESENT 2026-10-06.** Same unmeasured 2.0.0-era WCAG AA wording as the withdrawn `readme.txt:298` line, surviving in the repo's own changelog. Not edited here (outside this PR's write scope); needs the same withdraw-or-measure treatment before anyone quotes it. |
+| `readme.txt:282` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
 | `docs/site/compatibility.html:4` | `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Open PR #1756 replaces both rows. Not edited here to avoid colliding with it. |
 | `docs/growth/claims.md` (previous revision) | citation to `docs/growth/ACCESSIBILITY-STATEMENT.md` | **DANGLING at the time of writing** — the file arrives with PR #1759. Now cited precisely as such in C-13. |
 
