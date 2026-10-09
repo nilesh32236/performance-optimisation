@@ -3989,7 +3989,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					break;
 				}
 				$location = wp_remote_retrieve_header( $candidate, 'location' );
-				$next     = ( is_string( $location ) && '' !== trim( $location ) ) ? self::resolve_same_site_redirect( trim( $location ), $current_url ) : '';
+				// Single shared redirect resolver (audit #1785 review):
+				// Util handles bare-relative/query-only targets with
+				// case-insensitive host comparison; a non-string result
+				// means abort the fetch.
+				$redirect = ( is_string( $location ) && '' !== trim( $location ) ) ? Util::resolve_same_host_redirect( trim( $location ), $current_url ) : '';
+				$next     = is_string( $redirect ) ? $redirect : '';
 				if ( '' === $next ) {
 					return false;
 				}
@@ -4283,7 +4288,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						break;
 					}
 					$sheet_location = wp_remote_retrieve_header( $candidate, 'location' );
-					$sheet_next     = ( is_string( $sheet_location ) && '' !== trim( $sheet_location ) ) ? self::resolve_same_site_redirect( trim( $sheet_location ), $sheet_url ) : '';
+					// Single shared redirect resolver (audit #1785 review),
+					// as above: a non-string result means abort the fetch.
+					$sheet_redirect = ( is_string( $sheet_location ) && '' !== trim( $sheet_location ) ) ? Util::resolve_same_host_redirect( trim( $sheet_location ), $sheet_url ) : '';
+					$sheet_next     = is_string( $sheet_redirect ) ? $sheet_redirect : '';
 					if ( '' === $sheet_next ) {
 						return '';
 					}
@@ -4414,51 +4422,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 
 			return '' !== $site_host && $host === $site_host;
-		}
-
-		/**
-		 * Resolve a redirect Location against the current URL, same-site only.
-		 *
-		 * Supports absolute, protocol-relative, and path-relative targets.
-		 * Returns '' when the target leaves the site host or is invalid, so
-		 * the caller aborts the fetch instead of following it (SSRF guard,
-		 * audit #1785). Never throws.
-		 *
-		 * @param string $location Raw Location header value.
-		 * @param string $current  Current request URL (already same-site).
-		 * @return string Resolved same-site URL, or '' to abort.
-		 * @since NEXT
-		 */
-		private static function resolve_same_site_redirect( string $location, string $current ): string {
-			try {
-				if ( 0 === strpos( $location, '/' ) && 0 !== strpos( $location, '//' ) ) {
-					$scheme = wp_parse_url( $current, PHP_URL_SCHEME );
-					$host   = wp_parse_url( $current, PHP_URL_HOST );
-					$port   = wp_parse_url( $current, PHP_URL_PORT );
-					if ( ! is_string( $scheme ) || '' === $scheme || ! is_string( $host ) || '' === $host ) {
-						return '';
-					}
-					$resolved = $scheme . '://' . $host . ( null !== $port ? ':' . (int) $port : '' ) . $location;
-				} elseif ( 0 === strpos( $location, '//' ) ) {
-					$scheme   = wp_parse_url( $current, PHP_URL_SCHEME );
-					$resolved = ( is_string( $scheme ) && '' !== $scheme ? $scheme : 'https' ) . ':' . $location;
-				} elseif ( preg_match( '#^https?://#i', $location ) ) {
-					$resolved = $location;
-				} else {
-					return '';
-				}
-				if ( ! self::is_same_site_host( $resolved ) ) {
-					return '';
-				}
-				$scheme = strtolower( (string) wp_parse_url( $resolved, PHP_URL_SCHEME ) );
-				if ( 'http' !== $scheme && 'https' !== $scheme ) {
-					return '';
-				}
-				return $resolved;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
 		}
 
 		/**

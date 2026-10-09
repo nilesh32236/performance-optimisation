@@ -686,8 +686,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 		 * current URL minus its fragment. The resolved hop must then pass
 		 * the same-host policy ({@see is_same_site_url()}) so a same-host
 		 * response can never bounce the server into internal endpoints
-		 * (e.g. link-local metadata). Used by Telemetry and the LiteSpeed
-		 * crawler so the two copies of this logic cannot drift apart.
+		 * (e.g. link-local metadata). Used by Telemetry, the LiteSpeed
+		 * crawler, and the used-CSS/critical-CSS fetch paths so the copies
+		 * of this logic cannot drift apart.
 		 *
 		 * @since 2.4.0
 		 * @param string $location    Raw Location header value.

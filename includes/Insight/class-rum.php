@@ -2454,8 +2454,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Count the samples stored in one per-path aggregate bucket.
 		 *
-		 * Sums the `n` counters of the known metric slots (lcp/inp/cls/ttfb
-		 * plus segmented maps) so the per-day path-cap eviction can drop the
+		 * Sums the `n` counters of the known metric slots (ttfb/fcp/lcp/
+		 * inp/cls plus segmented maps) so the per-day path-cap eviction can drop the
 		 * least-observed path. Fail-open: malformed buckets count as 0
 		 * (evicted first). Never throws.
 		 *
@@ -2470,7 +2470,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return 0;
 				}
 				$total = 0;
-				foreach ( array( 'lcp', 'inp', 'cls', 'ttfb' ) as $metric ) {
+				foreach ( array( 'ttfb', 'fcp', 'lcp', 'inp', 'cls' ) as $metric ) {
 					if ( isset( $bucket[ $metric ] ) && is_array( $bucket[ $metric ] ) && isset( $bucket[ $metric ]['n'] ) ) {
 						$total += max( 0, (int) $bucket[ $metric ]['n'] );
 					}

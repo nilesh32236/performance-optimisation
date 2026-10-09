@@ -793,8 +793,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Strip local paths, embedded URLs, and unsafe characters from a
 		 * telemetry scan error before returning it to an Ability client.
 		 *
-		 * Mirrors the cleanup in Rest::run_performance_scan() (audit #1785):
-		 * cURL/wp_remote errors can leak paths, hostnames, or credentials.
+		 * Thin wrapper over {@see Util::sanitize_scan_error()} so the REST
+		 * and Ability copies share one implementation (audit #1785 review)
+		 * instead of drifting apart: cURL/wp_remote errors can leak paths,
+		 * hostnames, or credentials.
 		 *
 		 * @since NEXT
 		 *
@@ -802,26 +804,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return string Sanitized message (never empty).
 		 */
 		private static function sanitize_scan_error( string $message ): string {
-			try {
-				if ( defined( 'ABSPATH' ) ) {
-					$message = str_replace( ABSPATH, '', $message );
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_scan_error' ) ) {
+				try {
+					return Util::sanitize_scan_error( $message );
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-				if ( defined( 'WP_CONTENT_DIR' ) ) {
-					$message = str_replace( WP_CONTENT_DIR, '', $message );
-				}
-				$message = preg_replace( '#https?://[^\s\'"]+#', '[url]', $message );
-				if ( ! is_string( $message ) ) {
-					$message = '';
-				}
-				$message = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $message ) : trim( $message );
-				if ( '' === $message ) {
-					$message = __( 'Performance scan failed.', 'performance-optimisation' );
-				}
-				return $message;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return __( 'Performance scan failed.', 'performance-optimisation' );
 			}
+			return function_exists( '__' ) ? __( 'Performance scan failed.', 'performance-optimisation' ) : 'Performance scan failed.';
 		}
 
 		/**
@@ -865,7 +855,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				);
 			}
 			// Parity with Rest::queue_pagespeed_scan() (audit #1785):
-			// reject loopback/private addresses before queuing.
+			// wp_http_validate_url() enforces URL shape (valid host, no
+			// userinfo, sane port) — not private-range rejection; same-site
+			// membership is already enforced by resolve_input_url(), and the
+			// fetch itself is done by Google, not this server.
 			if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
 				return array(
 					'queued' => false,

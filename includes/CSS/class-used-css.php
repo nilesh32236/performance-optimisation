@@ -3908,8 +3908,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( ! is_string( $location ) || '' === trim( $location ) ) {
 						break;
 					}
-					$next = self::resolve_same_site_redirect( trim( $location ), $current_url );
-					if ( '' === $next ) {
+					// Single shared redirect resolver (audit #1785 review):
+					// Util handles bare-relative/query-only targets with
+					// case-insensitive host comparison; a non-string result
+					// means abort the fetch.
+					$next = Util::resolve_same_host_redirect( trim( $location ), $current_url );
+					if ( ! is_string( $next ) || '' === $next ) {
 						return '';
 					}
 					$current_url = $next;
@@ -3945,56 +3949,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$used_css   = new self( $options );
 				$purged_css = $used_css->generate_used_css( $html, $css_assets );
 				return is_string( $purged_css ) ? $purged_css : '';
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return '';
-			}
-		}
-
-		/**
-		 * Resolve a redirect Location against the current URL, same-site only.
-		 *
-		 * Supports absolute, protocol-relative, and path-relative targets.
-		 * Returns '' when the target leaves the site host or is invalid, so
-		 * the caller aborts the fetch instead of following it (SSRF guard,
-		 * audit #1785). Never throws.
-		 *
-		 * @param string $location Raw Location header value.
-		 * @param string $current  Current request URL (already same-site).
-		 * @return string Resolved same-site URL, or '' to abort.
-		 * @since NEXT
-		 */
-		private static function resolve_same_site_redirect( string $location, string $current ): string {
-			try {
-				if ( ! function_exists( 'wp_parse_url' ) || ! function_exists( 'home_url' ) ) {
-					return '';
-				}
-				if ( 0 === strpos( $location, '/' ) && 0 !== strpos( $location, '//' ) ) {
-					$scheme = wp_parse_url( $current, PHP_URL_SCHEME );
-					$host   = wp_parse_url( $current, PHP_URL_HOST );
-					$port   = wp_parse_url( $current, PHP_URL_PORT );
-					if ( ! is_string( $scheme ) || '' === $scheme || ! is_string( $host ) || '' === $host ) {
-						return '';
-					}
-					$resolved = $scheme . '://' . $host . ( null !== $port ? ':' . (int) $port : '' ) . $location;
-				} elseif ( 0 === strpos( $location, '//' ) ) {
-					$scheme   = wp_parse_url( $current, PHP_URL_SCHEME );
-					$resolved = ( is_string( $scheme ) && '' !== $scheme ? $scheme : 'https' ) . ':' . $location;
-				} elseif ( preg_match( '#^https?://#i', $location ) ) {
-					$resolved = $location;
-				} else {
-					return '';
-				}
-				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
-				$next_host = wp_parse_url( $resolved, PHP_URL_HOST );
-				if ( ! is_string( $home_host ) || '' === $home_host || $next_host !== $home_host ) {
-					return '';
-				}
-				$scheme = strtolower( (string) wp_parse_url( $resolved, PHP_URL_SCHEME ) );
-				if ( 'http' !== $scheme && 'https' !== $scheme ) {
-					return '';
-				}
-				return $resolved;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
