@@ -2020,9 +2020,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
-					if ( ! $legacy_on && ! $new_on ) {
-						return '';
-					}
 					if ( $new_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
 						try {
 							$lcp_url = $this->resolve_od_only_lcp_url();
