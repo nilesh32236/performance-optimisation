@@ -140,7 +140,9 @@ final class ArchitectureInventoryTest extends TestCase {
 		// instead of hand-rolling the snapshot, which adds one runtime edge.
 		$this->assertSame( 396, $graph['summary']['edges'] );
 		$this->assertSame( 395, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 206, $graph['summary']['compatibility_edges'] );
+		// 207: the System_Info drop-in probes now guard the Util facade with
+		// class_exists(), which adds one compatibility edge (audit #1663).
+		$this->assertSame( 207, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );

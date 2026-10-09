@@ -32,7 +32,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @var   string
 		 * @since 1.1.0
 		 */
-		const TRANSIENT_PREFIX = 'wppo_page_assets_';
+		public const TRANSIENT_PREFIX = 'wppo_page_assets_';
 
 		/**
 		 * Core WordPress script handles that should never be deregistered.

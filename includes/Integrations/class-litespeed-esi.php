@@ -1210,7 +1210,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// for Enterprise <esi:include> server-side GET sub-requests —
 			// matching the _wpnonce read order below so a mixed-source
 			// request cannot route one source's block against the other's
-			// nonce scope.
+			// nonce scope. Intentional read-before-verify order: the block
+			// value scopes the per-IP+block throttle buckets, and both inputs
+			// are sanitized here with wp_verify_nonce() following below.
 			$block = '';
 			if ( isset( $_POST['block'] ) && is_string( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing

@@ -941,7 +941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
 					return;
 				}
-				$raw = isset( $_GET['wppo_purge_fallback'] ) && is_string( $_GET['wppo_purge_fallback'] ) ? wp_unslash( $_GET['wppo_purge_fallback'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only miss routing; path-extracted and containment-checked below, never output.
+				$raw = isset( $_GET['wppo_purge_fallback'] ) && is_string( $_GET['wppo_purge_fallback'] ) ? sanitize_text_field( wp_unslash( $_GET['wppo_purge_fallback'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only miss routing; path-extracted and containment-checked below, never output.
 				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
 					return;
 				}

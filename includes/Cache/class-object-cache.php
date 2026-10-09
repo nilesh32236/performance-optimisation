@@ -748,8 +748,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				if ( $wp_filesystem ) {
 					$wp_filesystem->delete( $path );
-				} else {
-					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
+				} elseif ( function_exists( 'unlink' ) ) {
+					// No-silence fallback: a surviving state file forces the
+					// circuit breaker open again on the next read, so the
+					// file must go even when WP_Filesystem is unavailable.
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Circuit-state invalidation fallback when WP_Filesystem is unavailable.
+					unlink( $path );
 				}
 			}
 		}

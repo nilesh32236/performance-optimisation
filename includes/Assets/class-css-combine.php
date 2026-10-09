@@ -906,7 +906,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 					if ( empty( $path ) || ! is_file( $path ) ) {
 						continue;
 					}
-					$size = (int) filesize( $path );
+					// Guarded size read: a delete/rename race between is_file()
+					// and filesize() still warns, and (int) false coerces to 0,
+					// which would poison the smallest-first inline-budget sort.
+					$size_raw = @filesize( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- guarded with is_int check below.
+					if ( ! is_int( $size_raw ) || $size_raw <= 0 ) {
+						continue;
+					}
+					$size = $size_raw;
 					if ( $size > 0 ) {
 						$size_map[ $queued_handle ] = array(
 							'size'     => $size,
