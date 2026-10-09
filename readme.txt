@@ -295,7 +295,7 @@ When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin reco
 * New: Configurable static-page Cache Life (TTL), with per-role/per-URL variants.
 * New: Redis object-cache circuit breaker with auto-disable, recovery probe and admin notice.
 * New: Builder-update purge watcher for Elementor, Divi, Bricks and WPBakery.
-* New: Redesigned dashboard and all settings tabs with WCAG AA contrast, equal-height metrics and full mobile/RTL support.
+* New: Redesigned dashboard and all settings tabs, with equal-height metrics and full mobile/RTL support. An earlier draft of this line also said "WCAG AA contrast". That was not measured when 2.0.0 shipped, and the project's own later audit found AA text-contrast failures in the admin, so the wording has been withdrawn rather than restated. This plugin makes no WCAG conformance claim at any level, and has had no independent accessibility audit or testing with assistive technology. What was and was not checked is recorded in `docs/growth/claims.md`.
 * Improvement: Native lazy loading (`loading="lazy"`) is now the default; the legacy JavaScript IntersectionObserver lazy loader is opt-in.
 * Improvement: Adopted WordPress 6.9+ core APIs — template enhancement buffer, salted cache deletes, script-loader fetchpriority/in_footer, inline-style budget and the WordPress Abilities API.
 * Improvement: Speculative loading is more conservative by default (prefetch + conservative eagerness) and narrowed to core's Speculation Rules API with commerce and nonce exclusions.
