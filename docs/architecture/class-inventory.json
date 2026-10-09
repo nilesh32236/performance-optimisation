@@ -527,7 +527,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 2306,
+        "lines": 2314,
         "methods": 27,
         "public_methods": 17,
         "large_methods": 7,

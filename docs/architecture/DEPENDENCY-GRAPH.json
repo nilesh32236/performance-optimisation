@@ -22847,7 +22847,7 @@
             "file": "includes/Admin/class-wppo-cli-command.php",
             "domain": "Admin",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 2306,
+            "lines": 2314,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -22870,8 +22870,8 @@
                 {
                     "name": "check_verify_cron",
                     "line": 2045,
-                    "end_line": 2182,
-                    "lines": 138,
+                    "end_line": 2190,
+                    "lines": 146,
                     "visibility": "private",
                     "static": false,
                     "delegates": false
@@ -22923,8 +22923,8 @@
                 },
                 {
                     "name": "check_verify_uninstall_spot",
-                    "line": 2194,
-                    "end_line": 2268,
+                    "line": 2202,
+                    "end_line": 2276,
                     "lines": 75,
                     "visibility": "private",
                     "static": false,
@@ -22998,7 +22998,7 @@
                     "self::classify_unwritable_cache_root": 1636,
                     "self::evaluate_litespeed_state": 2035,
                     "self::find_orphan_cron_hooks": 2072,
-                    "self::find_unknown_wppo_options": 2234,
+                    "self::find_unknown_wppo_options": 2242,
                     "self::get_default_settings": 541,
                     "self::get_redis_config_from_assoc": 853,
                     "self::get_verify_check_names": 1133,
@@ -23009,7 +23009,7 @@
                 "instance_calls": {
                     "$cleaned_count->get_error_message": 327,
                     "$e->getMessage": 1955,
-                    "$fs->get_contents": 2294,
+                    "$fs->get_contents": 2302,
                     "$img_converter->convert_image": 404,
                     "$manager->disable": 892,
                     "$manager->enable": 864,
@@ -23031,9 +23031,9 @@
                     "$wp_filesystem->exists": 593,
                     "$wp_filesystem->get_contents": 598,
                     "$wp_filesystem->put_contents": 572,
-                    "$wpdb->esc_like": 2200,
-                    "$wpdb->get_col": 2130,
-                    "$wpdb->prepare": 2131
+                    "$wpdb->esc_like": 2208,
+                    "$wpdb->get_col": 2138,
+                    "$wpdb->prepare": 2139
                 },
                 "new_expressions": {
                     "PerformanceOptimise\\Inc\\Img_Converter": 372,
@@ -23100,17 +23100,17 @@
                     "Object_Cache": 844,
                     "__": 87,
                     "_get_cron_array": 2054,
-                    "array_fill": 2128,
+                    "array_fill": 2136,
                     "array_key_exists": 1336,
                     "array_keys": 607,
                     "array_map": 220,
                     "array_merge": 227,
                     "array_replace_recursive": 545,
-                    "array_slice": 2253,
+                    "array_slice": 2261,
                     "array_unique": 227,
                     "array_values": 227,
-                    "as_get_scheduled_actions": 2113,
-                    "as_has_scheduled_action": 2148,
+                    "as_get_scheduled_actions": 2121,
+                    "as_has_scheduled_action": 2156,
                     "class_exists": 21,
                     "clearstatcache": 1159,
                     "count": 245,
@@ -23118,8 +23118,8 @@
                     "dirname": 1819,
                     "esc_url_raw": 969,
                     "explode": 220,
-                    "file_get_contents": 2302,
-                    "filesize": 2283,
+                    "file_get_contents": 2310,
+                    "filesize": 2291,
                     "function_exists": 289,
                     "home_url": 1644,
                     "idn_to_ascii": 1269,
@@ -23127,7 +23127,7 @@
                     "in_array": 230,
                     "is_array": 540,
                     "is_dir": 1610,
-                    "is_object": 2199,
+                    "is_object": 2207,
                     "is_plugin_active": 2014,
                     "is_readable": 1816,
                     "is_string": 466,
@@ -23155,7 +23155,7 @@
                     "trailingslashit": 386,
                     "trim": 110,
                     "wp_json_encode": 465,
-                    "wp_next_scheduled": 2089,
+                    "wp_next_scheduled": 2091,
                     "wp_normalize_path": 110,
                     "wp_parse_url": 110,
                     "yaml_emit": 689
@@ -23169,19 +23169,19 @@
                     "sanitize_text_field": 107,
                     "trailingslashit": 386,
                     "wp_json_encode": 465,
-                    "wp_next_scheduled": 2089,
+                    "wp_next_scheduled": 2091,
                     "wp_normalize_path": 110,
                     "wp_parse_url": 110
                 },
                 "filesystem_dependencies": {
-                    "$fs->get_contents": 2294,
+                    "$fs->get_contents": 2302,
                     "$wp_filesystem->exists": 593,
                     "$wp_filesystem->get_contents": 598,
                     "$wp_filesystem->put_contents": 572,
                     "clearstatcache": 1159,
                     "dirname": 1819,
-                    "file_get_contents": 2302,
-                    "filesize": 2283,
+                    "file_get_contents": 2310,
+                    "filesize": 2291,
                     "is_dir": 1610,
                     "is_readable": 1816,
                     "is_writable": 1611,
@@ -23190,9 +23190,9 @@
                 },
                 "network_dependencies": [],
                 "database_dependencies": {
-                    "$wpdb->esc_like": 2200,
-                    "$wpdb->get_col": 2130,
-                    "$wpdb->prepare": 2131
+                    "$wpdb->esc_like": 2208,
+                    "$wpdb->get_col": 2138,
+                    "$wpdb->prepare": 2139
                 },
                 "dynamic_references": []
             },
@@ -35030,8 +35030,8 @@
             "lines": [
                 86,
                 1427,
-                2147,
-                2156
+                2155,
+                2164
             ],
             "evidence_count": 4,
             "cross_domain": true,
@@ -35387,7 +35387,7 @@
                 1647,
                 1656,
                 1657,
-                2291
+                2299
             ],
             "evidence_count": 23,
             "cross_domain": true,
@@ -46241,7 +46241,7 @@
                 "compatibility_in": 1,
                 "cross_domain": 18,
                 "static_state": false,
-                "lines": 2306
+                "lines": 2314
             },
             {
                 "node": "PerformanceOptimise\\Inc\\Object_Cache",
@@ -55386,8 +55386,8 @@
                 "lines": [
                     86,
                     1427,
-                    2147,
-                    2156
+                    2155,
+                    2164
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -55757,7 +55757,7 @@
                     1647,
                     1656,
                     1657,
-                    2291
+                    2299
                 ],
                 "evidence_count": 23,
                 "cross_domain": true,
@@ -63828,8 +63828,8 @@
                 "lines": [
                     86,
                     1427,
-                    2147,
-                    2156
+                    2155,
+                    2164
                 ],
                 "evidence_count": 4,
                 "cross_domain": true,
@@ -63955,7 +63955,7 @@
                     1647,
                     1656,
                     1657,
-                    2291
+                    2299
                 ],
                 "evidence_count": 23,
                 "cross_domain": true,

@@ -2081,8 +2081,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$notes[]  = 'legacy hook present (BC): ' . implode( ', ', $split['legacy'] );
 			}
 
-			// Expected-but-missing recurring dispatchers.
+			// Expected-but-missing recurring dispatchers, plus stale-but-scheduled
+			// events left behind after a feature was disabled.
 			$missing_expected = array();
+			$stale_scheduled  = array();
 			if ( function_exists( 'wp_next_scheduled' ) ) {
 				try {
 					$preload_on = ! empty( $stored['preload_settings']['enablePreloadCache'] );
@@ -2092,6 +2094,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$convert_img_on = ! empty( $stored['image_optimisation']['convertImg'] );
 					if ( $convert_img_on && ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
 						$missing_expected[] = 'wppo_img_conversion';
+					} elseif ( ! $convert_img_on && wp_next_scheduled( 'wppo_img_conversion' ) ) {
+						$stale_scheduled[] = 'wppo_img_conversion (feature disabled)';
 					}
 					$db_schedule = isset( $stored['database_cleanup']['dbSchedule'] ) ? (string) $stored['database_cleanup']['dbSchedule'] : '';
 					if ( '' !== $db_schedule && 'none' !== $db_schedule && ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
@@ -2104,6 +2108,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( ! empty( $missing_expected ) ) {
 				$has_warn = true;
 				$notes[]  = 'expected but unscheduled: ' . implode( ', ', $missing_expected );
+			}
+			if ( ! empty( $stale_scheduled ) ) {
+				$has_warn = true;
+				$notes[]  = 'scheduled but disabled: ' . implode( ', ', $stale_scheduled );
 			}
 
 			// Action Scheduler side (guarded — missing vendor install degrades to warn).
