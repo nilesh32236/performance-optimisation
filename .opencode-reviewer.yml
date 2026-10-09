@@ -14,7 +14,7 @@ project:
     - "JS/React uses pure useState — no Redux, Zustand, or external state libraries"
     - "All React components read initial settings from wppoSettings.settings[tabName] on mount"
     - "API calls use apiCall() from src/lib/apiRequest.js — never raw fetch()"
-    - "All user-facing strings come from wppoSettings.translations.KEY with English fallback"
+    - "SPA strings use __() from @wordpress/i18n fed by wp_set_script_translations() — there is no wppoSettings.translations map (removed in audit #1333; a lookup against it silently no-ops). The only JS-side map is wppoObject.translations for the admin bar"
     - "SCSS uses .wppo- prefix and BEM-like naming — no inline styles, no Tailwind"
     - "All REST endpoints require manage_options capability + X-WP-Nonce header"
     - "console.log is an ESLint error — use console.error or console.warn only"

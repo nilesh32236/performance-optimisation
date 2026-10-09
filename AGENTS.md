@@ -50,7 +50,7 @@ npm run start                # dev watch mode
 - **No routing library** — tab switching via `useState` + conditional rendering
 - **No state management library** — pure `useState` throughout
 - **All settings pages** call `update_settings` API with `{tab: '...', settings: {...}}`
-- Global `wppoSettings` object injected by PHP via `wp_localize_script` (includes `apiUrl`, `nonce`, `settings`, `translations`, `themeColors`, etc.)
+- Global `wppoSettings` object injected by PHP via `wp_localize_script` (includes `apiUrl`, `nonce`, `settings`, `themeColors`, etc.). It carries **no** `translations` map (audit #1333) — SPA strings use `__()` fed by `wp_set_script_translations()`; the only JS-side map is `wppoObject.translations` for the admin bar (`src/main.js`), which has no `wp-i18n` dep
 - Each component reads its settings from `wppoSettings.settings[tabName]` on mount
 - `apiCall('update_settings')` mutates `wppoSettings.settings` globally on success
 - API calls use `src/lib/apiRequest.js` (centralized `apiCall()` function)
@@ -192,7 +192,7 @@ The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes
 ## Testing quirks
 
 - Jest config lives in `package.json` (no `jest.config.js`). Environment is `jsdom`.
-- `src/setupTests.js` mocks: `wppoSettings` (translations), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
+- `src/setupTests.js` mocks: `wppoSettings` (empty object), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
 - Global `wppoSettings` object must be extended per-test (`apiUrl`, `nonce`, `settings`, etc.)
 - React component tests use `@testing-library/react` + `@testing-library/jest-dom`. **Do not hardcode a suite or test count here.** Every count recorded in this file went stale within one merge, because any PR that adds or removes a test changes it. Measure the current baseline with
   `npx wp-scripts test-unit-js`
@@ -211,7 +211,7 @@ and quote that in a report; never copy a number from this file or from an earlie
 - `console.log` is error-level; only `console.error` and `console.warn` allowed
 - CSS: custom SCSS design system with `.wppo-` prefix, BEM-like naming, CSS custom properties, no Tailwind/CSS-in-JS
 - SCSS breakpoints: `xs` (400px), `sm` (640px), `md` (768px), `lg` (992px), `xl` (1200px) via `respond-to()` mixin
-- All translatable strings come from `wppoSettings.translations` with English fallback
+- All translatable SPA strings use `__()` from `@wordpress/i18n` (sourced from `wp_set_script_translations()`), never a `wppoSettings.translations` map — that key was removed in audit #1333 and reintroducing a lookup silently no-ops
 
 ## PHP conventions
 

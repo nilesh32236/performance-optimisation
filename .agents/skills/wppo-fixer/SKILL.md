@@ -33,7 +33,7 @@ Use this skill when fixing issues found during code review or audit in the Perfo
 ### JavaScript Fixes
 - Replace `console.log` with `console.error` or `console.warn`
 - Add ARIA labels: `aria-label={__('Description', 'text-domain')}`
-- Wrap strings in translation function with `wppoSettings.translations` fallback
+- Wrap SPA strings in `__()` from `@wordpress/i18n` (no `wppoSettings.translations` map — removed in audit #1333)
 - Use `useId()` for unique HTML IDs in React components
 - Add proper dependency arrays to `useEffect`/`useCallback`
 

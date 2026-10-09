@@ -34,7 +34,7 @@ Modular detail lives in `AGENTS.md`, `.agents/AGENTS.md`, and `docs/` — load t
 
 ## Module 3 — Consistency contract (every PR)
 
-- Follow `AGENTS.md` PHP conventions (WPCS, PHP 8.2 min, `function_exists()`/`has_filter()` + version-gated fallbacks), JS conventions (`@wordpress/eslint-plugin/recommended`, only `console.error`/`console.warn`, `.wppo-` BEM-like SCSS, strings via `wppoSettings.translations` with English fallback).
+- Follow `AGENTS.md` PHP conventions (WPCS, PHP 8.2 min, `function_exists()`/`has_filter()` + version-gated fallbacks), JS conventions (`@wordpress/eslint-plugin/recommended`, only `console.error`/`console.warn`, `.wppo-` BEM-like SCSS, SPA strings via `__()` from `@wordpress/i18n`).
 - Shared UI feedback: `useNotice()` + `NoticeBanner` (`role="alert"`, `aria-live` assertive for errors, polite otherwise) — no per-component notification state.
 - REST: namespace `performance-optimisation/v1`, `manage_options` + `X-WP-Nonce` (except public `rum_collect` with token + IP rate limiting).
 - Multisite: `Util::transient_key()` (`{blog_id}_` prefix), domain-based static cache dirs, `get_current_blog_id()` namespacing in Redis drop-in.

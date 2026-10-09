@@ -828,7 +828,52 @@ describe( 'API Request library', () => {
 			expect( global.fetch ).not.toHaveBeenCalled();
 		} );
 
-		it( 'getPagespeedResults rejects off-origin URLs when homeUrl is known', async () => {
+		it( 'getPagespeedResults rejects off-origin URLs when the localised home URL is known', async () => {
+			// Audit #1776 review: the guard read the **top-level**
+			// `wppoSettings.homeUrl`, but the only
+			// wp_localize_script( 'performance-optimisation-script',
+			// 'wppoSettings', … ) call emits it NESTED at
+			// `performance_audit.homeUrl` (includes/Core/class-main.php). The
+			// key seeded here must therefore be the nested shape — seeding the
+			// old one made the test pass vacuously against a page that can no
+			// longer exist.
+			global.wppoSettings.performance_audit = {
+				homeUrl: 'https://example.com',
+			};
+			try {
+				const { getPagespeedResults } = await import( '../apiRequest' );
+				await expect(
+					getPagespeedResults( 'https://evil.example.net/', 'mobile' )
+				).rejects.toThrow( 'Invalid scan URL' );
+				expect( global.fetch ).not.toHaveBeenCalled();
+			} finally {
+				delete global.wppoSettings.performance_audit;
+			}
+		} );
+
+		it( 'accepts same-origin URLs when the nested home URL is known', async () => {
+			const mockData = { success: true, data: {} };
+			global.wppoSettings.performance_audit = {
+				homeUrl: 'https://example.com',
+			};
+			try {
+				global.fetch.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( mockData ),
+				} );
+				const { getPagespeedResults } = await import( '../apiRequest' );
+				await expect(
+					getPagespeedResults(
+						'https://example.com/some-page/',
+						'mobile'
+					)
+				).resolves.toEqual( mockData );
+				expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+			} finally {
+				delete global.wppoSettings.performance_audit;
+			}
+		} );
+
+		it( 'still honours a top-level homeUrl as a back-compat fallback', async () => {
 			global.wppoSettings.homeUrl = 'https://example.com';
 			try {
 				const { getPagespeedResults } = await import( '../apiRequest' );
@@ -838,6 +883,19 @@ describe( 'API Request library', () => {
 				expect( global.fetch ).not.toHaveBeenCalled();
 			} finally {
 				delete global.wppoSettings.homeUrl;
+			}
+		} );
+
+		it( 'fails closed when the home URL is present but unparseable', async () => {
+			global.wppoSettings.performance_audit = { homeUrl: '/relative/' };
+			try {
+				const { getPagespeedResults } = await import( '../apiRequest' );
+				await expect(
+					getPagespeedResults( 'https://evil.example.net/', 'mobile' )
+				).rejects.toThrow( 'Invalid scan URL' );
+				expect( global.fetch ).not.toHaveBeenCalled();
+			} finally {
+				delete global.wppoSettings.performance_audit;
 			}
 		} );
 
@@ -1123,6 +1181,41 @@ describe( 'API Request library', () => {
 				'Invalid strategy'
 			);
 		} );
+
+		it( 'routes scan validation messages through @wordpress/i18n (audit #1776)', async () => {
+			// Regression guard: these messages used to read a
+			// `wppoSettings.translations` map that wp_localize_script no
+			// longer emits (audit #1333), so they silently fell back to
+			// English forever. Asserting that __() output reaches the throw
+			// path fails if the call is ever re-pointed at a dead source.
+			const translate = jest.fn( ( text ) => `TRANSLATED: ${ text }` );
+			jest.resetModules();
+			jest.doMock( '@wordpress/i18n', () => ( {
+				__: translate,
+			} ) );
+			try {
+				const {
+					assertScanUrl,
+					assertScanStrategy,
+				} = require( '../apiRequest' );
+				expect( () => assertScanUrl( 'javascript:alert(1)' ) ).toThrow(
+					'TRANSLATED: Invalid scan URL: must be a same-origin http(s) URL.'
+				);
+				expect( () => assertScanStrategy( 'tablet' ) ).toThrow(
+					"TRANSLATED: Invalid strategy: must be 'mobile' or 'desktop'."
+				);
+				expect( () => assertScanStrategy( 'tablet', true ) ).toThrow(
+					"TRANSLATED: Invalid strategy: must be 'mobile', 'desktop' or ''."
+				);
+				expect( translate ).toHaveBeenCalledWith(
+					expect.any( String ),
+					'performance-optimisation'
+				);
+			} finally {
+				jest.dontMock( '@wordpress/i18n' );
+				jest.resetModules();
+			}
+		} );
 	} );
 
 	describe( 'isAuthErrorCode', () => {
@@ -1177,6 +1270,151 @@ describe( 'API Request library', () => {
 			commitSettingsCache( null );
 			commitSettingsCache( 'nope' );
 			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+
+		it( 'never replaces the cache with an empty object or an array', () => {
+			// Audit #1776 review: the gate was
+			// `payload && typeof payload === 'object'`, true for `{}` and for
+			// arrays, so a degraded/empty response body blanked the shared store
+			// and every sibling panel then read defaults as if all settings had
+			// been reset. The sibling writer (isFullSettingsMap) deliberately
+			// rejects `{}` for exactly this reason; both writers into one store
+			// must now agree.
+			global.wppoSettings.settings = { keep: true };
+			commitSettingsCache( {} );
+			commitSettingsCache( [] );
+			commitSettingsCache( [ { wiped: true } ] );
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+	} );
+
+	describe( 'non-2xx responses reject instead of resolving', () => {
+		it( 'rejects a 500 with a JSON error body', async () => {
+			// Audit #1776 review: `status` was inspected only for 401/403, so a
+			// 500 carrying `success: false` fulfilled the promise and every
+			// wrapper reading `res.data` treated a server-side failure as a
+			// successful read of undefined fields — invisible to the console
+			// too, because nothing threw.
+			global.fetch.mockResolvedValueOnce( {
+				ok: false,
+				status: 500,
+				json: jest
+					.fn()
+					.mockResolvedValueOnce( { success: false, data: null } ),
+			} );
+
+			await expect( apiCall( 'system_info', {}, 'GET' ) ).rejects.toThrow(
+				'Request failed (500): system_info'
+			);
+		} );
+
+		it( 'still resolves a non-2xx response whose envelope reports success', async () => {
+			const mockData = { success: true, data: { status: 'not_ready' } };
+			global.fetch.mockResolvedValueOnce( {
+				ok: false,
+				status: 202,
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			await expect(
+				apiCall( 'pagespeed_results', {}, 'GET' )
+			).resolves.toEqual( mockData );
+		} );
+
+		it( "keeps the server's own message for the caller's error notice", async () => {
+			global.fetch.mockResolvedValueOnce( {
+				ok: false,
+				status: 400,
+				json: jest.fn().mockResolvedValueOnce( {
+					success: false,
+					message:
+						'You can only query URLs belonging to this website.',
+				} ),
+			} );
+
+			await expect(
+				apiCall( 'pagespeed_results', {}, 'GET' )
+			).rejects.toThrow(
+				'pagespeed_results: You can only query URLs belonging to this website.'
+			);
+		} );
+	} );
+
+	describe( 'in-flight GET dedupe key', () => {
+		it( 'does not join an entry registered before a settings commit', async () => {
+			// Audit #1776 review: the key was the bare action string, so a GET
+			// issued *before* a mutating action could be joined by one issued
+			// after it — rendering pre-mutation server data as current. The
+			// pending first response is withheld until after the commit.
+			let releaseFirst;
+			const firstBody = new Promise( ( resolve ) => {
+				releaseFirst = resolve;
+			} );
+			global.fetch
+				.mockImplementationOnce(
+					() =>
+						new Promise( ( resolve ) => {
+							firstBody.then( () =>
+								resolve( {
+									ok: true,
+									status: 200,
+									json: jest.fn().mockResolvedValueOnce( {
+										success: true,
+										data: { round: 1 },
+									} ),
+								} )
+							);
+						} )
+				)
+				.mockResolvedValueOnce( {
+					ok: true,
+					status: 200,
+					json: jest.fn().mockResolvedValueOnce( {
+						success: true,
+						data: { round: 2 },
+					} ),
+				} );
+
+			const first = apiCall( 'pagespeed_results', {}, 'GET' );
+			// A settings commit lands while the first GET is still pending…
+			patchSettingsCache( 'file_optimisation', { delayJS: true } );
+			// …so the next identical GET must NOT join the pre-commit entry.
+			const second = await apiCall( 'pagespeed_results', {}, 'GET' );
+			expect( second ).toEqual( { success: true, data: { round: 2 } } );
+
+			releaseFirst();
+			await expect( first ).resolves.toEqual( {
+				success: true,
+				data: { round: 1 },
+			} );
+			expect( global.fetch ).toHaveBeenCalledTimes( 2 );
+		} );
+
+		it( 'still shares one request for two concurrent identical GETs', async () => {
+			global.fetch.mockImplementationOnce(
+				() =>
+					new Promise( ( resolve ) => {
+						setTimeout(
+							() =>
+								resolve( {
+									ok: true,
+									status: 200,
+									json: jest.fn().mockResolvedValueOnce( {
+										success: true,
+										data: { shared: true },
+									} ),
+								} ),
+							0
+						);
+					} )
+			);
+
+			const [ a, b ] = await Promise.all( [
+				apiCall( 'recent_activities', {}, 'GET' ),
+				apiCall( 'recent_activities', {}, 'GET' ),
+			] );
+			expect( a ).toEqual( b );
+			expect( global.fetch ).toHaveBeenCalledTimes( 1 );
 		} );
 	} );
 
