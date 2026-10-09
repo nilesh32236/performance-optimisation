@@ -45,7 +45,7 @@ import NoticeBanner from './common/NoticeBanner';
 import ConfirmDialog from './common/ConfirmDialog';
 import RiskBadge from './common/RiskBadge';
 
-import CriticalCssPanel from './CriticalCssPanel';
+import CriticalCssPanel, { resolveCcssStatusShape } from './CriticalCssPanel';
 import PresetsCard from './file-optimization/PresetsCard';
 
 // Per-instance row ids (issue #1274 review): a module counter + Date.now()
@@ -2001,6 +2001,13 @@ const FileOptimization = ( {
 	const settingsForCompare = useMemo(
 		() => stripCdnRowIds( settings ),
 		[ settings ]
+	);
+	// Resolve the CCSS status envelope once per payload (issue #1706
+	// review): the derived `suspended` flag is passed to CriticalCssPanel
+	// so neither parent nor child re-resolves the same small object.
+	const ccssResolvedStatus = useMemo(
+		() => resolveCcssStatusShape( ccssStatus ),
+		[ ccssStatus ]
 	);
 	useUnsavedChanges( settingsForCompare, baseline );
 
@@ -4122,6 +4129,9 @@ const FileOptimization = ( {
 										) }
 										<CriticalCssPanel
 											status={ ccssStatus }
+											suspended={
+												ccssResolvedStatus.suspended
+											}
 											onRegenerate={ handleRegenerateCss }
 											onRegenerateSingle={
 												handleRegenerateSingleCcss
