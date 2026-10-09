@@ -181,6 +181,32 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The generated drop-in must bypass the static cache for password and
+	 * commenter cookies (audit #1785): a cached unlocked password post
+	 * would be served to every anonymous visitor, and a cached
+	 * commenter-personalised page leaks personal data.
+	 */
+	public function test_create_bakes_personalised_cookie_bypass(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( 'wp-postpass_', $fs->contents );
+		$this->assertStringContainsString( 'comment_author_', $fs->contents );
+	}
+
+	/**
 	 * Test that a successful regeneration over an existing drop-in keeps a backup.
 	 */
 	public function test_create_keeps_backup_of_previous_dropin(): void {
