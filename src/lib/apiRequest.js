@@ -388,7 +388,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		throw new Error( 'wppoSettings is not defined' );
 	}
 	const isGet = 'GET' === method;
-	const inflightKey = getInflightKey( action, isGet ? null : body );
+	let inflightKey = null;
 
 	// Share concurrent identical GETs: a second caller awaiting the same
 	// action while the first is still pending joins the same promise
@@ -397,6 +397,10 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 	// fetch for the others. The key carries the settings generation and
 	// body so "identical" means identical (see getInflightKey()).
 	if ( isGet ) {
+		// Computed lazily inside the GET path: POSTs never consume the
+		// key, so computing it up front paid a JSON.stringify on every
+		// mutating call for a value that was never read.
+		inflightKey = getInflightKey( action, null );
 		const shared = inflightGets.get( inflightKey );
 		if ( shared ) {
 			if ( ! signal ) {
