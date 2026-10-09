@@ -93,6 +93,7 @@ class HostPurgerTest extends \PHPUnit\Framework\TestCase {
 		foreach ( array( 'KINSTA_CACHE', 'HTTP_X_KINSTA_CACHE', 'X_WPE_CACHE', 'HTTP_X_WPE_CACHE', 'HTTP_X_SG_CACHE', 'SG_CACHEPRESS' ) as $key ) {
 			unset( $_SERVER[ $key ] );
 		}
+		\PerformanceOptimise\Inc\Host_Detect::reset_cache();
 
 		Functions\stubs(
 			array(
@@ -206,5 +207,32 @@ class HostPurgerTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$this->assertTrue( Host_Purger::purge_all( array( 'invalid' ) ) );
 		$this->assertSame( array(), $this->requests );
+	}
+
+	/**
+	 * Unknown purge types no-op with success and surface a debug log.
+	 *
+	 * @return void
+	 */
+	public function test_unknown_type_noops_with_debug_log(): void {
+		$this->host_override = 'kinsta';
+		$this->install_stubs();
+		$this->assertTrue( Host_Purger::purge_all( 'bogus-type' ) );
+		$this->assertSame( array(), $this->requests );
+		$this->assertContains( 'wppo_debug_log', $this->fired_actions );
+	}
+
+	/**
+	 * The Varnish leg uses a short blocking timeout.
+	 *
+	 * @return void
+	 */
+	public function test_cloudways_varnish_uses_short_blocking_timeout(): void {
+		$this->host_override = 'cloudways';
+		$this->install_stubs();
+		$this->assertTrue( Host_Purger::purge_all( 'all' ) );
+		$this->assertCount( 1, $this->requests );
+		$this->assertSame( 3, $this->requests[0]['args']['timeout'] );
+		$this->assertTrue( $this->requests[0]['args']['blocking'] );
 	}
 }

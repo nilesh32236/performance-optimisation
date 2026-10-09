@@ -415,6 +415,17 @@ const SystemInfo = () => {
 									info.host?.who_caches_what?.page_cache,
 								purge_route:
 									info.host?.who_caches_what?.purge_route,
+								...( info.host?.degrade_reason
+									? {
+											degrade_reason:
+												info.host.degrade_reason,
+									  }
+									: {} ),
+								...( info.host?.apo_reason
+									? {
+											apo_reason: info.host.apo_reason,
+									  }
+									: {} ),
 							} }
 							labels={ {
 								slug: __(
@@ -435,6 +446,14 @@ const SystemInfo = () => {
 								),
 								purge_route: __(
 									'Purge Route',
+									'performance-optimisation'
+								),
+								degrade_reason: __(
+									'Host Degrade Reason',
+									'performance-optimisation'
+								),
+								apo_reason: __(
+									'APO Degrade Reason',
 									'performance-optimisation'
 								),
 							} }

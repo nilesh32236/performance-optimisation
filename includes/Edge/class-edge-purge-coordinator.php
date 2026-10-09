@@ -133,26 +133,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purge_Coordinator' ) ) {
 			}
 
 			$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
-			$body   = isset( $args['body'] ) && is_string( $args['body'] ) ? $args['body'] : '';
-			if ( 'POST' !== $method || '' === $body ) {
+			if ( 'POST' !== $method || ! isset( $args['body'] ) ) {
 				return '';
 			}
 			// Full-zone purges and URL-scoped file purges share one
-			// transport; de-duplicate identical bodies (APO + edge must not
-			// double-send). Distinct bodies keep distinct keys via the
-			// body in the hash below.
-			if ( false === strpos( $body, 'purge_everything' ) && false === strpos( $body, '"files"' ) ) {
+			// transport; de-duplicate identical parsed payloads (APO +
+			// edge must not double-send). Key on the decoded
+			// purge_everything/files payload — not substrings — so array
+			// bodies dedup too and unrelated payloads containing those
+			// strings can never collide. Distinct payloads keep distinct
+			// keys via the canonical body in the hash below.
+			$data = $args['body'];
+			if ( is_string( $data ) ) {
+				if ( '' === $data ) {
+					return '';
+				}
+				$decoded = json_decode( $data, true );
+				if ( ! is_array( $decoded ) ) {
+					return '';
+				}
+				$data = $decoded;
+			}
+			if ( ! is_array( $data ) || ( ! array_key_exists( 'purge_everything', $data ) && ! array_key_exists( 'files', $data ) ) ) {
 				return '';
 			}
 			if ( 1 !== preg_match( '#^https://api\.cloudflare\.com/client/v4/zones/[^/]+/purge_cache$#', $url ) ) {
 				return '';
 			}
 
-			$authorization = '';
-			if ( isset( $args['headers']['Authorization'] ) ) {
-				$authorization = (string) $args['headers']['Authorization'];
+			$canonical = array();
+			if ( array_key_exists( 'purge_everything', $data ) ) {
+				$canonical['purge_everything'] = (bool) $data['purge_everything'];
 			}
-			return hash( 'sha256', $method . "\n" . $url . "\n" . $body . "\n" . $authorization );
+			if ( array_key_exists( 'files', $data ) && is_array( $data['files'] ) ) {
+				$files = array_values( array_map( 'strval', $data['files'] ) );
+				sort( $files );
+				$canonical['files'] = $files;
+			}
+			$encoded = wp_json_encode( $canonical );
+			if ( ! is_string( $encoded ) || '' === $encoded ) {
+				return '';
+			}
+
+			$authorization = '';
+			if ( isset( $args['headers'] ) && is_array( $args['headers'] ) ) {
+				foreach ( $args['headers'] as $name => $value ) {
+					if ( 0 === strcasecmp( (string) $name, 'Authorization' ) ) {
+						$authorization = (string) $value;
+						break;
+					}
+				}
+			}
+			return hash( 'sha256', $method . "\n" . $url . "\n" . $encoded . "\n" . $authorization );
 		}
 	}
 }

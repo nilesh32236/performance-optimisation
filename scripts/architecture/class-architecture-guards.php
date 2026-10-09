@@ -139,6 +139,7 @@ final class Architecture_Guards {
 	 */
 	private const STATIC_STATE_OWNERS = array(
 		'PerformanceOptimise\\Inc\\AI_Adaptive'           => 'site_sensitive_request_memo',
+		'PerformanceOptimise\\Inc\\Apo_Detect'            => 'request_state',
 		'PerformanceOptimise\\Inc\\Admin_Notices'         => 'request_residue',
 		'PerformanceOptimise\\Inc\\Ai_Anomaly'            => 'site_sensitive_request_memo',
 		'PerformanceOptimise\\Inc\\Asset_Manager'         => 'protected_compatibility',
@@ -152,6 +153,7 @@ final class Architecture_Guards {
 		'PerformanceOptimise\\Inc\\Critical_CSS'          => 'request_residue',
 		'PerformanceOptimise\\Inc\\Database_Cleanup'      => 'site_sensitive_request_memo',
 		'PerformanceOptimise\\Inc\\Filesystem'            => 'cross_request_persisted',
+		'PerformanceOptimise\\Inc\\Host_Detect'           => 'request_state',
 		'PerformanceOptimise\\Inc\\Image_Optimisation'    => 'request_residue',
 		'PerformanceOptimise\\Inc\\Img_Converter'         => 'cross_request_persisted',
 		'PerformanceOptimise\\Inc\\Lcp_Preload'           => 'request_residue',

@@ -1433,6 +1433,8 @@ Intentionally narrow: no `*logout*` / `*nonce*` / `*add-to-cart*` substring wild
 ### `wppo_edge_cache_enabled`
 Filters whether Edge HTML Cache (N2) is enabled. @since 2.0.0.
 
+Note: when Cloudflare APO HTML caching is active, the filtered value is forced to `false` (APO owns the edge HTML layer, so a second WPPO layer would double-cache). The filter cannot re-enable edge cache under APO.
+
 Host-agnostic Cloudflare Workers / Bunny Edge adapter deploying `cache/wppo/{domain}/{path}/index.html` with stale-while-revalidate (<30ms global TTFB). Gated by `edge_cache.enabled` (false default). Purge via `Edge_Purger::purge_all()` on `wppo_after_cache_clear` alongside `CDN_Purger` (lock via `Util::transient_key('wppo_edge_purge_lock')`). Worker template `templates/cloudflare-worker.js` + `wrangler.toml` generator `Edge_Cache::get_wrangler_toml()` + Bunny `templates/bunny-edge.js` / `Edge_Cache::get_bunny_edge_js()`.
 
 **Parameters:**

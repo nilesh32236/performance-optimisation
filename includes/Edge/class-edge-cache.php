@@ -65,7 +65,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * Whether edge cache is enabled.
 		 *
 		 * Reads wppo_settings[edge_cache][enabled] (false default) and
-		 * applies the wppo_edge_cache_enabled filter.
+		 * applies the wppo_edge_cache_enabled filter. APO wins: when
+		 * Cloudflare APO HTML caching is active the filter cannot
+		 * re-enable a second WPPO HTML layer (double-cache guard, issue
+		 * #911) and this method returns false; see is_apo_degraded().
 		 *
 		 * @since 2.0.0
 		 * @return bool True when edge cache is enabled.
@@ -78,6 +81,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			}
 			/**
 			 * Filters whether edge HTML cache is enabled.
+			 *
+			 * Note: the filtered value is forced to false while Cloudflare
+			 * APO HTML caching is active (APO owns the edge HTML layer, so
+			 * a second WPPO layer would double-cache). The filter cannot
+			 * re-enable edge cache under APO.
 			 *
 			 * @since 2.0.0
 			 * @param bool $enabled Whether edge cache is enabled.

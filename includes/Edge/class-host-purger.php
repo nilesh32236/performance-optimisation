@@ -56,6 +56,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 				if ( 'all' === $type ) {
 					return self::purge_host( $slug );
 				}
+
+				// Unknown $type (caller typo, non-string payload): no-op
+				// true, but surface the misuse through the debug log
+				// instead of silently reporting success.
+				try {
+					if ( function_exists( 'do_action' ) ) {
+						do_action( 'wppo_debug_log', 'Host_Purger: unknown purge type; no-op.' );
+					}
+				} catch ( \Throwable $ignored ) {
+					unset( $ignored );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
@@ -184,11 +195,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Purger' ) ) {
 					return true;
 				}
 
+				// Short blocking timeout: this leg runs inside
+				// purge_after_cache_clear() (save_post / cache-clear admin
+				// actions), so a slow Varnish must not stall the request.
+				// Blocking stays on so transport failures surface honestly
+				// (issue #1651) instead of false-success.
 				$response = wp_remote_request(
 					$target,
 					array(
-						'method'  => 'PURGE',
-						'timeout' => 5,
+						'method'   => 'PURGE',
+						'timeout'  => 3,
+						'blocking' => true,
 					)
 				);
 

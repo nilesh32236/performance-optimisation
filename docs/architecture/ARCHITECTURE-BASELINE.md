@@ -254,7 +254,7 @@ P3-022 keeps the current findings visible while preventing new unexplained owner
 |---|---:|---|
 | Boundary edges | 20 classified findings | An unclassified `from → to + reason` finding fails as `forbidden_boundary_edge`; known findings use the boundary bridge vocabulary (`required_compatibility`, `required_lifecycle`, `temporary_migration`, `protected`, or `cycle_producing`). |
 | Schedule owners | 11 nodes with direct scheduling APIs | A new direct scheduling caller, or a new scheduling API in an existing caller, fails until its layer and owner are classified. |
-| Static-state owners | 33 owners | A static owner missing the P3-021 lifecycle vocabulary (`site_sensitive_request_memo`, `request_state`, `request_residue`, `cross_request_persisted`, or `protected_compatibility`) fails as `unexplained_static_state_owner`. |
+| Static-state owners | 35 owners | A static owner missing the P3-021 lifecycle vocabulary (`site_sensitive_request_memo`, `request_state`, `request_residue`, `cross_request_persisted`, or `protected_compatibility`) fails as `unexplained_static_state_owner`. |
 
 `ArchitectureGuardTest` proves each failure using `tests/php/fixtures/architecture-guard-violations.json` and proves the current generated evidence passes. The guard is architecture tooling only; no runtime behavior or scheduler ownership is changed by P3-022.
 

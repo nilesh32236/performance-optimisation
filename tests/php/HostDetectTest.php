@@ -25,6 +25,7 @@ class HostDetectTest extends \PHPUnit\Framework\TestCase {
 		foreach ( array( 'KINSTA_CACHE', 'HTTP_X_KINSTA_CACHE', 'X_WPE_CACHE', 'HTTP_X_WPE_CACHE', 'HTTP_X_SG_CACHE', 'SG_CACHEPRESS' ) as $key ) {
 			unset( $_SERVER[ $key ] );
 		}
+		Host_Detect::reset_cache();
 	}
 
 	/**
@@ -96,14 +97,16 @@ class HostDetectTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Unknown slugs normalize to none (fail open).
+	 * Custom filter slugs survive (filter extensibility); unknown hosts
+	 * fail open downstream (no ban, host purger no-ops).
 	 *
 	 * @return void
 	 */
-	public function test_unknown_slug_normalizes_to_none(): void {
+	public function test_custom_filter_slug_survives_fail_open(): void {
 		$this->install_stubs( 'acme-host' );
-		$this->assertSame( 'none', Host_Detect::detect() );
+		$this->assertSame( 'acme-host', Host_Detect::detect() );
 		$this->assertFalse( Host_Detect::is_banned_conflict() );
+		$this->assertTrue( Host_Detect::is_page_cache_allowed() );
 		$this->clean_server();
 	}
 
@@ -114,9 +117,40 @@ class HostDetectTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_server_marker_detects_kinsta(): void {
 		$this->install_stubs();
-		$_SERVER['HTTP_X_KINSTA_CACHE'] = 'HIT';
+		$_SERVER['KINSTA_CACHE'] = 'HIT';
 		$this->assertSame( 'kinsta', Host_Detect::detect() );
 		$this->assertTrue( Host_Detect::is_banned_conflict() );
+		$this->clean_server();
+	}
+
+	/**
+	 * Client-controlled request headers never force a host degrade.
+	 *
+	 * @return void
+	 */
+	public function test_spoofable_request_headers_are_ignored(): void {
+		$this->install_stubs();
+		$_SERVER['HTTP_X_KINSTA_CACHE'] = 'HIT';
+		$_SERVER['HTTP_X_WPE_CACHE']    = 'HIT';
+		$_SERVER['HTTP_X_SG_CACHE']     = 'HIT';
+		$this->assertSame( 'none', Host_Detect::detect() );
+		$this->assertFalse( Host_Detect::is_banned_conflict() );
+		$this->assertTrue( Host_Detect::is_page_cache_allowed() );
+		$this->clean_server();
+	}
+
+	/**
+	 * Detection memoizes per request until reset_cache().
+	 *
+	 * @return void
+	 */
+	public function test_detect_memoizes_until_reset(): void {
+		$this->install_stubs();
+		$this->assertSame( 'none', Host_Detect::detect() );
+		$_SERVER['KINSTA_CACHE'] = 'HIT';
+		$this->assertSame( 'none', Host_Detect::detect() );
+		Host_Detect::reset_cache();
+		$this->assertSame( 'kinsta', Host_Detect::detect() );
 		$this->clean_server();
 	}
 }

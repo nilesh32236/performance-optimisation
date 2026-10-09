@@ -116,7 +116,7 @@ Cross-domain edges require review. An edge can represent a real product interact
 ## High-value findings
 
 1. **Preload transport:** Cron warmup now shares one bounded, same-host redirect policy; future fetch callers must use the owner rather than implicit redirects.
-2. **Runtime state:** 33 owners hold 143 static properties. P3-004 resets six site-sensitive owners centrally; P3-021 selects the non-site-sensitive `Bfcache` request state for a shutdown reset and classifies persisted, compatibility, and protected residues.
+2. **Runtime state:** 35 owners hold 146 static properties. P3-004 resets six site-sensitive owners centrally; P3-021 selects the non-site-sensitive `Bfcache` request state for a shutdown reset and classifies persisted, compatibility, and protected residues.
 3. **`Util` hub:** 60 source nodes and 1,084 executable occurrences still depend on it; P3-017 removed the Woo proxy cluster without removing the public facade.
 4. **`Main` hub:** 38 outgoing class dependencies and 19 feature dependencies remain; P3-013 through P3-015 reduced large methods and moved bounded owners behind named coordinators, while Main retains public callback/facade identity.
 5. **Cache capacity:** `Cache_Capacity` now owns the statistics, cap, and eviction contract; `Cache` remains the public facade and lifecycle owner.

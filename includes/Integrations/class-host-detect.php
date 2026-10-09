@@ -4,8 +4,10 @@
  *
  * Detects Kinsta, WP Engine, SiteGround, and Cloudways/Breeze from MU
  * markers and constants without calling host APIs at detect time.
- * Detection is filter-extensible (`wppo_host_adapter`) and fails open to
- * 'none' on unknown hosts so the purge coordinator no-ops safely.
+ * Detection is filter-extensible (`wppo_host_adapter`, which may return
+ * custom slugs beyond the known set) and fails open so the purge
+ * coordinator no-ops safely on unknown hosts. Only server-set markers
+ * are probed — client-controlled request headers are never trusted.
  *
  * @package PerformanceOptimise\Inc
  * @since   NEXT
@@ -50,6 +52,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 		private const KNOWN_SLUGS = array( 'kinsta', 'wpengine', 'siteground', 'cloudways' );
 
 		/**
+		 * Per-request memo of the final detected slug.
+		 *
+		 * The detect() method runs on the hottest frontend path
+		 * (Cache::is_not_cacheable) and applies filters on every call;
+		 * memoize so one request probes once. Reset via reset_cache()
+		 * (unit tests, long-running workers).
+		 *
+		 * @since NEXT
+		 * @var string|null
+		 */
+		private static $detect_memo = null;
+
+		/**
 		 * Hosts whose own page cache bans an overlapping static-file cache.
 		 *
 		 * Kinsta bans Cache Enabler-style static caches; WP Engine bans
@@ -66,12 +81,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 		 * Detect the managed host slug, or 'none' when unknown.
 		 *
 		 * Probe order is constants → server markers → classes/functions
-		 * (all probed, never called), then the two filters. Never throws.
+		 * (all probed, never called), then the two filters. The allowlist
+		 * applies to the probe result only: a non-empty slug returned by
+		 * either filter is accepted as-is (sanitized) so custom hosts can
+		 * extend detection; unknown/custom slugs fail open downstream
+		 * (no ban, host purger no-ops). Never throws. Per-request memoized;
+		 * use reset_cache() to clear (tests, workers).
 		 *
 		 * @since NEXT
-		 * @return string One of 'kinsta', 'wpengine', 'siteground', 'cloudways', 'none'.
+		 * @return string Detected slug, a custom filter-provided slug, or 'none'.
 		 */
 		public static function detect(): string {
+			if ( null !== self::$detect_memo ) {
+				return self::$detect_memo;
+			}
+
 			try {
 				$slug = self::probe();
 			} catch ( \Throwable $e ) {
@@ -79,26 +103,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 				$slug = 'none';
 			}
 
+			if ( ! in_array( $slug, self::KNOWN_SLUGS, true ) ) {
+				$slug = 'none';
+			}
+
 			try {
 				if ( function_exists( 'apply_filters' ) ) {
 					$override = apply_filters( self::FILTER_ADAPTER, $slug );
-					if ( is_string( $override ) && '' !== $override ) {
+					if ( is_string( $override ) && '' !== trim( $override ) ) {
 						$slug = strtolower( trim( $override ) );
 					}
-					$slug = apply_filters( self::FILTER_DETECTED, $slug );
-					if ( ! is_string( $slug ) || '' === $slug ) {
-						return 'none';
+					$filtered = apply_filters( self::FILTER_DETECTED, $slug );
+					if ( ! is_string( $filtered ) || '' === trim( $filtered ) ) {
+						$slug = 'none';
+					} else {
+						$slug = strtolower( trim( $filtered ) );
 					}
-					$slug = strtolower( trim( $slug ) );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 
-			if ( ! in_array( $slug, self::KNOWN_SLUGS, true ) ) {
-				return 'none';
+			if ( '' === $slug ) {
+				$slug = 'none';
 			}
+
+			self::$detect_memo = $slug;
 			return $slug;
+		}
+
+		/**
+		 * Clear the per-request detection memo.
+		 *
+		 * Intended for unit tests and long-running workers where host
+		 * markers or filters change mid-process. No-op otherwise.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_cache(): void {
+			self::$detect_memo = null;
 		}
 
 		/**
@@ -158,13 +202,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
 				return 'cloudways';
 			}
 
-			if ( isset( $_SERVER['KINSTA_CACHE'] ) || isset( $_SERVER['HTTP_X_KINSTA_CACHE'] ) ) {
+			// Server markers only: HTTP_* entries are client-controlled
+			// request headers (spoofable by any visitor) and must never
+			// force a banned-conflict degrade. Non-prefixed keys are set
+			// by the server environment, not the request.
+			if ( isset( $_SERVER['KINSTA_CACHE'] ) ) {
 				return 'kinsta';
 			}
-			if ( isset( $_SERVER['X_WPE_CACHE'] ) || isset( $_SERVER['HTTP_X_WPE_CACHE'] ) ) {
+			if ( isset( $_SERVER['X_WPE_CACHE'] ) ) {
 				return 'wpengine';
 			}
-			if ( isset( $_SERVER['HTTP_X_SG_CACHE'] ) || isset( $_SERVER['SG_CACHEPRESS'] ) ) {
+			if ( isset( $_SERVER['SG_CACHEPRESS'] ) ) {
 				return 'siteground';
 			}
 

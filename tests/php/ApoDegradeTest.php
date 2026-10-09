@@ -42,6 +42,10 @@ class ApoDegradeTest extends \PHPUnit\Framework\TestCase {
 	private function install_stubs(): void {
 		unset( $_SERVER['HTTP_CF_APO_VIA'], $_SERVER['HTTP_CF_EDGE_CACHE'] );
 		$this->options = array();
+		Apo_Detect::reset_cache();
+		if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
+			\PerformanceOptimise\Inc\Host_Detect::reset_cache();
+		}
 
 		Functions\stubs(
 			array(
@@ -95,16 +99,53 @@ class ApoDegradeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * APO response header marks APO active.
+	 * Client-controlled request headers never force an APO degrade.
 	 *
 	 * @return void
 	 */
-	public function test_header_marks_active(): void {
+	public function test_spoofable_headers_are_ignored(): void {
 		$this->apo_override = null;
 		$this->install_stubs();
-		$_SERVER['HTTP_CF_APO_VIA'] = 'cache';
+		$_SERVER['HTTP_CF_APO_VIA']    = 'cache';
+		$_SERVER['HTTP_CF_EDGE_CACHE'] = 'cache, apo';
+		$this->assertFalse( Apo_Detect::is_apo_active() );
+		$this->assertSame( '', Apo_Detect::get_degrade_reason() );
+		unset( $_SERVER['HTTP_CF_APO_VIA'], $_SERVER['HTTP_CF_EDGE_CACHE'] );
+	}
+
+	/**
+	 * The Cloudflare plugin APO option marks APO active.
+	 *
+	 * @return void
+	 */
+	public function test_cloudflare_option_marks_active(): void {
+		$this->apo_override = null;
+		$this->install_stubs();
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) {
+				if ( 'cloudflare' === $name ) {
+					return array( 'automatic_platform_optimization' => true );
+				}
+				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
+			}
+		);
 		$this->assertTrue( Apo_Detect::is_apo_active() );
-		unset( $_SERVER['HTTP_CF_APO_VIA'] );
+		$this->assertNotSame( '', Apo_Detect::get_degrade_reason() );
+	}
+
+	/**
+	 * The APO verdict memoizes per request until reset_cache().
+	 *
+	 * @return void
+	 */
+	public function test_apo_verdict_memoizes_until_reset(): void {
+		$this->apo_override = null;
+		$this->install_stubs();
+		$this->assertFalse( Apo_Detect::is_apo_active() );
+		$this->apo_override = true;
+		$this->assertFalse( Apo_Detect::is_apo_active() );
+		Apo_Detect::reset_cache();
+		$this->assertTrue( Apo_Detect::is_apo_active() );
 	}
 
 	/**
