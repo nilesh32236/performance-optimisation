@@ -306,13 +306,38 @@ Consequences worth knowing before changing anything:
 - Deploys to WordPress.org SVN via `10up/action-wordpress-plugin-deploy`
 - `.distignore` excludes dev files (configs, tests, `.github`, `.jules`, `.qoder`, dev vendor packages)
 
+## The Playground demo has a mandatory gate
+
+`docs/site/playground.html` publishes a code-executing WordPress Playground link
+whose `blueprint-url` pins a commit SHA. **Moving that pin requires updating
+`docs/site/playground.html` and re-running:**
+
+```sh
+php scripts/verify-playground-blueprint.php   # --network to also fetch the pinned URL
+```
+
+It exits 0 only when the SHA resolves to a real commit, the blueprint parses, the
+plugin URL is an absolute https URL, and **the blueprint at that SHA still matches
+`.wordpress-org/playground/blueprint.json` in the working tree**. That last check
+is the stale-pin detection: a SHA can resolve perfectly and still serve an older
+blueprint, which is what a visitor loads.
+
+It runs in CI as a step of `psalm-wpcs-check.yml`. That workflow uses a `paths`
+WHITELIST, so **a change to `.wordpress-org/playground/blueprint.json` or to
+`docs/site/playground.html` without a `.php` file would otherwise skip the
+workflow entirely** and the gate would not run. Both paths are listed.
+
+If you change the blueprint, change the pin in the same commit. If the verifier
+fails because the pinned SHA is unreachable, the pin is pointing at a commit that
+is not on this branch — see the note below.
+
 ## CI workflows
 
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
 | `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
-| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | TWO JOBS: `code-quality` runs the scanners with `contents:read`+`security-events:write`; `report` posts the PR comment with `issues:write`+`pull-requests:write` and checks out nothing. `parallel-lint` (PHP 8.2-8.5), `phpcs`, Psalm, class-inventory drift, Playground pin gate | Psalm security scan, GitHub Issue/PR comment |
+| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, `generate-class-inventory.php --check`, the Playground pin gate, GitHub Issue/PR comment | Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |

@@ -87,10 +87,10 @@ The score formula lives in the graph metadata. It ranks review pressure; it does
 
 | Class | Lines | Methods | 80+ | Static | Private state | Fan in/out | Evidence in | Feature deps | Largest method |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `Main` | 10,225 | 236 | 17 | 12 | 39 | 16/37 | 133 | 18 | `enqueue_scripts` 203 |
+| `Main` | 10,290 | 237 | 17 | 12 | 40 | 16/37 | 133 | 19 | `enqueue_scripts` 203 |
 | `Image_Optimisation` | 8,999 | 183 | 13 | 7 | 30 | 4/4 | 11 | 3 | `add_delay_load_img` 476 |
 | `Critical_CSS` | 6,950 | 138 | 12 | 11 | 11 | 9/8 | 50 | 5 | `generate` 267 |
-| `Cache` | 5,643 | 161 | 8 | 4 | 29 | 14/13 | 71 | 8 | `maybe_store_cache` 177 |
+| `Cache` | 5,089 | 167 | 7 | 3 | 29 | 17/15 | 72 | 10 | `maybe_store_cache` 177 |
 | `Util` | 4,791 | 156 | 5 | 4 | 4 | 57/9 | 1,138 | 3 | `get_with_stampede_lock` 197 |
 | `Used_CSS` | 4,961 | 94 | 8 | 1 | 11 | 10/8 | 39 | 5 | `regenerate_all` 291 |
 | `Lcp_Preload` | 4,591 | 78 | 8 | 12 | 3 | 1/4 | 12 | 4 | `apply_occlusion_fetchpriority_low` 163 |

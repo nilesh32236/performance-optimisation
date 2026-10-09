@@ -1,0 +1,28 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "landingPage": "/wp-admin/admin.php?page=performance-optimisation",
+  "preferredVersions": {
+    "php": "8.2",
+    "wp": "7.1"
+  },
+  "features": {
+    "networking": true
+  },
+  "login": true,
+  "description": "Performance Optimisation 2.4.0 on PHP 8.2 and WordPress 7.1, logged in as admin, with the plugin already installed, activated, and the Dashboard open. Nothing is enabled by default, so you start from the same safe state a new install starts from.",
+  "plugins": [
+    {
+      "resource": "url",
+      "url": "https://github.com/nilesh32236/performance-optimisation/releases/download/v2.4.1/performance-optimisation-2.4.1.zip",
+      "caption": "Installing Performance Optimisation 2.4.0"
+    }
+  ],
+  "steps": [
+    {
+      "step": "setSiteOptions",
+      "options": {
+        "blogdescription": "WordPress Playground"
+      }
+    }
+  ]
+}

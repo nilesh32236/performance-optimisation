@@ -1,6 +1,8 @@
 # Exclude from WordPress.org SVN release
 /.git/
 /.github/
+/.wordpress-org/
+/tools/
 /.agents/
 /.jules/
 /node_modules/

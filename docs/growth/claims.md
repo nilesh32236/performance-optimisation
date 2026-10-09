@@ -7,8 +7,8 @@ produced that evidence, and the **commit SHA that evidence was produced on**.
 better than a plausible number, because a missing row is visible and a plausible number is not.
 Evidence from another branch, another commit, or another file is **not** evidence for this one.
 
-**Last reviewed:** 2026-10-08
-**Baseline commit:** `66fd4914164d135d0176a45243748d7af6eee44e` — recorded when the register was first written on `growth/claims-register`; not a claim about the current branch.
+**Last reviewed:** 2026-10-05
+**Baseline commit (this branch):** `66fd4914164d135d0176a45243748d7af6eee44e` (`growth/claims-register`)
 **Live listing version at review time:** 2.4.0, uploaded 2026-09-24
 **Owner of record:** plugin maintainer. Any row here may be deleted or corrected by the maintainer
 without discussion.
@@ -25,8 +25,8 @@ re-run on this branch, and four rows did not survive:
 | C-06 | "2783 tests, **1 failure** (`ArchitectureInventoryTest`)" | **FALSE for this branch.** That result is from `design/variant-c-redesign`. Here the suite is green. |
 | C-11 | `active_installs 0`, `num_ratings 4` | **TRUE**, re-confirmed 2026-10-03, with a warning added about the `rating` field. |
 
-A fifth row (C-13) was **added** as an ABSENCE claim - that the plugin makes no WCAG
-conformance claim of any kind. The measurements that prompted the row were recorded in the audit and turned out to be on an unmerged branch, which is why they do not support it.
+A fifth row (C-13) was **added**, because the register omitted the accessibility measurements that
+later turned out to exist.
 
 ---
 
@@ -67,6 +67,20 @@ look healthy. The CI workflow in `webpack.yml` carries `paths-ignore` for `**.md
 result is not a pass. Always read the check **names** that came back, not just the count.
 
 ---
+### C-15 — The Playground demo installs v2.4.1, pinned to a commit that a CI gate keeps honest
+
+| Field | Value |
+|---|---|
+| **Claim** | `docs/site/playground.html` publishes a code-executing WordPress Playground link whose blueprint installs Performance Optimisation 2.4.1. |
+| **Verdict** | **TRUE, with the load-bearing limits stated** |
+| **Evidence — the artifact** | `plugins[0].url` in `.wordpress-org/playground/blueprint.json` names `performance-optimisation-2.4.1.zip`. Downloaded and read: HTTP 200, 3,146,799 bytes, 434 entries, `Version: 2.4.1` in the shipped plugin file. |
+| **Evidence — the gate** | `php scripts/verify-playground-blueprint.php` asserts the SHA resolves, the blueprint parses, the plugin URL is absolute https, **and that the blueprint at the pinned SHA still matches the working tree**. That last check is the stale-pin detection. |
+| **Limit — not booted** | The 2.4.1 install has **NOT** been booted and re-verified. The last executed run was 2026-10-02 against 2.4.0; `blueprint.json` carries no committed snapshot of it. Treat the sandbox behaviour as unproven. |
+| **Limit — no artefact** | No output of that run is committed, so none of it can be re-derived from this repository. |
+| **Evidence — the absence** | The drop-in / page-cache situation and the unbounded-cache default are recorded separately and are **not** implied by this row. |
+| **Verified** | 2026-10-05 on `feat/playground-blueprint-minimal` (#1773) |
+
+
 
 ## Claims
 
@@ -129,7 +143,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 | Field | Value |
 |---|---|
 | **Claim** | "PHP 8.2, 8.3, 8.4 and 8.5 are each syntax-checked by CI on pushes and pull requests that touch source." |
-| **Verdict** | **TRUE, but re-cited and narrowed.** The previous run record was attached to the wrong commit. The phrase "every push and pull request" was also false: `webpack.yml:6-9 (push) and :13-16 (pull_request)` sets `paths-ignore` for `build/**`, `**.md`, `.distignore`, `.gitignore`. |
+| **Verdict** | **TRUE, but re-cited and narrowed.** The previous run record was attached to the wrong commit. The phrase "every push and pull request" was also false: `webpack.yml:6-9` sets `paths-ignore` for `build/**`, `**.md`, `.distignore`, `.gitignore`. |
 | **Evidence** | `.github/workflows/webpack.yml:120` job `php-syntax`; `:126` `strategy.matrix`; `:131` `- name: Setup PHP ${{ matrix.php }}`; `:134` `php-version: ${{ matrix.php }}`; `:138` `run: parallel-lint --exclude vendor .`. Matrix values `["8.2","8.3","8.4","8.5"]`. |
 | **Command** | same `gh api ... check-runs` call as C-04 |
 | **Result** | `PHP Syntax Check (8.2–8.5) (8.2) \| success \| 2026-10-02T14:24:41Z`<br>`PHP Syntax Check (8.2–8.5) (8.3) \| success \| 2026-10-02T14:24:41Z`<br>`PHP Syntax Check (8.2–8.5) (8.4) \| success \| 2026-10-02T14:24:50Z`<br>`PHP Syntax Check (8.2–8.5) (8.5) \| success \| 2026-10-02T14:24:42Z` |
@@ -163,11 +177,11 @@ result is not a pass. Always read the check **names** that came back, not just t
 | **Verified** | 2026-10-03 |
 | **Expires** | On any change to that test file or to `docs/php-84-85-compat.md`. |
 
-### C-08 — Named WordPress versions are covered by a version-gate unit matrix (7.1 is NOT among them)
+### C-08 — WordPress 6.2 through 7.2 are covered by a version-gate unit matrix
 
 | Field | Value |
 |---|---|
-| **Claim** | "Named WordPress versions are covered by an automated version-gate suite." |
+| **Claim** | "WordPress 6.2 through 7.2 are covered by an automated version-gate suite." |
 | **Verdict** | **TRUE** |
 | **Evidence — what it is** | `tests/php/WpVersionGateTest.php` data provider `version_provider()` enumerates `'6.2'`, `'6.2.6'`, `'6.3-alpha'`, `'6.3'`, `'6.6.2'`, `'6.7.2'`, `'6.8'`, `'6.8.3'`, `'6.9-alpha'`, `'6.9-beta1'`, `'6.9'`, `'6.9.1'`, `'7.0-alpha'`, `'7.0'`, `'7.2'`, plus unset and empty globals. Every test evaluates the plugin's real `Wp_Version` gate helpers against each value. |
 | **Evidence — what it is NOT** | It is a matrix over **version strings**, not a matrix over **WordPress installations**. No WordPress core is downloaded, booted, or rendered. It runs inside the PHPUnit job described in C-04, and therefore is also subject to that job's `paths-ignore`. `readme.txt` must say this explicitly. |
@@ -183,7 +197,7 @@ result is not a pass. Always read the check **names** that came back, not just t
 |---|---|
 | **Claim** | "There is no automated multi-WordPress-version install matrix in this plugin's CI." |
 | **Verdict** | **TRUE** |
-| **Evidence** | `grep -rnE "wordpress-version\|wp-env\|playground\|wp core install\|wp-env (start\|run)\|playground (run\|cli)\|wordpress-setup-action" .github/workflows/` returns **no output** (exit 1). The widened form including `wordpress_version` and `WP_VERSION` also returns nothing. No workflow declares a `wordpress-version` input or matrix key. The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
+| **Evidence** | `grep -rnE "wordpress-version\|wp-env \(start\|run\)\|playground \(run\|cli\)\|wp core install\|wordpress-setup-action" .github/workflows/` returns **no output** (exit 1) — no workflow declares a `wordpress-version` input or matrix key, nor a test-service install. The plain-string form `grep -rn "wordpress-version\|wp-env\|playground"` **now returns five lines**, all of them this repository's own Playground path filters and the verifier step added by #1773. Those are references to a demo blueprint, not a version matrix. **Re-verified 2026-10-05 on #1773.** The only PHP matrix in CI is the `php-syntax` lint matrix (C-05); the only PHPUnit job is single-version (C-04). |
 | **Command** | `grep -rn "wordpress-version\|wordpress_version\|WP_VERSION\|wp-env\|playground" .github/workflows/` |
 | **SHA** | `66fd4914164d135d0176a45243748d7af6eee44e` |
 | **Verified** | 2026-10-03 |
@@ -250,8 +264,8 @@ users**. It moves to corrected only when the release is live and the API returns
 
 | Field | Value |
 |---|---|
-| **Claim** | The plugin makes **exactly one** WCAG-flavoured statement in public copy, and it is a changelog line, not a conformance claim: `readme.txt:298` (2.0.0) says "Redesigned dashboard and all settings tabs with WCAG AA contrast". **No other WCAG statement exists** in readme.txt, readme.md or docs/site/ - counted, 0 occurrences elsewhere. There is no AA-conformance assertion anywhere. | This row exists so that the absence is deliberate and recorded, not merely forgotten. |
-| **Verdict** | **TRUE** — but on the absence claim alone. The measurements below are **inadmissible as evidence** under the rule at the top of this file ("evidence from another branch, another commit, or another file is not evidence for this one"): every one of them is on `origin/design/variant-c-redesign`, which is unmerged. They are recorded as history, not as support. The claim itself — that the plugin makes no WCAG conformance claim — is an absence verifiable on `master`. |
+| **Claim** | The plugin makes **no WCAG conformance claim of any kind.** This row exists so that the absence is deliberate and recorded, not merely forgotten. |
+| **Verdict** | **TRUE**, with the measurements below |
 | **The narrow, real measurement** | On `design/variant-c-redesign`, two WCAG criteria were measured to zero failures in a real browser against the live admin: **1.4.3 Contrast (Minimum)** (Level AA) and **1.4.12 Text Spacing** (Level AA). |
 | **Command** | `git show origin/design/variant-c-redesign:scripts/probe-text-spacing.mjs`, and the commit bodies of `77e89ce1` and `38d5f15d` for the contrast and text-spacing results. |
 | **Result** | `77e89ce1` — "overview 0 speed 0 media 0 data-system 0 manage 0 / TOTAL 0". `38d5f15d` — "clipped/collapsed 0 overlaps 0 horizontal scroll none / TOTAL 0". |
@@ -269,46 +283,6 @@ users**. It moves to corrected only when the release is live and the API returns
 > not WCAG checks. The honest sentence is the one in this row: two AA criteria, measured, on an
 > unmerged branch, reported by their authors.
 
-### C-14 — WordPress 7.1 has two behavioural tests, and no CI installs WordPress core
-
-| Field | Value |
-|---|---|
-| **Claim** | `docs/site/compatibility.html` states that two tests pin WordPress 7.1 behaviour, and that `wp-env`, `playground`, `wp core install` and the WordPress setup action appear in no workflow. Both statements are claims and both are recorded here. |
-| **Verdict** | **TRUE**, with the limit stated rather than hidden |
-| **Evidence — the two tests** | `tests/php/MainSpeculationRulesTest.php:6` reconciles speculation-rules handling with the WP 7.1 `moderate` default and pins an explicit eagerness so the escalation cannot override the plugin UI. `tests/php/ImgConverterTest.php:97` stubs `wp_get_image_encode_quality()` (WP 7.1+) *while simulating the WP 7.1+ runtime*. |
-| **Evidence — the limit** | Both SIMULATE the 7.1 runtime; neither exercises a real 7.1 install. `setup-php` is used by six workflows to select a PHP version and none of them installs WordPress. |
-| **Evidence — the absence** | `grep -rnE "wp-env\|wp core install\|wordpress-setup-action" .github/workflows/` returns no output (exit 1). **Corrected 2026-10-08:** the earlier form of this row also grepped for bare `playground`, and that no longer returns empty. `grep -rn "playground" .github/workflows/` returns **17 hits, all in `psalm-wpcs-check.yml`**, and none of them installs WordPress: four are path-filter globs (`docs/site/playground.html`, `.wordpress-org/playground/blueprint.json` at `:14,15,26,27`), the rest are a `playground_pin` step id with its status plumbing (`:203,329,335,336,338,356,455,457,459,461`) and an invocation of the plugin's own `scripts/verify-playground-blueprint.php` (`:214,218,222`). A path filter selects when a workflow runs; a step id names a step; a verifier checks a file. None of the three installs WordPress. The claim is therefore narrowed to what is actually true. |
-| **Command (absence)** | `grep -rnE "wp-env\|wp core install" .github/workflows/` → no output (exit 1). `grep -rn "playground" .github/workflows/ \| wc -l` → `17`, all in `psalm-wpcs-check.yml`, none an installer. |
-| **NOT a conformance claim** | No automated WCAG conformance scan. `axe-core` is not a dependency on this branch. No independent audit, no assistive-technology testing. See C-13. |
-| **Rule 7** | This row exists so the compatibility page's 7.1 statements are not unbacked copy. |
-| **Verified** | 2026-10-04; absence claim re-verified and narrowed 2026-10-08 |
-
-### C-15 — The `JS Tests & Build (React 19)` job forces React 19 and `@wordpress/element@7.0.0`
-
-| Field | Value |
-|---|---|
-| **Claim** | `docs/site/compatibility.html` states that a `JS Tests & Build (React 19)` job forces `@wordpress/element@7.0.0` and React 19 and runs the JS tests. |
-| **Verdict** | **TRUE**, with the limit stated rather than hidden |
-| **Evidence** | `.github/workflows/webpack.yml:93` declares the job `js-react19`; `:94` names it `JS Tests & Build (React 19)`; `:112` runs `npm install --save-dev --legacy-peer-deps @wordpress/element@7.0.0 react@^19 react-dom@^19 …`. |
-| **Command** | `grep -n "js-react19\|name: JS Tests & Build (React 19)\|@wordpress/element@7.0.0" .github/workflows/webpack.yml` |
-| **Result** | Three matching lines: `93:  js-react19:`, `94:    name: JS Tests & Build (React 19)`, `112:        run: npm install --save-dev --legacy-peer-deps @wordpress/element@7.0.0 react@^19 …`. |
-| **Evidence — the limit** | The job forces those versions as a **dev-dependency**. It does not tell you what WordPress 7.1 ships, and its result is **not** evidence about the WordPress 7.1 compatibility row. The page says so in the same cell. |
-| **Rule 7** | Added 2026-10-08 so this page assertion is not unbacked copy. The AI verdict on #1765 named six unregistered page claims; four were already covered by C-14 and one by C-07, leaving this one and the job-scoping half of C-16. |
-| **Verified** | 2026-10-08 |
-
-### C-16 — `PhpDeprecationHygieneTest` gates the deprecation rules, in the PHP 8.2 job only
-
-| Field | Value |
-|---|---|
-| **Claim** | `docs/site/compatibility.html` states that the static source-pattern scanner `PhpDeprecationHygieneTest` gates the deprecation rules, but runs in the PHP 8.2 job only — the 8.2–8.5 test matrix is documented and not applied. |
-| **Verdict** | **TRUE** |
-| **Evidence — the test** | `tests/php/PhpDeprecationHygieneTest.php`. See C-07 for what it scans and its result. |
-| **Evidence — the job scoping** | `.github/workflows/webpack.yml:140` declares the job `php-tests`; `:141` names it `PHPUnit Tests`; `:153` sets `php-version: '8.2'`; `:160` runs `composer test`. `phpunit.xml.dist:9` discovers `tests/php` by the `Test.php` suffix, so the scanner runs wherever that job runs — and that job is 8.2 only. No other workflow invokes PHPUnit. |
-| **Command** | `grep -n "php-tests:\|name: PHPUnit Tests\|php-version: '8.2'\|run: composer test" .github/workflows/webpack.yml` |
-| **Result** | `140:  php-tests:`, `141:    name: PHPUnit Tests`, `153:          php-version: '8.2'`, `160:        run: composer test`. |
-| **Rule 7** | C-07 names the test but not the job scoping; this row exists so the page's "runs in the 8.2 job only" statement is backed. |
-| **Verified** | 2026-10-08 |
-
 ---
 
 ## Claims deliberately NOT made
@@ -318,7 +292,7 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | Not claimed | Why not |
 |---|---|
 | "Tested on every WordPress release since 6.2" | No such matrix exists (C-09). |
-| "Full test suite runs on PHP 8.2–8.5" | PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked by the lint matrix (C-05). Corrected in `docs/site/compatibility.html` by #1765, which rewrites the table to say so. |
+| "Full test suite runs on PHP 8.2–8.5" | PHPUnit runs on 8.2 only in CI (C-04). 8.3–8.5 are syntax-checked (C-05). PR #1756 corrects `docs/site/compatibility.html`, which still says otherwise on `master`. |
 | "Fully compatible with WooCommerce / Elementor / Divi" | Integration safeguards exist; a blanket guarantee across every version of every extension is not testable and is not tested (C-12). |
 | "Works with every theme" | Same reason. |
 | "Will improve your PageSpeed score by X%" | The only benchmark in the repo is a single internal example, and the readme already says results vary. No reproducible harness. |
@@ -326,7 +300,7 @@ Recorded so that nobody later "fixes" the copy by adding them back.
 | "Battle-tested" / "trusted by N sites" | `active_installs` is **0** and `num_ratings` is **4** (C-11). A volume claim would be false on its face. |
 | "Faster than plugin X" | No head-to-head benchmark exists. |
 | "Rated 100% by users" | `rating: 100` is computed from 4 ratings (C-11). |
-| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9` for push, `webpack.yml:13-16` for pull_request). |
+| "CI runs on every push and pull request" | The CI workflow sets `paths-ignore` for `**.md`, `build/**`, `.distignore`, `.gitignore` (`webpack.yml:6-9`, `:13-16`). |
 
 ---
 
@@ -336,8 +310,8 @@ Copy that is not backed by anything in this file. Fix the copy or add the eviden
 
 | Location | Text | Status |
 |---|---|---|
-| `readme.txt:298` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
-| `docs/site/compatibility.html:4` | Was `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Corrected in `docs/site/compatibility.html` by #1765. #1756 carried the same correction but also reintroduced the retracted compatibility sentence, so it was closed and only the true part was carried forward. |
+| `readme.txt:282` (2.0.0 changelog) | "New: Redesigned dashboard and all settings tabs with **WCAG AA contrast**…" | **UNSUPPORTED.** The later measured contrast work on `design/variant-c-redesign` found **35** AA text-contrast failures in the admin (`c97ee033`, `77e89ce1`) and closed them only on that unmerged branch. The shipped 2.0.0 claim is contradicted by the project's own measurement. Reported to the release owner; not edited here, because two open PRs (#1756, #1760) already rewrite `readme.txt`. |
+| `docs/site/compatibility.html:4` | `WordPress 7.1` → **Verified** → "CI syntax and React 19 coverage"; `PHP 8.2–8.5` → **Verified** → "CI syntax checks **and full PHPUnit runs**" | **CONTRADICTED** by C-04 and C-09. Open PR #1756 replaces both rows. Not edited here to avoid colliding with it. |
 | `docs/growth/claims.md` (previous revision) | citation to `docs/growth/ACCESSIBILITY-STATEMENT.md` | **DANGLING at the time of writing** — the file arrives with PR #1759. Now cited precisely as such in C-13. |
 
 ---
