@@ -31,13 +31,6 @@ class UninstallUserMetaLeakTest extends \PHPUnit\Framework\TestCase {
 	private const USER_META_WRITES = array( 'update_user_meta', 'add_user_meta' );
 
 	/**
-	 * User-meta APIs that remove a row, used to spot deliberate exceptions.
-	 *
-	 * @var string[]
-	 */
-	private const USER_META_DELETES = array( 'delete_user_meta', 'delete_metadata' );
-
-	/**
 	 * Collect every wppo_ user-meta key the plugin writes.
 	 *
 	 * @return array<string, string[]> Meta key => source locations.
@@ -45,8 +38,13 @@ class UninstallUserMetaLeakTest extends \PHPUnit\Framework\TestCase {
 	private function collect_written_user_meta(): array {
 		$found = array();
 		$files = array_merge(
-			(array) glob( WPPO_PLUGIN_PATH . 'includes/*/class-*.php' ),
-			(array) glob( WPPO_PLUGIN_PATH . 'includes/class-*.php' )
+			// Recursive: the earlier non-recursive glob missed any file that is
+			// not `includes/class-*.php` or `includes/<subdir>/class-*.php`, so a
+			// key written from, say, a trait or a plain include would have been
+			// invisible to the guard. The scan is over the plugin's own source
+			// only — vendor and tests are excluded by the standard path prefix.
+			(array) glob( WPPO_PLUGIN_PATH . 'includes/*/*.php' ),
+			(array) glob( WPPO_PLUGIN_PATH . 'includes/*.php' )
 		);
 		$this->assertNotEmpty( $files, 'the source scan must find plugin class files' );
 
