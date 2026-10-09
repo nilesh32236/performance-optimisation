@@ -34,6 +34,11 @@
          already a dev dependency, so this costs nothing. -->
     <stubs>
         <file name="vendor/php-stubs/wordpress-stubs/wordpress-stubs.php" />
+        <!-- phpredis is optional at runtime (every call site guards with
+             class_exists()), but Psalm needs the symbols to resolve Redis* docblocks
+             and method calls. tests/stubs/redis.php is Psalm-only: never loaded at
+             runtime and excluded from the release ZIP via /tests/. -->
+        <file name="tests/stubs/redis.php" />
     </stubs>
 
     <!-- WordPress globals ($wpdb, $_GET, $_POST, $_SERVER) are untyped, so the

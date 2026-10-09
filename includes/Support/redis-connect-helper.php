@@ -163,9 +163,13 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			return new \WP_Error( 'redis_version', __( 'Sentinel mode requires phpredis version 6.0.0 or higher.', 'performance-optimisation' ) );
 		}
 
+		// Normalize the password to string up front so the emptiness check
+		// below can use a strict comparison (no mixed truthiness). Scalars
+		// keep their value; anything exotic stringifies and fails closed
+		// at auth().
 		$master_name  = $config['master_name'] ?? 'mymaster';
 		$use_tls      = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
-		$password     = $config['password'] ?? '';
+		$password     = isset( $config['password'] ) ? (string) $config['password'] : '';
 		$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
 		$timeout      = 0.5;
 		$read_timeout = 0;
@@ -196,7 +200,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					array(
 						'host'           => (string) $s_host,
 						'port'           => (int) $s_port,
-						'connectTimeout' => (float) $timeout,
+						'connectTimeout' => $timeout,
 						'readTimeout'    => (float) $read_timeout,
 						'retryInterval'  => 0,
 						'persistent'     => false,
@@ -212,7 +216,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
 
 					if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
-						if ( $password && ! $redis->auth( $password ) ) {
+						if ( '' !== $password && false === $redis->auth( $password ) ) {
 							$redis->close();
 							$errors[] = __( 'Sentinel Master Auth failed.', 'performance-optimisation' );
 								continue;
@@ -267,10 +271,11 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 			return new \WP_Error( 'missing_redis', __( 'The Redis class is not available.', 'performance-optimisation' ) );
 		}
 
+		// Same password normalization as the Sentinel path: strict '' comparison below.
 		$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 		$host     = $config['host'] ?? '127.0.0.1';
 		$port     = isset( $config['port'] ) ? (int) $config['port'] : 6379;
-		$password = $config['password'] ?? '';
+		$password = isset( $config['password'] ) ? (string) $config['password'] : '';
 		$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
 		$timeout  = 0.5;
 
@@ -281,27 +286,9 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$redis = new \Redis();
 		$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
 
-		// Connection failures return WP_Error below. A temporary error
-		// handler (instead of the @ operator) keeps extension warnings out
-		// of production output; the WP_DEBUG-gated catch in wppo_redis_connect()
-		// stays the single diagnosable logging path with a static message.
-		$handler_set = function_exists( 'set_error_handler' );
-		if ( $handler_set ) {
-			set_error_handler( // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Temporary scoped suppression of phpredis connect warnings (restored in finally); replaces the @ operator.
-				static function () {
-					return true;
-				}
-			);
-		}
-		try {
-			$connected = $redis->$func( $host, $port, $timeout );
-		} finally {
-			if ( $handler_set && function_exists( 'restore_error_handler' ) ) {
-				restore_error_handler();
-			}
-		}
-		if ( $connected ) {
-			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( @$redis->$func( $host, $port, $timeout ) ) {
+			if ( '' !== $password && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
 			}
@@ -502,8 +489,9 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 	 * @param array                $config Configuration options; recognizes `compression` which may be
 	 *                                      "lzf", "zstd", "lz4", or "none".
 	 * @since 1.4.0
+	 * @return void
 	 */
-	function wppo_apply_redis_options( $redis, $config ) {
+	function wppo_apply_redis_options( $redis, $config ): void {
 		if ( ! is_object( $redis ) || ! method_exists( $redis, 'setOption' ) ) {
 			return;
 		}
@@ -598,7 +586,7 @@ if ( ! function_exists( 'wppo_validate_tls_ca_file' ) ) {
 	 * resolved path, or '' when invalid so callers fail closed to the
 	 * system CA store.
 	 *
-	 * @param string $path Raw CA file path from config.
+	 * @param mixed $path Raw CA file path from config (validated as string inside).
 	 * @since 2.2.0
 	 * @return string Resolved path or '' when invalid.
 	 */
@@ -638,7 +626,7 @@ if ( ! function_exists( 'wppo_parse_nodes' ) ) {
 	 * Accepts a string containing nodes separated by whitespace, commas, or semicolons, or an array of node strings.
 	 *
 	 * @since 1.4.0
-	 * @param array|string $nodes Node specifications as a delimited string or an array of strings.
+	 * @param mixed $nodes Node specifications as a delimited string, an array of strings, or any other value (unsupported input yields an empty list).
 	 * @return string[] Trimmed node strings with empty entries removed; returns an empty array for unsupported input.
 	 */
 	function wppo_parse_nodes( $nodes ) {

@@ -60,8 +60,8 @@ if ( ! function_exists( 'wppo_get_wp_version' ) ) {
 	 */
 	function wppo_get_wp_version(): string {
 		try {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== trim( (string) $GLOBALS['wp_version'] ) ) {
-				return trim( (string) $GLOBALS['wp_version'] );
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== trim( $GLOBALS['wp_version'] ) ) {
+				return trim( $GLOBALS['wp_version'] );
 			}
 
 			if ( function_exists( 'get_bloginfo' ) ) {
@@ -72,7 +72,10 @@ if ( ! function_exists( 'wppo_get_wp_version' ) ) {
 					return '';
 				}
 
-				if ( is_string( $version ) && '' !== trim( $version ) ) {
+				// No is_string() guard: get_bloginfo() is stubbed as string and
+				// trim() coerces scalars; an exotic filtered value throws a
+				// TypeError that the outer catch turns into a fail-open ''.
+				if ( '' !== trim( $version ) ) {
 					return trim( $version );
 				}
 			}
@@ -101,11 +104,11 @@ if ( ! function_exists( 'wppo_requirements_met' ) ) {
 	 */
 	function wppo_requirements_met( ?string $php_version = null, ?string $wp_version = null ): bool {
 		try {
-			$required_php = defined( 'WPPO_REQUIRES_PHP' ) ? (string) WPPO_REQUIRES_PHP : '8.2';
-			$required_wp  = defined( 'WPPO_REQUIRES_WP' ) ? (string) WPPO_REQUIRES_WP : '6.2';
+			$required_php = defined( 'WPPO_REQUIRES_PHP' ) ? WPPO_REQUIRES_PHP : '8.2';
+			$required_wp  = defined( 'WPPO_REQUIRES_WP' ) ? WPPO_REQUIRES_WP : '6.2';
 
 			if ( null === $php_version ) {
-				$php_version = defined( 'PHP_VERSION' ) ? (string) PHP_VERSION : '';
+				$php_version = defined( 'PHP_VERSION' ) ? PHP_VERSION : '';
 				if ( '' === $php_version && function_exists( 'phpversion' ) ) {
 					$php_version = (string) phpversion();
 				}
@@ -119,7 +122,7 @@ if ( ! function_exists( 'wppo_requirements_met' ) ) {
 				$wp_version = wppo_get_wp_version();
 			}
 
-			$wp_version = trim( (string) $wp_version );
+			$wp_version = trim( $wp_version );
 			if ( '' === $wp_version ) {
 				return true;
 			}
@@ -157,9 +160,9 @@ if ( ! function_exists( 'wppo_render_requirements_notice' ) ) {
 				return;
 			}
 
-			$required_php = defined( 'WPPO_REQUIRES_PHP' ) ? (string) WPPO_REQUIRES_PHP : '8.2';
-			$required_wp  = defined( 'WPPO_REQUIRES_WP' ) ? (string) WPPO_REQUIRES_WP : '6.2';
-			$detected_php = defined( 'PHP_VERSION' ) ? (string) PHP_VERSION : 'unknown';
+			$required_php = defined( 'WPPO_REQUIRES_PHP' ) ? WPPO_REQUIRES_PHP : '8.2';
+			$required_wp  = defined( 'WPPO_REQUIRES_WP' ) ? WPPO_REQUIRES_WP : '6.2';
+			$detected_php = defined( 'PHP_VERSION' ) ? PHP_VERSION : 'unknown';
 			$detected_wp  = wppo_get_wp_version();
 			if ( '' === $detected_wp ) {
 				$detected_wp = 'unknown';
@@ -295,10 +298,14 @@ if ( ! function_exists( 'wppo_activate' ) ) {
 	/**
 	 * Activation hook callback function.
 	 *
+	 * Accepts (and ignores) the `$network_wide` flag WordPress passes to
+	 * activation callbacks so the signature matches the
+	 * `callable(bool):void` stub type.
+	 *
 	 * @since 1.0.0
-	 * Includes the activation class and runs the activation process.
+	 * @param bool $network_wide Whether the plugin is network-activated (unused).
 	 */
-	function wppo_activate(): void {
+	function wppo_activate( $network_wide = false ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- WordPress passes $network_wide to activation callbacks; the signature must accept it.
 		Activate::init();
 	}
 }
@@ -308,10 +315,14 @@ if ( ! function_exists( 'wppo_deactivate' ) ) {
 	/**
 	 * Deactivation hook callback function.
 	 *
+	 * Accepts (and ignores) the `$network_wide` flag WordPress passes to
+	 * deactivation callbacks so the signature matches the
+	 * `callable(bool):void` stub type.
+	 *
 	 * @since 1.0.0
-	 * Includes the deactivation class and runs the deactivation process.
+	 * @param bool $network_wide Whether the plugin is network-deactivated (unused).
 	 */
-	function wppo_deactivate(): void {
+	function wppo_deactivate( $network_wide = false ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- WordPress passes $network_wide to deactivation callbacks; the signature must accept it.
 		Deactivate::init();
 	}
 }
