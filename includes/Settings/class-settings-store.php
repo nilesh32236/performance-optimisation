@@ -585,6 +585,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 
 				// Used-CSS delivery mode (issue #1220) — allowlist
 				// file/delay/async/remove. Unknown values fail open to file.
+				// Distinct from the orthogonal usedCssDelivery (inline-vs-file
+				// output target, issue #1410) below — do not merge the axes.
 				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
 					$mode                   = strtolower( trim( (string) $value ) );
 					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
@@ -592,7 +594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				}
 
 				// Used-CSS inline-vs-file delivery target (issue #1410) —
-				// orthogonal to usedCSSDeliveryMode: 'inline' inlines the
+				// orthogonal to usedCSSDeliveryMode above: 'inline' inlines the
 				// used-CSS sidecar as a <style> tag (first-visit LCP),
 				// 'file' keeps the cacheable separate stylesheet link
 				// (repeat-view wins). Unknown values fail open to 'file'
@@ -604,15 +606,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 				}
 
 				// Preload-first-N stylesheets (issue #1410) — int clamped to
-				// 0-5 (0 = off). Unrecognized values fail open to 0 (manual
-				// preload URLs only, current behaviour).
+				// 0-5 (0 = off). Out-of-range values saturate to the nearest
+				// bound (matching normalizePreloadCssFirstN() in
+				// PreloadSettings.js) so the UI and server agree.
 				if ( 'preloadCssFirstN' === $safe_key ) {
 					if ( is_array( $value ) ) {
 						$sanitized[ $safe_key ] = 0;
 						continue;
 					}
 					$count                  = is_numeric( $value ) ? (int) $value : 0;
-					$sanitized[ $safe_key ] = ( $count >= 0 && $count <= 5 ) ? $count : 0;
+					$sanitized[ $safe_key ] = min( 5, max( 0, $count ) );
 					continue;
 				}
 

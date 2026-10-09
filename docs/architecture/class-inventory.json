@@ -1116,14 +1116,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "CSS",
-        "lines": 5216,
+        "lines": 5246,
         "methods": 100,
         "public_methods": 53,
         "large_methods": 8,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "regenerate_all",
-            "line": 3576,
+            "line": 3606,
             "lines": 291
         },
         "method_prefixes": {
@@ -2271,7 +2271,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10373,
+        "lines": 10398,
         "methods": 239,
         "public_methods": 151,
         "large_methods": 17,
@@ -4768,7 +4768,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Settings",
-        "lines": 1740,
+        "lines": 1743,
         "methods": 26,
         "public_methods": 24,
         "large_methods": 3,
@@ -4776,7 +4776,7 @@
         "largest_method": {
             "name": "sanitize_settings_recursively",
             "line": 382,
-            "lines": 426
+            "lines": 429
         },
         "method_prefixes": {
             "sanitize": 8,

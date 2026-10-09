@@ -4,7 +4,7 @@
  *
  * Covers the additive `file_optimisation.usedCssDelivery` allowlist
  * (fail-open to file = current behaviour), the `preload_settings.preloadCssFirstN`
- * clamp (0-5, fail-open to 0), the `wppo_inline_combined_css` falsy escape
+ * saturating clamp (0-5, matching the JS normalizer), the `wppo_inline_combined_css` falsy escape
  * hatch for inline output, the bounded inline sidecar reader, and the
  * builder smoke gate that keeps builder pages styled.
  *
@@ -66,14 +66,14 @@ class UsedCssInlineFileDelivery1410Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Preload-first-N defaults to 0 and clamps to 0-5.
+	 * Preload-first-N defaults to 0 and saturates to 0-5 (matching the JS normalizer).
 	 */
 	public function test_preload_css_first_n_clamp(): void {
 		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array() ) );
 		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 0 ) ) );
 		$this->assertSame( 3, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 3 ) ) );
 		$this->assertSame( 5, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 5 ) ) );
-		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 6 ) ) );
+		$this->assertSame( 5, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 6 ) ) );
 		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => -1 ) ) );
 		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => 'bogus' ) ) );
 		$this->assertSame( 0, Used_CSS::get_preload_css_first_n( array( 'preloadCssFirstN' => array( 2 ) ) ) );
@@ -182,7 +182,8 @@ class UsedCssInlineFileDelivery1410Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * New keys survive the settings sanitizer; unknown values fail open.
+	 * New keys survive the settings sanitizer; unknown values fail open
+	 * (delivery to file, count saturated to the nearest 0-5 bound).
 	 */
 	public function test_sanitizer_pins_new_keys(): void {
 		$sanitized = Settings_Store::sanitize_settings_recursively(
@@ -201,7 +202,7 @@ class UsedCssInlineFileDelivery1410Test extends \PHPUnit\Framework\TestCase {
 			)
 		);
 		$this->assertSame( 'file', $fallback['usedCssDelivery'] );
-		$this->assertSame( 0, $fallback['preloadCssFirstN'] );
+		$this->assertSame( 5, $fallback['preloadCssFirstN'] );
 	}
 
 	/**

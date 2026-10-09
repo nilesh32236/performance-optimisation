@@ -95,6 +95,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * - remove: strip full stylesheets; auto-downgrades to delay when the
 		 *           builder smoke check fails (never unstyled, never fatal).
 		 *
+		 * Not to be confused with DELIVERY_TARGETS (inline-vs-file output,
+		 * issue #1410): this axis decides *when* full stylesheets load, the
+		 * other decides whether the used-CSS sidecar is a file link or an
+		 * inline `<style>` tag.
+		 *
 		 * @since 2.2.0
 		 * @var string[]
 		 */
@@ -108,6 +113,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * inlines the used-CSS sidecar as a `<style>` tag (first-visit LCP,
 		 * no extra stylesheet request). Defaults to 'file' so existing
 		 * installs are byte-identical until the operator opts in.
+		 *
+		 * Not to be confused with DELIVERY_MODES (file/delay/async/remove,
+		 * issue #1220): despite the shared 'file' value and near-identical
+		 * key names (`usedCssDelivery` vs `usedCSSDeliveryMode`), the two
+		 * axes are independent — the admin UI labels this one 'Used CSS
+		 * Output (inline vs file)' and the other 'Used CSS Delivery Mode'.
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -2616,8 +2627,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Additive `preload_settings.preloadCssFirstN` key: the first N
 		 * enqueued stylesheets are preloaded automatically so the LCP warning
 		 * clears without manual URLs. 0 disables (manual URLs only, current
-		 * behaviour). Clamped to 0-5 at read time as defense-in-depth (the
-		 * sanitizer clamps at write time).
+		 * behaviour). Out-of-range values saturate to the nearest bound
+		 * (matching the sanitizer and normalizePreloadCssFirstN() in
+		 * PreloadSettings.js) as defense-in-depth.
 		 *
 		 * @param array|null $preload_opts Optional preload_settings (defaults to plugin settings).
 		 * @return int Stylesheet count to auto-preload (0-5).
@@ -2630,10 +2642,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$preload_opts = isset( $settings['preload_settings'] ) && is_array( $settings['preload_settings'] ) ? $settings['preload_settings'] : array();
 				}
 				$count = isset( $preload_opts['preloadCssFirstN'] ) && is_numeric( $preload_opts['preloadCssFirstN'] ) ? (int) $preload_opts['preloadCssFirstN'] : 0;
-				if ( $count < 0 || $count > 5 ) {
-					return 0;
-				}
-				return $count;
+				return min( 5, max( 0, $count ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return 0;
@@ -2668,14 +2677,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Read a used-CSS sidecar for inline output (issue #1410).
 		 *
 		 * Bounded (MAX_INLINE_BYTES + 1 probe byte) and sanitized for `<style>`
-		 * embedding (`</` sequences neutralized so a hostile sidecar cannot
-		 * break out of the style element). Fail-open: any failure returns ''.
+		 * embedding (save-time sanitization re-applied as defense-in-depth
+		 * plus `</` sequences neutralized so a sidecar modified on disk
+		 * cannot break out of the style element). Per-request memoized keyed
+		 * by path + size + mtime (bounded to 5 entries) so uncached/dynamic
+		 * pages pay the file I/O once per view. Fail-open: any failure
+		 * returns ''.
 		 *
 		 * @param string $path Absolute sidecar path.
 		 * @return string Sanitized CSS, or '' when unreadable/empty/oversize.
 		 * @since NEXT
 		 */
 		public static function get_used_css_inline_css( string $path ): string {
+			static $memo = array();
 			try {
 				if ( '' === trim( $path ) ) {
 					return '';
@@ -2687,11 +2701,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( false === $size || $size <= 0 || $size > self::MAX_INLINE_BYTES ) {
 					return '';
 				}
+				$mtime    = @filemtime( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- memo key only, fail-open below.
+				$memo_key = $path . '|' . (int) $size . '|' . ( false === $mtime ? 0 : (int) $mtime );
+				if ( isset( $memo[ $memo_key ] ) ) {
+					return $memo[ $memo_key ];
+				}
 				$css = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local sidecar read, fail-open below.
 				if ( ! is_string( $css ) || '' === trim( $css ) ) {
 					return '';
 				}
 				if ( strlen( $css ) > self::MAX_INLINE_BYTES ) {
+					return '';
+				}
+				// Defense-in-depth: re-apply save-time sanitization so a
+				// sidecar modified on disk outside the save path is never
+				// emitted verbatim into a `<style>` tag.
+				$css = self::sanitize_used_css_output( $css );
+				if ( ! is_string( $css ) || '' === trim( $css ) ) {
 					return '';
 				}
 				// Neutralize a `</style` breakout (case-insensitive) while
@@ -2700,6 +2726,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! is_string( $css ) || '' === trim( $css ) ) {
 					return '';
 				}
+				if ( count( $memo ) >= 5 ) {
+					$memo = array();
+				}
+				$memo[ $memo_key ] = $css;
 				return $css;
 			} catch ( \Throwable $e ) {
 				unset( $e );

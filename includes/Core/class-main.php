@@ -7046,11 +7046,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					// Print-only stylesheets never block first paint — skip so
 					// the bounded budget is spent on render-blocking CSS.
+					// A media list is an OR: 'print, screen' still applies to
+					// screens, so only skip when every comma-separated part
+					// is print-only (e.g. 'print', 'PRINT', 'print and (...)').
 					$media = $wp_styles->registered[ $handle ]->args ?? 'all';
-					if ( is_string( $media ) && 'print' === strtolower( trim( $media ) ) ) {
-						continue;
+					if ( is_string( $media ) ) {
+						$parts = array_map( 'trim', explode( ',', strtolower( $media ) ) );
+						$parts = array_filter(
+							$parts,
+							static function ( $part ) {
+								return '' !== $part;
+							}
+						);
+						if ( ! empty( $parts ) ) {
+							$all_print = true;
+							foreach ( $parts as $part ) {
+								if ( 'print' !== $part && 0 !== strpos( $part, 'print and' ) && 0 !== strpos( $part, 'print(' ) ) {
+									$all_print = false;
+									break;
+								}
+							}
+							if ( $all_print ) {
+								continue;
+							}
+						}
 					}
-					$url = (bool) preg_match( '/^https?:\/\//i', $src ) ? $src : Util::cached_content_url( $src );
+					if ( 0 === strpos( $src, '//' ) ) {
+						$url = ( function_exists( 'is_ssl' ) && is_ssl() ? 'https:' : 'http:' ) . $src;
+					} else {
+						$url = (bool) preg_match( '/^https?:\/\//i', $src ) ? $src : Util::cached_content_url( $src );
+					}
 					if ( ! is_string( $url ) || '' === trim( $url ) ) {
 						continue;
 					}
