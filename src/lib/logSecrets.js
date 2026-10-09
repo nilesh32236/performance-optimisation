@@ -30,3 +30,58 @@ export const redactLogSecrets = ( raw ) => {
 			'$1=[redacted]'
 		);
 };
+
+/**
+ * Maximum length of a log message produced by getErrorLogMessage().
+ *
+ * Shared by the SPA implementation below and the dependency-free frontend
+ * mirrors (lazyload.js, esi.js, main.js); pinned behaviourally and by
+ * src/__tests__/logMirrorSync.test.js.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const MAX_LOG_MESSAGE_LENGTH = 500;
+
+/**
+ * Extract a safe log message from an error without leaking response bodies.
+ *
+ * Server error objects can embed response payloads (system info, settings);
+ * console output persists in devtools/extensions, so only the message is
+ * logged, never the full error/response object.
+ *
+ * Lives here (next to redactLogSecrets) rather than in apiRequest.js so
+ * crash-path consumers such as ErrorBoundary can import one pure,
+ * dependency-light module instead of the full fetch/dedupe barrel.
+ * apiRequest.js re-exports it for back-compat.
+ *
+ * @since 2.3.0
+ * @since NEXT Moved from lib/apiRequest.js to lib/logSecrets.js (re-exported).
+ * @param {*} error Caught error value.
+ * @return {string} Safe message string.
+ */
+export const getErrorLogMessage = ( error ) => {
+	let message;
+	if ( error instanceof Error ) {
+		message = error.message || 'Unknown error';
+	} else if ( typeof error === 'string' ) {
+		message = error.slice( 0, MAX_LOG_MESSAGE_LENGTH ) || 'Unknown error';
+	} else if ( error === null || typeof error === 'undefined' ) {
+		return 'Unknown error';
+	} else {
+		try {
+			message = String( error ).slice( 0, MAX_LOG_MESSAGE_LENGTH );
+		} catch {
+			return 'Unknown error';
+		}
+	}
+	try {
+		const redacted = redactLogSecrets( message );
+		return ( redacted || 'Unknown error' ).slice(
+			0,
+			MAX_LOG_MESSAGE_LENGTH
+		);
+	} catch {
+		return 'Unknown error';
+	}
+};

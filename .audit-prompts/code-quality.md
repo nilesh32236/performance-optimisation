@@ -32,7 +32,7 @@ You are auditing a WordPress plugin for code quality and adherence to WordPress 
 ### JS/React Conventions
 - All React components read initial settings from `wppoSettings.settings[tabName]`
 - API calls use `apiCall()` from `src/lib/apiRequest.js` — not raw `fetch()`
-- Translatable strings come from `wppoSettings.translations` with English fallback
+- Translatable SPA strings use `__()` from `@wordpress/i18n` (via `wp_set_script_translations()`) — not a `wppoSettings.translations` map, which was removed in audit #1333
 - No `console.log` (ESLint error-level — use `console.error` or `console.warn`)
 - SCSS uses `.wppo-` prefix and BEM-like naming — no inline styles or ad-hoc class names
 

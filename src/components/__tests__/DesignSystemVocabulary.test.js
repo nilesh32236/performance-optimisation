@@ -78,6 +78,22 @@ describe( 'a class the markup emits has a rule behind it', () => {
 			'wppo-overview__stale'
 		);
 	} );
+
+	it( 'styles .wppo-error-boundary', () => {
+		// The SPA crash fallback is a full-panel condition that rendered as bare
+		// unstyled markup because its only class had no rule anywhere in
+		// src/css — and therefore none in the built stylesheet either.
+		expect( read( 'src/css/base/_base.scss' ) ).toMatch(
+			/\.wppo-error-boundary\s*\{/
+		);
+		expect( read( 'src/components/common/ErrorBoundary.js' ) ).toContain(
+			'wppo-error-boundary'
+		);
+		// …and the rule actually ships, not just the source of it.
+		expect( read( 'build/style-index.css' ) ).toMatch(
+			/\.wppo-error-boundary\{/
+		);
+	} );
 } );
 
 describe( 'button link modifiers are correctly applied', () => {

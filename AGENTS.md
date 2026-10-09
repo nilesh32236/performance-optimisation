@@ -50,7 +50,7 @@ npm run start                # dev watch mode
 - **No routing library** — tab switching via `useState` + conditional rendering
 - **No state management library** — pure `useState` throughout
 - **All settings pages** call `update_settings` API with `{tab: '...', settings: {...}}`
-- Global `wppoSettings` object injected by PHP via `wp_localize_script` (includes `apiUrl`, `nonce`, `settings`, `translations`, `themeColors`, etc.)
+- Global `wppoSettings` object injected by PHP via `wp_localize_script` (includes `apiUrl`, `nonce`, `settings`, `themeColors`, etc.). It carries **no** `translations` map (audit #1333) — SPA strings use `__()` fed by `wp_set_script_translations()`; the only JS-side map is `wppoObject.translations` for the admin bar (`src/main.js`), which has no `wp-i18n` dep
 - Each component reads its settings from `wppoSettings.settings[tabName]` on mount
 - `apiCall('update_settings')` mutates `wppoSettings.settings` globally on success
 - API calls use `src/lib/apiRequest.js` (centralized `apiCall()` function)
@@ -192,7 +192,7 @@ The schema-v2 inventory tracks 86 files: 82 runtime plugin files under `includes
 ## Testing quirks
 
 - Jest config lives in `package.json` (no `jest.config.js`). Environment is `jsdom`.
-- `src/setupTests.js` mocks: `wppoSettings` (translations), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
+- `src/setupTests.js` mocks: `wppoSettings` (empty object), `window.matchMedia`, and `@wordpress/components` (ToggleControl → plain checkbox)
 - Global `wppoSettings` object must be extended per-test (`apiUrl`, `nonce`, `settings`, etc.)
 - React component tests use `@testing-library/react` + `@testing-library/jest-dom`. **Do not hardcode a suite or test count here.** Every count recorded in this file went stale within one merge, because any PR that adds or removes a test changes it. Measure the current baseline with
   `npx wp-scripts test-unit-js`
@@ -211,7 +211,7 @@ and quote that in a report; never copy a number from this file or from an earlie
 - `console.log` is error-level; only `console.error` and `console.warn` allowed
 - CSS: custom SCSS design system with `.wppo-` prefix, BEM-like naming, CSS custom properties, no Tailwind/CSS-in-JS
 - SCSS breakpoints: `xs` (400px), `sm` (640px), `md` (768px), `lg` (992px), `xl` (1200px) via `respond-to()` mixin
-- All translatable strings come from `wppoSettings.translations` with English fallback
+- All translatable SPA strings use `__()` from `@wordpress/i18n` (sourced from `wp_set_script_translations()`), never a `wppoSettings.translations` map — that key was removed in audit #1333 and reintroducing a lookup silently no-ops
 
 ## PHP conventions
 
@@ -306,13 +306,38 @@ Consequences worth knowing before changing anything:
 - Deploys to WordPress.org SVN via `10up/action-wordpress-plugin-deploy`
 - `.distignore` excludes dev files (configs, tests, `.github`, `.jules`, `.qoder`, dev vendor packages)
 
+## The Playground demo has a mandatory gate
+
+`docs/site/playground.html` publishes a code-executing WordPress Playground link
+whose `blueprint-url` pins a commit SHA. **Moving that pin requires updating
+`docs/site/playground.html` and re-running:**
+
+```sh
+php scripts/verify-playground-blueprint.php   # --network to also fetch the pinned URL
+```
+
+It exits 0 only when the SHA resolves to a real commit, the blueprint parses, the
+plugin URL is an absolute https URL, and **the blueprint at that SHA still matches
+`.wordpress-org/playground/blueprint.json` in the working tree**. That last check
+is the stale-pin detection: a SHA can resolve perfectly and still serve an older
+blueprint, which is what a visitor loads.
+
+It runs in CI as a step of `psalm-wpcs-check.yml`. That workflow uses a `paths`
+WHITELIST, so **a change to `.wordpress-org/playground/blueprint.json` or to
+`docs/site/playground.html` without a `.php` file would otherwise skip the
+workflow entirely** and the gate would not run. Both paths are listed.
+
+If you change the blueprint, change the pin in the same commit. If the verifier
+fails because the pinned SHA is unreachable, the pin is pointing at a commit that
+is not on this branch — see the note below.
+
 ## CI workflows
 
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
 | `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
-| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | TWO JOBS: `code-quality` runs the scanners with `contents:read`+`security-events:write`; `report` posts the PR comment with `issues:write`+`pull-requests:write` and checks out nothing. `parallel-lint` (PHP 8.2-8.5), `phpcs`, Psalm, class-inventory drift, Playground pin gate | Psalm security scan, GitHub Issue/PR comment |
+| `psalm-wpcs-check.yml` | Path-filtered push/PR + weekly + `workflow_dispatch` | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, `generate-class-inventory.php --check`, the Playground pin gate, GitHub Issue/PR comment | Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |

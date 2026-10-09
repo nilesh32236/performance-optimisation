@@ -51,7 +51,13 @@ const LlmsPanel = () => {
 		setSource( s.source || 'both' );
 	}, [ llmsKey, saving ] );
 
-	const homeUrl = getWppoSettings( 'homeUrl', '' );
+	// `homeUrl` is emitted NESTED under `performance_audit` by PHP
+	// (includes/Core/class-main.php); the top-level key is kept as a
+	// back-compat fallback so this panel and the isValidScanUrl() guard in
+	// src/lib/apiRequest.js resolve the same value. Mirrors Dashboard.js.
+	const homeUrl =
+		getWppoSettings( 'performance_audit.homeUrl', '' ) ||
+		getWppoSettings( 'homeUrl', '' );
 	const llmsUrl = homeUrl
 		? `${ homeUrl.replace( /\/$/, '' ) }/llms.txt`
 		: '/llms.txt';

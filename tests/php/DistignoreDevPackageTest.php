@@ -32,7 +32,18 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function distignore_patterns(): array {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test-only local source scan.
-		$lines = explode( "\n", (string) file_get_contents( WPPO_PLUGIN_PATH . '.distignore' ) );
+		// Fail CLOSED. `(string) file_get_contents()` on an unreadable or missing
+		// file yields '', which explodes to one empty element and is then filtered
+		// out - leaving an empty pattern list, against which every guard below
+		// passes. Deleting .distignore entirely made this guard GREEN; only the
+		// sibling test noticed, by accident, because it asserts a pattern exists.
+		$path = WPPO_PLUGIN_PATH . '.distignore';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- repo file under test.
+		$raw = file_get_contents( $path );
+		$this->assertIsString( $raw, "{$path} must be readable for these guards to mean anything" );
+		$this->assertNotSame( '', trim( (string) $raw ), "{$path} is empty" );
+
+		$lines = explode( "\n", $raw );
 		$out   = array();
 		foreach ( $lines as $line ) {
 			$line = trim( $line );
@@ -105,7 +116,10 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_internal_agent_artifacts_are_excluded_from_the_release(): void {
 		$patterns = $this->distignore_patterns();
-		foreach ( array( '/wppo-agent-rules.md', '/empty_commit.sh' ) as $required ) {
+		foreach (
+			array( '/wppo-agent-rules.md', '/empty_commit.sh', '/tools', '/.wordpress-org' )
+			as $required
+		) {
 			$this->assertContains(
 				$required,
 				$patterns,
@@ -136,9 +150,26 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotEmpty( $prod, 'composer.lock must declare production packages for this guard to mean anything' );
 
 		$wrongly_excluded = array();
-		foreach ( array_keys( $prod ) as $vendor ) {
+		foreach ( $prod as $vendor => $package ) {
 			if ( in_array( '/vendor/' . $vendor, $patterns, true ) ) {
-				$wrongly_excluded[] = $prod[ $vendor ] . ' (needs /vendor/' . $vendor . ' in the release ZIP)';
+				$wrongly_excluded[] = $package . ' (needs /vendor/' . $vendor . ' in the release ZIP)';
+			}
+		}
+
+		// The loop above only compares whole-vendor strings, so it is blind to
+		// any exclusion that would drop a production package's FILES without
+		// matching the vendor directory name - `/vendor`, `vendor/*`, a glob, or
+		// a bare `/*`. composer.lock names every production install path, so
+		// assert that no pattern can match any of them.
+		foreach ( $this->production_install_paths() as $install_path ) {
+			foreach ( $patterns as $pattern ) {
+				if ( $this->pattern_matches_path( $pattern, $install_path ) ) {
+					$wrongly_excluded[] = sprintf(
+						'pattern "%s" matches production install path "%s"',
+						$pattern,
+						$install_path
+					);
+				}
 			}
 		}
 
@@ -149,5 +180,56 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 			. implode( "\n", $wrongly_excluded )
 			. "\nRemove the .distignore entry."
 		);
+	}
+
+	/**
+	 * Every path a production composer package is installed to.
+	 *
+	 * @return array
+	 */
+	private function production_install_paths(): array {
+		$lock = $this->composer_lock();
+		$out  = array();
+		foreach ( (array) ( $lock['packages'] ?? array() ) as $package ) {
+			$out[] = 'vendor/' . (string) $package['name'];
+		}
+		sort( $out );
+		return $out;
+	}
+
+	/**
+	 * Whether a .distignore pattern would exclude a given path.
+	 *
+	 * Deliberately conservative: a pattern is treated as matching if it equals
+	 * the path, is a parent directory of it, or is a glob whose fixed prefix
+	 * covers it. Over-matching here produces a FAILURE, which is the safe
+	 * direction - a false positive blocks a release; a false negative ships a
+	 * broken ZIP.
+	 *
+	 * @param string $pattern .distignore pattern, leading slash optional.
+	 * @param string $path    Repository-relative path.
+	 * @return bool
+	 */
+	private function pattern_matches_path( string $pattern, string $path ): bool {
+		$pattern = trim( $pattern, '/' );
+		$path    = trim( $path, '/' );
+		if ( '' === $pattern ) {
+			return false;
+		}
+		if ( $pattern === $path || 0 === strpos( $path, $pattern . '/' ) ) {
+			return true;
+		}
+		// A pattern with a glob matches anything under its literal prefix. A
+		// pattern whose glob starts it (`/*`, `*`) has an empty prefix and
+		// matches EVERYTHING - which is the catastrophic case and must not be
+		// mistaken for "no match". Getting that backwards let `/*` through.
+		$fixed = strtok( $pattern, '*?[' );
+		if ( $fixed !== $pattern ) {
+			if ( '' === $fixed ) {
+				return true;
+			}
+			return 0 === strpos( $path, rtrim( $fixed, '/' ) );
+		}
+		return false;
 	}
 }
