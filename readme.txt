@@ -5,7 +5,7 @@ Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
 Stable tag: 2.4.1
-License: GPLv2 or later
+License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Free WordPress performance plugin for faster sites with page caching, Core Web Vitals monitoring, image optimization, and CSS/JS optimization.
@@ -170,6 +170,11 @@ Yes. Use the **Tools** tab to export your current configuration as a JSON file a
 
 = Is this plugin free? =
 Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
+
+= Does this plugin work on WordPress Multisite? =
+Yes, with one documented limitation. The plugin is multisite-aware for sites that already exist: transient keys are isolated per site, static cache files are keyed per site, the Redis drop-in uses the blog prefix, and site-specific options are kept separate. The custom activity-log table is created per site on activation.
+
+A site added to the network AFTER the plugin is activated does not get that table. In that case the activity log stays empty on the new site — it does not fatal, does not lose data, and every other feature works normally. To fix it, deactivate and reactivate the plugin on that site, which runs the normal activation path and creates the table.
 
 == Support ==
 

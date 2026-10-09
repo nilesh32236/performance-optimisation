@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name:       Performance Optimisation
+ * Plugin URI:        https://github.com/nilesh32236/performance-optimisation
  * Description:       Free WordPress performance plugin for faster sites with page caching, Core Web Vitals monitoring, image optimization, and CSS/JS optimization.
  * Requires at least: 6.2
  * Requires PHP:      8.2
