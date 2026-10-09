@@ -7,6 +7,10 @@
  * full objects — so the mirrors cannot drift apart silently.
  */
 import { getErrorLogMessage } from '../lib/apiRequest';
+import {
+	getErrorLogMessage as getErrorLogMessageDirect,
+	MAX_LOG_MESSAGE_LENGTH,
+} from '../lib/logSecrets';
 
 describe( 'log mirror contract', () => {
 	it( 'truncates long messages to 500 chars', () => {
@@ -22,26 +26,33 @@ describe( 'log mirror contract', () => {
 		expect( getErrorLogMessage( new Error( 'boom' ) ) ).toBe( 'boom' );
 	} );
 
+	it( 'apiRequest re-exports the canonical helper for back-compat', () => {
+		expect( getErrorLogMessage ).toBe( getErrorLogMessageDirect );
+	} );
+
 	it( 'all four implementations share the same truncation cap', () => {
 		const fs = require( 'fs' );
 		const path = require( 'path' );
 		const read = ( rel ) =>
 			fs.readFileSync( path.join( __dirname, '..', rel ), 'utf8' );
-		for ( const rel of [
-			'esi.js',
-			'lazyload.js',
-			'main.js',
-			'lib/apiRequest.js',
-		] ) {
-			const src = read( rel );
-			// Whitespace-tolerant: `slice( 0, 500 )` and `slice(0, 500)` are the
-			// same contract, and a pure reformat must not fail this. The exact
-			// spacing also forced the `500` literal to stay copy-pasted in every
-			// mirror, which is what blocks collapsing them onto one shared
-			// MAX_LOG_MESSAGE_LENGTH constant. Behaviour for the SPA copy is
-			// asserted above, not by string-matching the source.
-			expect( src ).toMatch( /slice\(\s*0,\s*500\s*\)/ );
+		// The dependency-free mirrors cannot import the SPA bundle, so they
+		// keep the copy-pasted `slice( 0, 500 )` literal (whitespace-tolerant
+		// match: a pure reformat must not fail this).
+		for ( const rel of [ 'esi.js', 'lazyload.js', 'main.js' ] ) {
+			expect( read( rel ) ).toMatch( /slice\(\s*0,\s*500\s*\)/ );
 		}
+		// The canonical SPA implementation lives in lib/logSecrets.js and
+		// expresses the cap through the shared MAX_LOG_MESSAGE_LENGTH
+		// constant instead of a pasted literal. Pin the constant's value and
+		// that the implementation actually uses it, so the behaviour above
+		// (`truncates long messages to 500 chars`) cannot drift from the
+		// mirrors' literal.
+		expect( MAX_LOG_MESSAGE_LENGTH ).toBe( 500 );
+		const spaSrc = read( 'lib/logSecrets.js' );
+		expect( spaSrc ).toMatch( /MAX_LOG_MESSAGE_LENGTH/ );
+		expect( getErrorLogMessageDirect( 'x'.repeat( 600 ) ) ).toHaveLength(
+			MAX_LOG_MESSAGE_LENGTH
+		);
 	} );
 
 	it( 'no SPA component re-implements the helper inline', () => {

@@ -17,7 +17,7 @@
  *    parent boundary, unmounts the root — so a crash handler that itself
  *    throws escalates the very failure it exists to contain. Message
  *    extraction is therefore delegated to `getErrorLogMessage()`
- *    (src/lib/apiRequest.js), the single tested implementation of the
+ *    (src/lib/logSecrets.js, re-exported by src/lib/apiRequest.js), the
  *    log-message contract: nullish input short-circuits to a sentinel, the
  *    `String()` coercion is guarded, and the result is redacted and then
  *    capped at 500 chars. Never re-implement it inline here — that is how a
@@ -28,14 +28,14 @@
  * escape reloads the page and discards every other tab's unsaved work.
  *
  * @since NEXT
- * @param {Object}                     props            Component props.
- * @param {import('react').ReactNode}  [props.children] Content to guard.
- * @param {string|number|boolean|null} [props.resetKey] Changing primitive value clears a latched error state.
- * @param {Function}                   [props.onReload] Reload handler (defaults to a full page reload; non-functions are ignored).
+ * @param {Object}                                             props            Component props.
+ * @param {import('react').ReactNode}                          [props.children] Content to guard.
+ * @param {string|number|boolean|bigint|symbol|null|undefined} [props.resetKey] Changing primitive value clears a latched error state.
+ * @param {Function}                                           [props.onReload] Reload handler (defaults to a full page reload; non-functions are ignored).
  */
 import { Component } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { getErrorLogMessage } from '../../lib/apiRequest';
+import { getErrorLogMessage } from '../../lib/logSecrets';
 
 /**
  * Reload the whole admin page. Split out so the Reload button's behaviour can

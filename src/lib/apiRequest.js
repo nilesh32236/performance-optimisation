@@ -1,6 +1,6 @@
 import { __ } from '@wordpress/i18n';
 import { isAuthErrorCode } from './authErrors';
-import { redactLogSecrets } from './logSecrets';
+import { getErrorLogMessage } from './logSecrets';
 import {
 	commitSettingsResponse as commitResponse,
 	cloneSettingsPayload,
@@ -10,6 +10,12 @@ import {
 // Audit #1354: the raw lookup Set stays module-private in
 // authErrors.js — re-export only the frozen list and the lookup.
 export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
+
+// getErrorLogMessage() lives in ./logSecrets.js (dependency-light, next to
+// redactLogSecrets) so crash-path consumers need not import this barrel.
+// Re-exported here so every existing `from './apiRequest'` /
+// `from '../lib/apiRequest'` import keeps working.
+export { getErrorLogMessage, MAX_LOG_MESSAGE_LENGTH } from './logSecrets';
 
 // P3-019: single response-commit contract exported for reuse so components
 // commit server payloads instead of patching request echoes.
@@ -102,40 +108,6 @@ export const getWppoSettings = ( path, fallback = {} ) => {
 		current = current[ key ];
 	}
 	return current === undefined ? fallback : current;
-};
-
-/**
- * Extract a safe log message from an error without leaking response bodies.
- *
- * Server error objects can embed response payloads (system info, settings);
- * console output persists in devtools/extensions, so only the message is
- * logged, never the full error/response object.
- *
- * @since 2.3.0
- * @param {*} error Caught error value.
- * @return {string} Safe message string.
- */
-export const getErrorLogMessage = ( error ) => {
-	let message;
-	if ( error instanceof Error ) {
-		message = error.message || 'Unknown error';
-	} else if ( typeof error === 'string' ) {
-		message = error.slice( 0, 500 ) || 'Unknown error';
-	} else if ( error === null || typeof error === 'undefined' ) {
-		return 'Unknown error';
-	} else {
-		try {
-			message = String( error ).slice( 0, 500 );
-		} catch {
-			return 'Unknown error';
-		}
-	}
-	try {
-		const redacted = redactLogSecrets( message );
-		return ( redacted || 'Unknown error' ).slice( 0, 500 );
-	} catch {
-		return 'Unknown error';
-	}
 };
 
 let pendingRefresh = null;
@@ -251,7 +223,13 @@ export const commitSettingsCache = ( payload ) => {
  * live global so sibling panels see the new value without a reload. The
  * merged tab and the top-level object are both frozen like commitSettingsCache().
  *
+ * No-ops (without bumping the dedupe generation) when the patch is empty or
+ * the merged tab is shallow-equal to the base: committing an identical
+ * snapshot would spuriously end the in-flight GET generation and cost one
+ * extra network trip for data that has not changed.
+ *
  * @since 2.3.0
+ * @since NEXT Skips empty and no-change patches without bumping the generation.
  * @param {string} tab   Settings tab key (e.g. 'ai_adaptive').
  * @param {Object} patch Tab settings to merge.
  * @return {void}
@@ -266,6 +244,10 @@ export const patchSettingsCache = ( tab, patch ) => {
 	if ( ! patch || typeof patch !== 'object' ) {
 		return;
 	}
+	const patchKeys = Object.keys( patch );
+	if ( patchKeys.length === 0 ) {
+		return;
+	}
 	const current =
 		wppoSettings.settings && typeof wppoSettings.settings === 'object'
 			? wppoSettings.settings
@@ -274,9 +256,17 @@ export const patchSettingsCache = ( tab, patch ) => {
 		current[ tab ] && typeof current[ tab ] === 'object'
 			? current[ tab ]
 			: {};
+	const merged = { ...base, ...patch };
+	const baseKeys = Object.keys( base );
+	if (
+		Object.keys( merged ).length === baseKeys.length &&
+		patchKeys.every( ( key ) => Object.is( merged[ key ], base[ key ] ) )
+	) {
+		return;
+	}
 	wppoSettings.settings = Object.freeze( {
 		...current,
-		[ tab ]: Object.freeze( { ...base, ...patch } ),
+		[ tab ]: Object.freeze( merged ),
 	} );
 	settingsGeneration += 1;
 };
@@ -302,6 +292,34 @@ export const patchSettingsCache = ( tab, patch ) => {
 const inflightGets = new Map();
 
 /**
+ * Key-stable JSON serialisation for the dedupe key body portion.
+ *
+ * Raw `JSON.stringify()` depends on insertion order, so semantically
+ * identical bodies with different key order produced different registry keys
+ * and missed dedupe (one extra request, same data). Sorting object keys
+ * recursively keeps the key a pure function of the body's content. Arrays
+ * keep their order (order is significant there); values JSON cannot represent
+ * degrade to null exactly as `JSON.stringify()` would.
+ *
+ * @since NEXT
+ * @param {*} value Body value to serialise.
+ * @return {*} Value with object keys sorted for stable serialisation.
+ */
+const toStableValue = ( value ) => {
+	if ( Array.isArray( value ) ) {
+		return value.map( toStableValue );
+	}
+	if ( value && typeof value === 'object' ) {
+		const sorted = {};
+		for ( const key of Object.keys( value ).sort() ) {
+			sorted[ key ] = toStableValue( value[ key ] );
+		}
+		return sorted;
+	}
+	return value;
+};
+
+/**
  * Build the in-flight GET registry key for a request.
  *
  * Three parts, none of which may collapse:
@@ -314,7 +332,8 @@ const inflightGets = new Map();
  * - the body — GETs do not forward a body today, but nothing stopped a future
  *   one from doing so, and a key that ignored it would then silently share
  *   responses between different requests. Unserialisable bodies degrade to
- *   '' rather than throwing out of apiCall().
+ *   '' rather than throwing out of apiCall(). Objects serialise with sorted
+ *   keys so identical content in a different key order still dedupes.
  *
  * @since NEXT
  * @param {string} action REST action path.
@@ -325,7 +344,7 @@ const getInflightKey = ( action, body ) => {
 	let bodyKey = '';
 	if ( body !== undefined && body !== null ) {
 		try {
-			bodyKey = JSON.stringify( body ) ?? '';
+			bodyKey = JSON.stringify( toStableValue( body ) ) ?? '';
 		} catch {
 			bodyKey = '';
 		}
@@ -462,9 +481,9 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// (see authSync.test.js). An HTTP 401/403 with a JSON body but no
 		// recognised code falls back to the same single retry.
 		if (
-			( data.code && isAuthErrorCode( data.code ) ) ||
+			( data?.code && isAuthErrorCode( data.code ) ) ||
 			( ( response.status === 401 || response.status === 403 ) &&
-				! data.success )
+				! data?.success )
 		) {
 			if ( isRetrying ) {
 				throw new Error(
@@ -498,9 +517,13 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// `ok === false` is the explicit form: a real `Response` always carries
 		// a boolean `ok`, and a test double that omits it is treated as OK so
 		// only genuine HTTP failures reject.
-		if ( response.ok === false && ! data.success ) {
+		// A degraded body (JSON null, an array, a bare string) must still
+		// reject cleanly here rather than throw a TypeError out of the
+		// `data.success` / `data.message` reads, so both use optional
+		// chaining.
+		if ( response.ok === false && ! data?.success ) {
 			const detail =
-				typeof data.message === 'string' ? data.message.trim() : '';
+				typeof data?.message === 'string' ? data.message.trim() : '';
 			throw new Error(
 				detail
 					? `${ action }: ${ detail }`
@@ -516,7 +539,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// P3-019: one response-commit contract covers every settings-bearing
 		// action (update/import/restore/sandbox_promote/safe_mode full maps,
 		// apply_preset nested settings). Fail-safe no-op otherwise.
-		if ( data.success ) {
+		if ( data?.success ) {
 			commitSettingsResponse( action, data.data );
 		}
 		return data;
