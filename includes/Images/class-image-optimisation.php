@@ -4379,6 +4379,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Emit the single automatic LCP hero preload (issue #1703).
+		 *
+		 * Issue-named entry point for the opt-in automatic LCP hero path:
+		 * manual picker keeps precedence, otherwise the unified OD + RUM
+		 * chain resolves the candidate and exactly one
+		 * `<link rel="preload" as="image" fetchpriority="high">` is emitted.
+		 * Toggle-off emits nothing (byte-identical output).
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::emit_lcp_preload}.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			return $this->lcp_preload()->emit_lcp_preload( $buffer );
+		}
+
+		/**
 		 * Resolve the responsive LCP candidate (OD breakpoints → RUM field).
 		 *
 		 * Shared resolver for `emit_responsive_lcp_preload()` and the

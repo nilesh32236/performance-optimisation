@@ -1942,6 +1942,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 		}
 
 		/**
+		 * Emit the single automatic LCP hero preload (issue #1703).
+		 *
+		 * Issue-named single entry point for the opt-in automatic LCP hero
+		 * path: resolves the hero candidate (manual `_wppo_lcp_preload_url`
+		 * picker keeps precedence, then the unified `resolve_auto_lcp_url()`
+		 * chain — OD bridge + RUM field data + stored PageSpeed + heuristic
+		 * when a buffer is provided), and emits exactly one
+		 * `<link rel="preload" as="image" fetchpriority="high">` for the
+		 * candidate. The emitted URL is claimed in the shared hero slot
+		 * (`claim_hero_preload_slot()`) so lazy-load rewriting excludes it
+		 * in the same response and no duplicate tag prints when OD or the
+		 * Critical-CSS path already emitted one.
+		 *
+		 * Gating: the manual picker is explicit opt-in and emits even when
+		 * both auto toggles are off; otherwise at least one of
+		 * `preload_settings.autoLcpPreload` / `image_optimisation.autoPreloadLCP`
+		 * must be on (default-off, byte-identical output when off). With only
+		 * the new toggle on and RUM unsatisfied, the OD-only subset still
+		 * resolves (parity with `get_auto_lcp_preload_data()`); disagreeing
+		 * or missing signals emit nothing (fail-open, never fatal).
+		 * Multisite-safe: per-site options, no cross-site state.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * @internal Call via the Image_Optimisation facade, never directly.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			try {
+				if ( self::$responsive_lcp_preload_emitted ) {
+					return '';
+				}
+				if ( $this->response_already_has_high_preload( $buffer ) ) {
+					return '';
+				}
+				try {
+					$manual = $this->get_manual_lcp_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$manual = '';
+				}
+				$lcpown_options     = $this->owner->lcp_get_options();
+				$image_optimisation = $lcpown_options['image_optimisation'] ?? array();
+				$preload_settings   = $lcpown_options['preload_settings'] ?? array();
+				$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
+				$new_on             = ! empty( $preload_settings['autoLcpPreload'] );
+				$lcp_url            = '';
+				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
+					$lcp_url = $manual;
+				} else {
+					try {
+						if ( $this->is_auto_lcp_disabled_for_post() ) {
+							return '';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					if ( ! $legacy_on && ! $new_on ) {
+						return '';
+					}
+					if ( $new_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
+						try {
+							$lcp_url = $this->resolve_od_only_lcp_url();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$lcp_url = '';
+						}
+					} else {
+						try {
+							$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$lcp_url = '';
+						}
+					}
+				}
+				if ( ! is_string( $lcp_url ) || '' === trim( $lcp_url ) ) {
+					return '';
+				}
+				$lcp_url = trim( $lcp_url );
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
+					return '';
+				}
+				if ( ! $this->claim_hero_preload_slot( $lcp_url, '', is_string( $buffer ) ? $buffer : null ) ) {
+					return '';
+				}
+				$srcset = '';
+				$sizes  = '';
+				try {
+					$breakpoint = $this->get_breakpoint_srcset_for_url( $lcp_url, $buffer );
+					if ( '' !== ( $breakpoint['srcset'] ?? '' ) && '' !== ( $breakpoint['sizes'] ?? '' ) ) {
+						$srcset = trim( (string) $breakpoint['srcset'] );
+						$sizes  = trim( (string) $breakpoint['sizes'] );
+					} else {
+						$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+						if ( '' !== trim( (string) ( $responsive['srcset'] ?? '' ) ) && '' !== trim( (string) ( $responsive['sizes'] ?? '' ) ) ) {
+							$srcset = trim( (string) $responsive['srcset'] );
+							$sizes  = trim( (string) $responsive['sizes'] );
+						} elseif ( is_string( $buffer ) && '' !== $buffer ) {
+							$buf_srcset = $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
+							$buf_sizes  = '' !== $buf_srcset ? $this->get_lcp_sizes_for_url( $lcp_url, $buffer ) : '';
+							if ( '' !== $buf_srcset && '' !== $buf_sizes ) {
+								$srcset = $buf_srcset;
+								$sizes  = $buf_sizes;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$srcset = '';
+					$sizes  = '';
+				}
+				if ( '' === $srcset || '' === $sizes ) {
+					$srcset = '';
+					$sizes  = '';
+				}
+				$link_tag = '';
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_preload_link' ) ) {
+						$link_tag = Util::get_preload_link(
+							$lcp_url,
+							'preload',
+							'image',
+							false,
+							Util::get_image_mime_type( $lcp_url ),
+							'',
+							'high',
+							$srcset,
+							$sizes
+						);
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$link_tag = '';
+				}
+				if ( ! is_string( $link_tag ) || '' === trim( $link_tag ) ) {
+					self::release_hero_preload_slot( $lcp_url, '' );
+					return '';
+				}
+				if ( false === strpos( $link_tag, 'fetchpriority="high"' ) && false === strpos( $link_tag, "fetchpriority='high'" ) ) {
+					self::release_hero_preload_slot( $lcp_url, '' );
+					return '';
+				}
+				self::$responsive_lcp_preload_emitted = true;
+				try {
+					self::record_direct_preload_url( $lcp_url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $link_tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Resolve the responsive LCP candidate (OD breakpoints → RUM field).
 		 *
 		 * Shared resolver for `emit_responsive_lcp_preload()` and the
@@ -2663,14 +2820,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				$auto_lcp_on = ! empty( ( $lcpown_options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
-				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
+				$new_on      = ! empty( ( $lcpown_options['preload_settings'] ?? array() )['autoLcpPreload'] );
+				$legacy_on   = ! empty( $image_optimisation['autoPreloadLCP'] );
+				$rum_ok      = $this->is_auto_lcp_rum_satisfied();
+				$auto_lcp_on = $new_on && $rum_ok;
+				// OD-only fallback parity with get_auto_lcp_preload_data()
+				// (issue #1703): with the new toggle on but RUM unsatisfied the
+				// OD tier still preloads, so the same hero must stay excluded
+				// from lazy-load. Resolve the OD-only subset once; when it hits,
+				// the gate passes and the hit is reused below (no second scan).
+				$od_only_hit = '';
+				if ( $new_on && ! $legacy_on && ! $rum_ok ) {
+					try {
+						$od_only_hit = $this->resolve_od_only_lcp_url();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$od_only_hit = '';
+					}
+					if ( '' !== $od_only_hit ) {
+						$auto_lcp_on = true;
+					}
+				}
+				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || $legacy_on || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
 				if ( ! $gated ) {
 					if ( null === $buffer ) {
 						$lcpown_lazy_lcp_exclusion_url     = '';
 						$lcpown_lazy_lcp_exclusion_url_key = $memo_key;
 					}
 					return '';
+				}
+				if ( '' !== $od_only_hit ) {
+					$resolved_url = $od_only_hit;
+					if ( null === $buffer ) {
+						$lcpown_lazy_lcp_exclusion_url     = $resolved_url;
+						$lcpown_lazy_lcp_exclusion_url_key = $memo_key;
+					}
+					return $resolved_url;
 				}
 				$resolved = $this->resolve_auto_lcp_url( $buffer );
 				if ( '' !== $resolved ) {
