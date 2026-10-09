@@ -58,9 +58,6 @@
 ## YYYY-MM-DD - [Dynamic Danger Button Shadows]
 **Learning:** Hardcoded RGB colors in danger button box-shadows (e.g., rgba(220, 38, 38, 0.25)) break visual consistency if the underlying `--wppo-danger` CSS variable is modified by the theme.
 **Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)` to ensure dynamic theme adaptation.
-## 2026-10-03 - Dynamic Welcome Panel Shadows
-**Learning:** Hardcoded `rgba()` colors in the welcome-step number badge shadows do not track the active WP admin color scheme. Note `--wppo-primary` is bound to `var(--wp-admin-theme-color)` and therefore adapts, whereas `--wppo-success` is a static hex, so converting its shadow is a no-op until that token is themed.
-**Action:** Replace hardcoded `rgba()` values in box-shadows with `color-mix(in srgb, var(--variable) X%, transparent)`; the percentage must match the original alpha because `color-mix()` mixes premultiplied alpha.
-## 2026-10-08 - Replace Hardcoded Colors in Message Region
-**Learning:** The message region component was using hardcoded hex colors, breaking dynamic WordPress theme adaptation.
-**Action:** Replaced hardcoded text, background, border, and semantic colors with native `--wppo-*` variables defined in `_variables.scss` to ensure consistent theming.
+## 2026-10-04 - Fix missing button link styling
+**Learning:** The `--link` modifier was absent while the base `.wppo-button` box still applied, so these inherited the base's button sizing (38/44px tall, 9/16px padded, font-weight 600). Because `.wppo-button` declares no background color, they fell back to the UA default `buttonface` rendering and read as oversized button-shaped controls rather than inline links. When a class is emitted by markup, grep the **compiled** stylesheet — a literal search for `button--link` in the SCSS finds nothing when the rule is written as a nested `&--link`.
+**Action:** Add `.wppo-button--link` to `_forms.scss` and style it to look like a standard link (transparent background, primary color, hover underline) while retaining button accessibility.

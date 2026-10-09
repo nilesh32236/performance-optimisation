@@ -2270,14 +2270,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10270,
+        "lines": 10271,
         "methods": 238,
         "public_methods": 151,
         "large_methods": 16,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "enqueue_scripts",
-            "line": 3332,
+            "line": 3333,
             "lines": 203
         },
         "method_prefixes": {
@@ -2354,8 +2354,8 @@
         "private_state_properties": 40,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 247,
-        "wordpress_dependencies": 72,
+        "external_dependencies": 248,
+        "wordpress_dependencies": 73,
         "filesystem_dependencies": 7,
         "network_dependencies": 0,
         "database_dependencies": 2,
