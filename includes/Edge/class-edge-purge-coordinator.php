@@ -19,11 +19,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purge_Coordinator' ) ) {
 
 	/**
-	 * Coordinates legacy CDN and edge-cache purges for one cache-clear event.
+	 * Coordinates legacy CDN, edge-cache, and managed-host purges for one cache-clear event.
 	 *
-	 * Provider behaviour remains owned by CDN_Purger, Edge_Purger, and
-	 * Cloudflare_Purger. This adapter only scopes an in-request transport
-	 * de-duplication seam around the two existing calls.
+	 * Provider behaviour remains owned by CDN_Purger, Edge_Purger,
+	 * Host_Purger, and Cloudflare_Purger. This adapter only scopes an
+	 * in-request transport de-duplication seam around the existing calls.
 	 *
 	 * @since NEXT
 	 */
@@ -58,12 +58,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purge_Coordinator' ) ) {
 			try {
 				$cdn_ok  = class_exists( CDN_Purger::class ) ? CDN_Purger::purge_all( $type, $url_path ) : true;
 				$edge_ok = class_exists( Edge_Purger::class ) ? Edge_Purger::purge_all( $type, $url_path ) : true;
+				$host_ok = class_exists( Host_Purger::class ) ? Host_Purger::purge_all( $type, $url_path ) : true;
 			} finally {
 				remove_filter( 'pre_http_request', $deduplicator, PHP_INT_MAX );
 				remove_action( 'http_api_debug', $response_recorder, PHP_INT_MAX );
 			}
 
-			return $cdn_ok && $edge_ok;
+			return $cdn_ok && $edge_ok && $host_ok;
 		}
 
 		/**
@@ -133,7 +134,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purge_Coordinator' ) ) {
 
 			$method = isset( $args['method'] ) ? strtoupper( (string) $args['method'] ) : 'GET';
 			$body   = isset( $args['body'] ) && is_string( $args['body'] ) ? $args['body'] : '';
-			if ( 'POST' !== $method || '{"purge_everything":true}' !== $body ) {
+			if ( 'POST' !== $method || '' === $body ) {
+				return '';
+			}
+			// Full-zone purges and URL-scoped file purges share one
+			// transport; de-duplicate identical bodies (APO + edge must not
+			// double-send). Distinct bodies keep distinct keys via the
+			// body in the hash below.
+			if ( false === strpos( $body, 'purge_everything' ) && false === strpos( $body, '"files"' ) ) {
 				return '';
 			}
 			if ( 1 !== preg_match( '#^https://api\.cloudflare\.com/client/v4/zones/[^/]+/purge_cache$#', $url ) ) {

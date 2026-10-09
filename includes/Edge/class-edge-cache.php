@@ -82,7 +82,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			 * @since 2.0.0
 			 * @param bool $enabled Whether edge cache is enabled.
 			 */
-			return (bool) apply_filters( self::FILTER_ENABLED, $enabled );
+			$enabled = (bool) apply_filters( self::FILTER_ENABLED, $enabled );
+			// Cloudflare APO double-cache guard (issue #911): when APO
+			// already caches HTML at the edge, WPPO must refuse to layer a
+			// second HTML cache. The filter above cannot re-enable it.
+			if ( $enabled && class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) ) {
+				try {
+					if ( Apo_Detect::is_apo_active() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $enabled;
+		}
+
+		/**
+		 * Whether the edge cache is degraded by Cloudflare APO double-cache protection.
+		 *
+		 * @since NEXT
+		 * @return bool True when the setting is on but APO forces it off.
+		 */
+		public static function is_apo_degraded(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) || ! Apo_Detect::is_apo_active() ) {
+					return false;
+				}
+				$settings = Util::get_settings();
+				$enabled  = isset( $settings['edge_cache'] ) && is_array( $settings['edge_cache'] ) && ! empty( $settings['edge_cache']['enabled'] );
+				return (bool) $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Human-readable degrade notice for the SPA, or '' when healthy.
+		 *
+		 * @since NEXT
+		 * @return string Notice string.
+		 */
+		public static function get_degrade_notice(): string {
+			if ( self::is_apo_degraded() && class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) ) {
+				return Apo_Detect::get_degrade_reason();
+			}
+			return '';
 		}
 
 		/**

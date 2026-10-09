@@ -150,6 +150,12 @@ const EdgeCachePanel = () => {
 					'performance-optimisation'
 				) }
 			</p>
+			<p className="wppo-text-muted wppo-text-small">
+				{ __(
+					'Host-aware fan-out: Kinsta, WP Engine, SiteGround and Cloudways purges run alongside CDN/edge via Host_Purger (no-op on unknown hosts, filter wppo_host_adapter). On banned-conflict hosts and under Cloudflare APO the WPPO static cache degrades to notify-only — the host or APO owns HTML and purges route there. See System Info → Hosting for who-caches-what.',
+					'performance-optimisation'
+				) }
+			</p>
 
 			<div className="wppo-field">
 				<label className="wppo-field-label" htmlFor="wppoEdgeProvider">

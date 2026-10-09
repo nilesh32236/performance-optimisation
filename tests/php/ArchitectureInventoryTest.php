@@ -133,16 +133,16 @@ final class ArchitectureInventoryTest extends TestCase {
 		$graph = $this->read_json( 'DEPENDENCY-GRAPH.json' );
 		$this->assertSame( 2, $graph['schema_version'] );
 		$this->assertStringContainsString( 'PhpToken', $graph['analysis_method'] );
-		$this->assertSame( 89, $graph['summary']['files'] );
-		$this->assertSame( 85, $graph['summary']['class_like_nodes'] );
+		$this->assertSame( 92, $graph['summary']['files'] );
+		$this->assertSame( 88, $graph['summary']['class_like_nodes'] );
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
 		// 396/395: the WP-CLI settings subcommands now reach Settings_Command
 		// instead of hand-rolling the snapshot, which adds one runtime edge.
-		$this->assertSame( 396, $graph['summary']['edges'] );
-		$this->assertSame( 395, $graph['summary']['runtime_edges'] );
-		// 207: the System_Info drop-in probes now guard the Util facade with
-		// class_exists(), which adds one compatibility edge (audit #1663).
-		$this->assertSame( 207, $graph['summary']['compatibility_edges'] );
+		// +9/+9/+9 (issue #911): Host_Detect, Apo_Detect and Host_Purger add
+		// three nodes and their runtime/compatibility edges.
+		$this->assertSame( 405, $graph['summary']['edges'] );
+		$this->assertSame( 404, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 215, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );

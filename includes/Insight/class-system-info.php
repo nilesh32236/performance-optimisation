@@ -90,8 +90,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'server'         => self::get_server(),
 				'cache'          => self::get_cache(),
 				'litespeed'      => self::get_litespeed(),
+				'host'           => self::get_host(),
 				'infrastructure' => self::get_infrastructure(),
 				'opcache'        => self::get_opcache(),
+			);
+		}
+
+		/**
+		 * Get managed-host and Cloudflare APO details ("who caches what").
+		 *
+		 * Reports the detected host slug, whether the host bans an
+		 * overlapping WPPO page cache, whether Cloudflare APO is active
+		 * (double-cache guard), and a who-caches-what map. Null-safe and
+		 * fail-open: detection failures report 'none'/false, never fatal.
+		 *
+		 * @since NEXT
+		 * @return array{
+		 *     slug: string,
+		 *     banned_conflict: bool,
+		 *     degrade_reason: string,
+		 *     apo_active: bool,
+		 *     apo_reason: string,
+		 *     who_caches_what: array<string,string>
+		 * }
+		 */
+		public static function get_host(): array {
+			$slug           = 'none';
+			$banned         = false;
+			$degrade_reason = '';
+			$apo_active     = false;
+			$apo_reason     = '';
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) ) {
+					$slug           = Host_Detect::detect();
+					$banned         = Host_Detect::is_banned_conflict();
+					$degrade_reason = Host_Detect::get_degrade_reason();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) ) {
+					$apo_active = Apo_Detect::is_apo_active();
+					$apo_reason = Apo_Detect::get_degrade_reason();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			$page_cache_owner = 'wppo';
+			if ( $banned || $apo_active ) {
+				$page_cache_owner = $apo_active ? 'cloudflare-apo' : $slug;
+			}
+			$purge_target = 'wppo';
+			if ( 'none' !== $slug ) {
+				$purge_target = 'wppo+host:' . $slug;
+			}
+			if ( $apo_active ) {
+				$purge_target .= '+cloudflare';
+			}
+
+			return array(
+				'slug'            => $slug,
+				'banned_conflict' => (bool) $banned,
+				'degrade_reason'  => (string) $degrade_reason,
+				'apo_active'      => (bool) $apo_active,
+				'apo_reason'      => (string) $apo_reason,
+				'who_caches_what' => array(
+					'page_cache'  => $page_cache_owner,
+					'purge_route' => $purge_target,
+				),
 			);
 		}
 
