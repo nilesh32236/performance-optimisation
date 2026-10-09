@@ -7048,7 +7048,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// the bounded budget is spent on render-blocking CSS.
 					// A media list is an OR: 'print, screen' still applies to
 					// screens, so only skip when every comma-separated part
-					// is print-only (e.g. 'print', 'PRINT', 'print and (...)').
+					// is print-only (e.g. 'print', 'PRINT', 'only print',
+					// 'print and (...)', 'only print and (...)').
 					$media = $wp_styles->registered[ $handle ]->args ?? 'all';
 					if ( is_string( $media ) ) {
 						$parts = array_map( 'trim', explode( ',', strtolower( $media ) ) );
@@ -7061,7 +7062,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( ! empty( $parts ) ) {
 							$all_print = true;
 							foreach ( $parts as $part ) {
-								if ( 'print' !== $part && 0 !== strpos( $part, 'print and' ) && 0 !== strpos( $part, 'print(' ) ) {
+								if ( 1 !== preg_match( '/^(?:only\s+)?print(?:\s+and\b|\s*\(|$)/', $part ) ) {
 									$all_print = false;
 									break;
 								}
