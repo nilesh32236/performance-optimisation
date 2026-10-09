@@ -87,7 +87,6 @@ if ( has_filter( 'new_hook_name' ) ) {
 ## Reporting
 
 After analysis, create a markdown summary with:
-
 ```markdown
 # WordPress Feature Monitor - YYYY-MM-DD
 
@@ -104,3 +103,20 @@ After analysis, create a markdown summary with:
 - [ ] Create PR for improvement X
 - [ ] Flag for next release cycle
 ```
+
+## Machine-Readable Final Message (CI-parsed runs)
+
+When this skill drives an automated monitor run whose output is parsed by
+CI (see `.github/workflows/wordpress-monitor.yml` and
+`.github/schemas/wppo-findings.schema.json`), the markdown report above is
+NOT the deliverable. The final message must be exactly ONE JSON document —
+no prose before or after, no markdown fences. Its first line must begin
+with `{"schema_version"` so CI's extraction anchor finds it, and every
+finding needs the required numerics (`performance_impact`, `user_value`,
+`feasibility`, `risk_numeric`), a 64-char lowercase-hex advisory `id`, a
+`classification` enum value, and `measured_impact: null`. Unknown extra
+fields are rejected by the schema. Before stopping, self-verify with
+`echo '<json>' | jq -e .` and
+`echo '<json>' | jq -e 'type == "object" and (.findings | type == "array")'` —
+both must exit 0. If the JSON risks truncation, shorten prose fields
+(`fallback`, `acceptance_criteria` wording), never the structure.
