@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
-import PreloadSettings from '../PreloadSettings';
+import PreloadSettings, { normalizePreloadCssFirstN } from '../PreloadSettings';
 
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
@@ -586,5 +586,62 @@ describe( 'PreloadSettings Component', () => {
 				screen.getByText( /Preload queue resumed/i )
 			).toBeInTheDocument();
 		} );
+	} );
+
+	describe( 'normalizePreloadCssFirstN (issue #1410)', () => {
+		it( 'clamps counts to 0-5', () => {
+			expect( normalizePreloadCssFirstN( 0 ) ).toBe( 0 );
+			expect( normalizePreloadCssFirstN( 3 ) ).toBe( 3 );
+			expect( normalizePreloadCssFirstN( 5 ) ).toBe( 5 );
+			expect( normalizePreloadCssFirstN( 6 ) ).toBe( 5 );
+			expect( normalizePreloadCssFirstN( -1 ) ).toBe( 0 );
+			expect( normalizePreloadCssFirstN( 2.9 ) ).toBe( 2 );
+		} );
+
+		it( 'fails open to 0 for non-numeric values', () => {
+			expect( normalizePreloadCssFirstN( undefined ) ).toBe( 0 );
+			expect( normalizePreloadCssFirstN( 'bogus' ) ).toBe( 0 );
+			expect( normalizePreloadCssFirstN( NaN ) ).toBe( 0 );
+			expect( normalizePreloadCssFirstN( '2' ) ).toBe( 2 );
+		} );
+	} );
+
+	it( 'renders the preload-first-N control and persists the count', async () => {
+		render( <PreloadSettings options={ { preloadCssFirstN: 2 } } /> );
+
+		const countInput = screen.getByLabelText(
+			/Preload First N Stylesheets/i
+		);
+		expect( countInput ).toBeInTheDocument();
+		expect( countInput ).toHaveValue( 2 );
+
+		fireEvent.change( countInput, { target: { value: '3' } } );
+		expect( countInput ).toHaveValue( 3 );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'preload_settings',
+					settings: expect.objectContaining( {
+						preloadCssFirstN: 3,
+					} ),
+				} ),
+				'POST',
+				expect.any( AbortSignal )
+			);
+		} );
+	} );
+
+	it( 'defaults the preload-first-N count to 0 (off)', () => {
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.getByLabelText( /Preload First N Stylesheets/i )
+		).toHaveValue( 0 );
 	} );
 } );

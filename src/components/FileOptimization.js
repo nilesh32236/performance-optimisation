@@ -138,6 +138,19 @@ export const normalizeDeliveryMode = ( value ) => {
 		: 'file';
 };
 
+// Normalize the used-CSS inline-vs-file delivery target the same way PHP
+// sanitizes it (lowercase + trim, allowlisted file|inline, fail-open to
+// 'file') so the UI never disagrees with the server on a single render
+// (issue #1410). Exported for direct Jest coverage.
+// @since NEXT
+export const normalizeUsedCssDelivery = ( value ) => {
+	if ( typeof value !== 'string' ) {
+		return 'file';
+	}
+	const target = value.toLowerCase().trim();
+	return [ 'file', 'inline' ].includes( target ) ? target : 'file';
+};
+
 // One-click Safe preset bundle (issue #1442): fallback mirror of
 // Main::get_safe_preset_bundle() — minify + defer + delay with the builder,
 // commerce, interaction and jQuery exclusion presets pre-applied. Only
@@ -499,6 +512,7 @@ const FILE_OPT_SYNC_KEYS = [
 	'unusedCSSRegressionGuard',
 	'unusedCSSRegressionThreshold',
 	'usedCSSDeliveryMode',
+	'usedCssDelivery',
 	'disableEmojis',
 	'disableEmbeds',
 	'disableDashicons',
@@ -700,6 +714,9 @@ const normalizeFileOpt = ( source = {} ) => {
 		next.usedCSSDeliveryMode = normalizeDeliveryMode(
 			next.usedCSSDeliveryMode
 		);
+	}
+	if ( 'usedCssDelivery' in next ) {
+		next.usedCssDelivery = normalizeUsedCssDelivery( next.usedCssDelivery );
 	}
 	if ( 'ccssMaxRetries' in next ) {
 		next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
@@ -3702,6 +3719,48 @@ const FileOptimization = ( {
 										>
 											{ __(
 												'File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
+												'performance-optimisation'
+											) }
+										</p>
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="usedCssDelivery"
+										>
+											{ __(
+												'Used CSS Output',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="usedCssDelivery"
+											name="usedCssDelivery"
+											value={
+												settings.usedCssDelivery ||
+												'file'
+											}
+											onChange={ onFieldChange }
+											aria-describedby="usedCssDelivery-desc"
+										>
+											<option value="file">
+												{ __(
+													'Separate file (cacheable stylesheet, repeat-view wins)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="inline">
+												{ __(
+													'Inline (no extra request, first-visit LCP)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="usedCssDelivery-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'Inline removes the stylesheet request for first visits; the separate file is cached for repeat views. Oversize, builder-unsafe, or CSP-blocked output falls back to the file automatically — pages are never left unstyled.',
 												'performance-optimisation'
 											) }
 										</p>

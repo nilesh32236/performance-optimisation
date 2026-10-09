@@ -26,6 +26,19 @@ import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 
+// Normalize the preload-first-N stylesheet count the same way PHP
+// sanitizes it (integer, clamped 0-5, fail-open to 0 = off) so the UI
+// never disagrees with the server on a single render (issue #1410).
+// Exported for direct Jest coverage.
+// @since NEXT
+export const normalizePreloadCssFirstN = ( value ) => {
+	const n = Number( value );
+	if ( ! Number.isFinite( n ) ) {
+		return 0;
+	}
+	return Math.min( 5, Math.max( 0, Math.trunc( n ) ) );
+};
+
 const PreloadSettings = ( { options = {} } ) => {
 	const defaultSettings = {
 		enablePreloadCache: false,
@@ -41,6 +54,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		autoLcpPreload: false,
 		preloadCSS: false,
 		preloadCSSUrls: '',
+		preloadCssFirstN: 0,
 		enableSpeculationRules: false,
 		speculationMode: 'prefetch',
 		speculationEagerness: 'conservative',
@@ -87,6 +101,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.autoLcpPreload,
 		options.preloadCSS,
 		options.preloadCSSUrls,
+		options.preloadCssFirstN,
 		options.enableSpeculationRules,
 		options.speculationMode,
 		options.speculationEagerness,
@@ -733,6 +748,41 @@ const PreloadSettings = ( { options = {} } ) => {
 									</p>
 								</div>
 							) }
+							<div className="wppo-field">
+								<label
+									className="wppo-field-label"
+									htmlFor="preloadCssFirstN"
+								>
+									{ __(
+										'Preload First N Stylesheets',
+										'performance-optimisation'
+									) }
+								</label>
+								<input
+									className="wppo-input"
+									type="number"
+									inputMode="numeric"
+									id="preloadCssFirstN"
+									name="preloadCssFirstN"
+									min="0"
+									max="5"
+									step="1"
+									value={ normalizePreloadCssFirstN(
+										settings.preloadCssFirstN
+									) }
+									onChange={ onFieldChange }
+									aria-describedby="preloadCssFirstN-desc"
+								/>
+								<p
+									id="preloadCssFirstN-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
+									{ __(
+										'Automatically preload the first N enqueued stylesheets (0 = off, max 5) so the LCP warning clears without manual URLs. Manual URLs above always win on conflict.',
+										'performance-optimisation'
+									) }
+								</p>
+							</div>
 						</div>
 					</div>
 				</FeatureCard>

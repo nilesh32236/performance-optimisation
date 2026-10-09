@@ -260,6 +260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 * @since 2.3.0 Also backfills the #1388 keys (`ccssInlineBudgetKb`,
 		 *        `ccssCommerceExclude`, `ccssChecksumRegen`).
 		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_css_queue_defaults() (ARCH-004).
+		 * @since NEXT Also backfills the #1410 key (`usedCssDelivery`, file default).
 		 * @return void
 		 */
 		public function migrate_css_queue_defaults(): void {
@@ -279,6 +280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				'usedCssQueueCap'      => 50,
 				'ccssViewportVariants' => false,
 				'usedCSSDeliveryMode'  => 'file',
+				'usedCssDelivery'      => 'file',
 				'ccssGenTimeout'       => 25,
 				'ccssInlineBudgetKb'   => 14,
 				'ccssCommerceExclude'  => true,
@@ -590,6 +592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 *
 		 * @since 2.2.0
 		 * @since 2.4.0 Relocated verbatim from Main::maybe_migrate_preload_auto_defaults() (ARCH-004).
+		 * @since NEXT Also backfills the #1410 `preloadCssFirstN` count (0 = off).
 		 * @return void
 		 */
 		public function migrate_preload_auto_defaults(): void {
@@ -612,6 +615,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			if ( ! array_key_exists( 'autoDiscoverFonts', $preload ) ) {
 				$preload['autoDiscoverFonts'] = false;
 				$changed                      = true;
+			}
+			if ( ! array_key_exists( 'preloadCssFirstN', $preload ) ) {
+				$preload['preloadCssFirstN'] = 0;
+				$changed                     = true;
 			}
 
 			if ( ! $changed ) {
