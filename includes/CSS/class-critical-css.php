@@ -3959,16 +3959,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( 0 === $page_timeout ) {
 				return false;
 			}
-			$response = wp_remote_get(
-				$url,
-				array(
-					'timeout'             => $page_timeout,
-					// Bound the HTTP layer so a multi-MB page can never
-					// materialize fully in memory before truncation (issue #1235).
-					'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
-					'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-				)
-			);
+			// Redirect-hop guard (audit #1785): WP follows redirects
+			// transparently, so a same-site open redirect could route this
+			// server-side fetch to internal/loopback services (SSRF).
+			// Follow hops manually, aborting unless every Location stays
+			// same-site (max 5 hops).
+			$response    = false;
+			$current_url = $url;
+			$hops        = 0;
+			while ( $hops <= 5 ) {
+				$candidate = wp_remote_get(
+					$current_url,
+					array(
+						'timeout'             => $page_timeout,
+						'redirection'         => 0,
+						// Bound the HTTP layer so a multi-MB page can never
+						// materialize fully in memory before truncation (issue #1235).
+						'limit_response_size' => self::MAX_CCSS_SOURCE_BYTES,
+						'user-agent'          => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
+					)
+				);
+				if ( is_wp_error( $candidate ) ) {
+					$response = $candidate;
+					break;
+				}
+				$code = wp_remote_retrieve_response_code( $candidate );
+				if ( ! in_array( $code, array( 301, 302, 303, 307, 308 ), true ) ) {
+					$response = $candidate;
+					break;
+				}
+				$location = wp_remote_retrieve_header( $candidate, 'location' );
+				$next     = ( is_string( $location ) && '' !== trim( $location ) ) ? self::resolve_same_site_redirect( trim( $location ), $current_url ) : '';
+				if ( '' === $next ) {
+					return false;
+				}
+				$current_url = $next;
+				++$hops;
+				if ( $hops > 5 ) {
+					return false;
+				}
+			}
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return false;
@@ -4233,9 +4263,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Own-host fetches may legitimately target loopback/private addresses
 			// (localhost / private-IP dev sites); every other host goes through
 			// the safe API so redirect hops are re-validated against private ranges.
-			$response = self::is_same_site_host( $url )
-			? wp_remote_get( $url, $args )
-			: wp_safe_remote_get( $url, $args );
+			// Same-site hops are followed manually with a same-site-only guard
+			// (audit #1785): WP would otherwise follow a same-site open
+			// redirect off-site transparently (SSRF).
+			if ( self::is_same_site_host( $url ) ) {
+				$args['redirection'] = 0;
+				$response            = null;
+				$sheet_url           = $url;
+				$sheet_hops          = 0;
+				while ( $sheet_hops <= 5 ) {
+					$candidate = wp_remote_get( $sheet_url, $args );
+					if ( is_wp_error( $candidate ) ) {
+						$response = $candidate;
+						break;
+					}
+					$sheet_code = wp_remote_retrieve_response_code( $candidate );
+					if ( ! in_array( $sheet_code, array( 301, 302, 303, 307, 308 ), true ) ) {
+						$response = $candidate;
+						break;
+					}
+					$sheet_location = wp_remote_retrieve_header( $candidate, 'location' );
+					$sheet_next     = ( is_string( $sheet_location ) && '' !== trim( $sheet_location ) ) ? self::resolve_same_site_redirect( trim( $sheet_location ), $sheet_url ) : '';
+					if ( '' === $sheet_next ) {
+						return '';
+					}
+					$sheet_url = $sheet_next;
+					++$sheet_hops;
+					if ( $sheet_hops > 5 ) {
+						return '';
+					}
+				}
+				if ( null === $response ) {
+					return '';
+				}
+			} else {
+				$response = wp_safe_remote_get( $url, $args );
+			}
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return '';
@@ -4351,6 +4414,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 
 			return '' !== $site_host && $host === $site_host;
+		}
+
+		/**
+		 * Resolve a redirect Location against the current URL, same-site only.
+		 *
+		 * Supports absolute, protocol-relative, and path-relative targets.
+		 * Returns '' when the target leaves the site host or is invalid, so
+		 * the caller aborts the fetch instead of following it (SSRF guard,
+		 * audit #1785). Never throws.
+		 *
+		 * @param string $location Raw Location header value.
+		 * @param string $current  Current request URL (already same-site).
+		 * @return string Resolved same-site URL, or '' to abort.
+		 * @since NEXT
+		 */
+		private static function resolve_same_site_redirect( string $location, string $current ): string {
+			try {
+				if ( 0 === strpos( $location, '/' ) && 0 !== strpos( $location, '//' ) ) {
+					$scheme = wp_parse_url( $current, PHP_URL_SCHEME );
+					$host   = wp_parse_url( $current, PHP_URL_HOST );
+					$port   = wp_parse_url( $current, PHP_URL_PORT );
+					if ( ! is_string( $scheme ) || '' === $scheme || ! is_string( $host ) || '' === $host ) {
+						return '';
+					}
+					$resolved = $scheme . '://' . $host . ( null !== $port ? ':' . (int) $port : '' ) . $location;
+				} elseif ( 0 === strpos( $location, '//' ) ) {
+					$scheme   = wp_parse_url( $current, PHP_URL_SCHEME );
+					$resolved = ( is_string( $scheme ) && '' !== $scheme ? $scheme : 'https' ) . ':' . $location;
+				} elseif ( preg_match( '#^https?://#i', $location ) ) {
+					$resolved = $location;
+				} else {
+					return '';
+				}
+				if ( ! self::is_same_site_host( $resolved ) ) {
+					return '';
+				}
+				$scheme = strtolower( (string) wp_parse_url( $resolved, PHP_URL_SCHEME ) );
+				if ( 'http' !== $scheme && 'https' !== $scheme ) {
+					return '';
+				}
+				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**

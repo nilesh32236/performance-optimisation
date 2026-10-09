@@ -1544,13 +1544,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
 			}
 			if ( file_exists( $wppo_dir ) ) {
+				// Symlink guard (audit #1785): a wp-content/wppo symlink
+				// whose target is anywhere inside WP_CONTENT_DIR could
+				// otherwise point the recursive delete at plugins/uploads.
+				// Reject symlinks outright and require realpath() to equal
+				// the canonical directory.
+				if ( is_link( $wppo_dir ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+				}
 				$resolved_wppo = realpath( $wppo_dir );
 				if ( false === $resolved_wppo || rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/' !== $content_dir . 'wppo/' ) {
-					// Allow symlink edge-cases only when the resolved path
-					// is still inside WP_CONTENT_DIR (fail-open otherwise).
-					if ( false === $resolved_wppo || 0 !== strpos( rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/', $content_dir ) ) {
-						return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
-					}
+					return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
 				}
 			}
 

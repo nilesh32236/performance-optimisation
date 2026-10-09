@@ -1221,6 +1221,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$block = 'cart';
 			}
 
+			// Transient-bloat guard (audit #1785): reject unknown block
+			// values before any throttle write. is_fragment_throttled()
+			// keys on md5(IP|block), so random block values would mint
+			// unlimited _transient_ rows without a persistent object cache.
+			// No transient read or write happens for unknown blocks.
+			$allowed_blocks = array( 'cart', 'checkout', 'account', 'adminbar', 'admin_bar', 'admin-bar', 'nonce' );
+			if ( ! in_array( $block, $allowed_blocks, true ) ) {
+				self::emit_private_fail_closed();
+				if ( function_exists( 'wp_send_json_error' ) ) {
+					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+				}
+				return;
+			}
+
 			// POST body first (OLS hydration client); query-string fallback
 			// for Enterprise <esi:include> server-side GET sub-requests, whose
 			// src URL carries the _wpnonce embedded by render_esi_placeholder().

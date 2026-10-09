@@ -553,21 +553,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			// Security (issue #1181): rate limiting trusts REMOTE_ADDR only.
 			// X-Forwarded-For / X-Real-IP are attacker-controlled and must
-			// never bypass limits.
+			// never bypass limits. The global bucket is checked first
+			// (audit #1785) so a distributed flood trips the site-wide
+			// budget even when per-IP buckets stay under their caps.
 			$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 			$ip     = self::normalize_ip( $raw_ip );
 			// Fail closed: an empty/unparseable IP falls back to the site-wide
 			// bucket instead of skipping the throttle (proxies stripping
 			// REMOTE_ADDR must not silently disable rate limiting).
-			if ( '' === $ip ) {
-				if ( self::is_globally_rate_limited() ) {
-					return array(
-						'ok'      => false,
-						'status'  => 429,
-						'message' => __( 'Too many beacons.', 'performance-optimisation' ),
-					);
-				}
-			} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
+			if ( self::is_globally_rate_limited() ) {
+				return array(
+					'ok'      => false,
+					'status'  => 429,
+					'message' => __( 'Too many beacons.', 'performance-optimisation' ),
+				);
+			}
+			if ( '' !== $ip && self::is_rate_limited( $ip ) ) {
 				return array(
 					'ok'      => false,
 					'status'  => 429,
@@ -734,6 +735,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 
+			// Token-scope guard (audit #1785): tokens minted on every page
+			// view — including 404s — let any visitor collect valid tokens
+			// for junk paths and push genuine data out of the day's buckets.
+			// Mint only on cacheable 2xx, non-404, non-password responses.
+			try {
+				if ( function_exists( 'is_404' ) && is_404() ) {
+					return;
+				}
+				if ( function_exists( 'post_password_required' ) && post_password_required() ) {
+					return;
+				}
+				if ( function_exists( 'http_response_code' ) ) {
+					$status = http_response_code();
+					if ( is_int( $status ) && ( $status < 200 || $status >= 300 ) ) {
+						return;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$parsed_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
 			// Fallback to strict check to prevent '0' being treated as false.
 			// Normalized (trailing slash trimmed, '/' kept for root) so the
@@ -877,7 +899,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Lowercases, strips IPv6 zone IDs (%eth0), and validates via
 		 * filter_var(); returns '' when unparseable so callers fail closed
-		 * to the site-wide bucket.
+		 * to the site-wide bucket. IPv6 addresses collapse to their /64
+		 * prefix (audit #1785) so one host cannot mint a fresh hourly
+		 * bucket per address.
 		 *
 		 * @since 2.2.0
 		 * @param string $ip Raw IP string.
@@ -895,7 +919,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			if ( function_exists( 'filter_var' ) ) {
 				$valid = filter_var( $ip, FILTER_VALIDATE_IP );
-				return false === $valid ? '' : (string) $valid;
+				if ( false === $valid ) {
+					return '';
+				}
+				$ip = (string) $valid;
+				// Collapse IPv6 to its /64 prefix.
+				if ( false !== strpos( $ip, ':' ) && function_exists( 'inet_pton' ) && function_exists( 'inet_ntop' ) ) {
+					$packed = inet_pton( $ip );
+					if ( is_string( $packed ) && 16 === strlen( $packed ) ) {
+						$prefix = substr( $packed, 0, 8 );
+						$masked = $prefix . str_repeat( "\x00", 8 );
+						$short  = inet_ntop( $masked );
+						if ( is_string( $short ) && '' !== $short ) {
+							return strtolower( $short ) . '/64';
+						}
+					}
+				}
+				return $ip;
 			}
 			return $ip;
 		}
@@ -2377,10 +2417,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 					$day[ $path ] = $bucket;
 
-					// Bound paths per day.
+					// Bound paths per day (audit #1785): evict the path with
+					// the fewest samples — not the oldest — so junk paths
+					// minted by any visitor cannot push genuine high-traffic
+					// data out of the day's buckets. Ties break oldest-first
+					// (insertion order). Never evict the path just written.
 					$path_total = count( $day );
 					while ( $path_total > self::MAX_PATHS_PER_DAY ) {
-						array_shift( $day );
+						$evict_path = null;
+						$evict_n    = null;
+						foreach ( $day as $candidate_path => $candidate_bucket ) {
+							if ( $candidate_path === $path ) {
+								continue;
+							}
+							$candidate_n = self::count_path_samples( $candidate_bucket );
+							if ( null === $evict_path || $candidate_n < $evict_n ) {
+								$evict_path = $candidate_path;
+								$evict_n    = $candidate_n;
+							}
+						}
+						if ( null === $evict_path ) {
+							break;
+						}
+						unset( $day[ $evict_path ] );
 						--$path_total;
 					}
 					$all[ $date ] = $day;
@@ -2389,6 +2448,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				self::persist_aggregate( $all );
 			} finally {
 				self::release_flush_lock();
+			}
+		}
+
+		/**
+		 * Count the samples stored in one per-path aggregate bucket.
+		 *
+		 * Sums the `n` counters of the known metric slots (lcp/inp/cls/ttfb
+		 * plus segmented maps) so the per-day path-cap eviction can drop the
+		 * least-observed path. Fail-open: malformed buckets count as 0
+		 * (evicted first). Never throws.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $bucket Per-path bucket.
+		 * @return int Total sample count (>= 0).
+		 */
+		private static function count_path_samples( $bucket ): int {
+			try {
+				if ( ! is_array( $bucket ) ) {
+					return 0;
+				}
+				$total = 0;
+				foreach ( array( 'lcp', 'inp', 'cls', 'ttfb' ) as $metric ) {
+					if ( isset( $bucket[ $metric ] ) && is_array( $bucket[ $metric ] ) && isset( $bucket[ $metric ]['n'] ) ) {
+						$total += max( 0, (int) $bucket[ $metric ]['n'] );
+					}
+				}
+				foreach ( array( 'lcpSeg', 'inpSeg' ) as $seg_key ) {
+					if ( isset( $bucket[ $seg_key ] ) && is_array( $bucket[ $seg_key ] ) ) {
+						foreach ( $bucket[ $seg_key ] as $segment ) {
+							if ( is_array( $segment ) && isset( $segment['n'] ) ) {
+								$total += max( 0, (int) $segment['n'] );
+							}
+						}
+					}
+				}
+				return $total;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
 			}
 		}
 

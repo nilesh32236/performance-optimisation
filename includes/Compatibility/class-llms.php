@@ -429,6 +429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 						array(
 							'post_type'      => get_post_types( array( 'public' => true ), 'names' ),
 							'post_status'    => 'publish',
+							'has_password'   => false,
 							'posts_per_page' => $needed,
 							'fields'         => 'ids',
 							'orderby'        => 'date',

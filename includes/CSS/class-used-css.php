@@ -3880,12 +3880,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private static function fetch_and_generate_used_css( int $post_id, string $permalink, int $timeout ): string {
 			try {
 				$fetch_args = array(
-					'timeout' => $timeout,
-					'headers' => array(
+					'timeout'     => $timeout,
+					'redirection' => 0,
+					'headers'     => array(
 						'X-WPPO-Used-CSS' => '1',
 					),
 				);
-				$response   = wp_remote_get( $permalink, $fetch_args );
+				// Redirect-hop guard (audit #1785): only the first URL is
+				// same-site-checked by callers, and WP follows redirects
+				// transparently — a same-site open redirect could otherwise
+				// route this server-side fetch to internal/loopback
+				// services (SSRF). Follow hops manually (max 5), aborting
+				// unless every Location stays same-site.
+				$response      = null;
+				$current_url   = $permalink;
+				$redirect_hops = 0;
+				while ( $redirect_hops <= 5 ) {
+					$response = wp_remote_get( $current_url, $fetch_args );
+					if ( is_wp_error( $response ) ) {
+						break;
+					}
+					$code = wp_remote_retrieve_response_code( $response );
+					if ( ! in_array( $code, array( 301, 302, 303, 307, 308 ), true ) ) {
+						break;
+					}
+					$location = wp_remote_retrieve_header( $response, 'location' );
+					if ( ! is_string( $location ) || '' === trim( $location ) ) {
+						break;
+					}
+					$next = self::resolve_same_site_redirect( trim( $location ), $current_url );
+					if ( '' === $next ) {
+						return '';
+					}
+					$current_url = $next;
+					++$redirect_hops;
+					if ( $redirect_hops > 5 ) {
+						return '';
+					}
+				}
 
 				if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -3913,6 +3945,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$used_css   = new self( $options );
 				$purged_css = $used_css->generate_used_css( $html, $css_assets );
 				return is_string( $purged_css ) ? $purged_css : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Resolve a redirect Location against the current URL, same-site only.
+		 *
+		 * Supports absolute, protocol-relative, and path-relative targets.
+		 * Returns '' when the target leaves the site host or is invalid, so
+		 * the caller aborts the fetch instead of following it (SSRF guard,
+		 * audit #1785). Never throws.
+		 *
+		 * @param string $location Raw Location header value.
+		 * @param string $current  Current request URL (already same-site).
+		 * @return string Resolved same-site URL, or '' to abort.
+		 * @since NEXT
+		 */
+		private static function resolve_same_site_redirect( string $location, string $current ): string {
+			try {
+				if ( ! function_exists( 'wp_parse_url' ) || ! function_exists( 'home_url' ) ) {
+					return '';
+				}
+				if ( 0 === strpos( $location, '/' ) && 0 !== strpos( $location, '//' ) ) {
+					$scheme = wp_parse_url( $current, PHP_URL_SCHEME );
+					$host   = wp_parse_url( $current, PHP_URL_HOST );
+					$port   = wp_parse_url( $current, PHP_URL_PORT );
+					if ( ! is_string( $scheme ) || '' === $scheme || ! is_string( $host ) || '' === $host ) {
+						return '';
+					}
+					$resolved = $scheme . '://' . $host . ( null !== $port ? ':' . (int) $port : '' ) . $location;
+				} elseif ( 0 === strpos( $location, '//' ) ) {
+					$scheme   = wp_parse_url( $current, PHP_URL_SCHEME );
+					$resolved = ( is_string( $scheme ) && '' !== $scheme ? $scheme : 'https' ) . ':' . $location;
+				} elseif ( preg_match( '#^https?://#i', $location ) ) {
+					$resolved = $location;
+				} else {
+					return '';
+				}
+				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+				$next_host = wp_parse_url( $resolved, PHP_URL_HOST );
+				if ( ! is_string( $home_host ) || '' === $home_host || $next_host !== $home_host ) {
+					return '';
+				}
+				$scheme = strtolower( (string) wp_parse_url( $resolved, PHP_URL_SCHEME ) );
+				if ( 'http' !== $scheme && 'https' !== $scheme ) {
+					return '';
+				}
+				return $resolved;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';

@@ -790,6 +790,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		}
 
 		/**
+		 * Strip local paths, embedded URLs, and unsafe characters from a
+		 * telemetry scan error before returning it to an Ability client.
+		 *
+		 * Mirrors the cleanup in Rest::run_performance_scan() (audit #1785):
+		 * cURL/wp_remote errors can leak paths, hostnames, or credentials.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $message Raw error message.
+		 * @return string Sanitized message (never empty).
+		 */
+		private static function sanitize_scan_error( string $message ): string {
+			try {
+				if ( defined( 'ABSPATH' ) ) {
+					$message = str_replace( ABSPATH, '', $message );
+				}
+				if ( defined( 'WP_CONTENT_DIR' ) ) {
+					$message = str_replace( WP_CONTENT_DIR, '', $message );
+				}
+				$message = preg_replace( '#https?://[^\s\'"]+#', '[url]', $message );
+				if ( ! is_string( $message ) ) {
+					$message = '';
+				}
+				$message = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $message ) : trim( $message );
+				if ( '' === $message ) {
+					$message = __( 'Performance scan failed.', 'performance-optimisation' );
+				}
+				return $message;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return __( 'Performance scan failed.', 'performance-optimisation' );
+			}
+		}
+
+		/**
 		 * Execute callback: Run Performance Scan (operational).
 		 *
 		 * Delegates to Telemetry::scan().
@@ -806,7 +841,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			}
 			$result = Telemetry::scan( $url, 'manual', false );
 			if ( is_wp_error( $result ) ) {
-				return array( 'error' => $result->get_error_message() );
+				return array( 'error' => self::sanitize_scan_error( $result->get_error_message() ) );
 			}
 			return $result;
 		}
@@ -827,6 +862,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array(
 					'queued' => false,
 					'error'  => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
+				);
+			}
+			// Parity with Rest::queue_pagespeed_scan() (audit #1785):
+			// reject loopback/private addresses before queuing.
+			if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
+				return array(
+					'queued' => false,
+					'error'  => __( 'PageSpeed cannot scan local or non-public URLs.', 'performance-optimisation' ),
 				);
 			}
 			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
@@ -905,15 +948,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Get Image Job Status (operational).
 		 *
-		 * Delegates to Img_Converter::get_img_info().
+		 * Returns the same counts-only shape as the REST image-job-status
+		 * endpoint (audit #1785): the raw wppo_img_info array lists
+		 * absolute server paths and can be very large, so it must never
+		 * leave the server. See Rest::get_image_job_status().
 		 *
 		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
-		 * @return array Image job status.
+		 * @return array Image job status counts.
 		 */
 		public static function execute_get_image_job_status( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			return Img_Converter::get_img_info();
+			$img_info = Img_Converter::get_img_info();
+			return array(
+				'pending'   => array(
+					'webp' => count( $img_info['pending']['webp'] ?? array() ),
+					'avif' => count( $img_info['pending']['avif'] ?? array() ),
+				),
+				'completed' => array(
+					'webp' => count( $img_info['completed']['webp'] ?? array() ),
+					'avif' => count( $img_info['completed']['avif'] ?? array() ),
+				),
+				'failed'    => array(
+					'webp' => count( $img_info['failed']['webp'] ?? array() ),
+					'avif' => count( $img_info['failed']['avif'] ?? array() ),
+				),
+				'savings'   => Img_Converter::get_savings_summary( $img_info ),
+			);
 		}
 
 		/**
