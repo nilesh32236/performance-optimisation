@@ -61,3 +61,7 @@
 ## 2026-10-04 - Fix missing button link styling
 **Learning:** The `--link` modifier was absent while the base `.wppo-button` box still applied, so these inherited the base's button sizing (38/44px tall, 9/16px padded, font-weight 600). Because `.wppo-button` declares no background color, they fell back to the UA default `buttonface` rendering and read as oversized button-shaped controls rather than inline links. When a class is emitted by markup, grep the **compiled** stylesheet — a literal search for `button--link` in the SCSS finds nothing when the rule is written as a nested `&--link`.
 **Action:** Add `.wppo-button--link` to `_forms.scss` and style it to look like a standard link (transparent background, primary color, hover underline) while retaining button accessibility.
+
+## 2024-05-24 - Dynamic Tooltip Shadows
+**Learning:** The `.wppo-tooltip-content` box-shadow used a hardcoded `rgba(0, 0, 0, 0.15)` instead of a design-system variable, meaning any global shadow scaling wouldn't apply here.
+**Action:** Replaced the hardcoded RGB shadow with `var(--wppo-shadow)` token in `_tooltip.scss`.
