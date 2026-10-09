@@ -111,11 +111,40 @@ CI (see `.github/workflows/wordpress-monitor.yml` and
 `.github/schemas/wppo-findings.schema.json`), the markdown report above is
 NOT the deliverable. The final message must be exactly ONE JSON document —
 no prose before or after, no markdown fences. Its first line must begin
-with `{"schema_version"` so CI's extraction anchor finds it, and every
-finding needs the required numerics (`performance_impact`, `user_value`,
-`feasibility`, `risk_numeric`), a 64-char lowercase-hex advisory `id`, a
-`classification` enum value, and `measured_impact: null`. Unknown extra
-fields are rejected by the schema. Before stopping, self-verify with
+with `{"schema_version"` so CI's extraction anchor finds it.
+
+**Authoritative contract:** `.github/schemas/wppo-findings.schema.json`
+wins on any conflict with the summary below. The schema sets
+`additionalProperties: false` at every level — any unknown key rejects the
+whole document, so emit exactly the fields listed here and nothing else.
+
+Top-level object (no extra keys): `schema_version` (const `1`), `run`
+(`commit`, `wordpress_target`, `php_target`, `date` as `YYYY-MM-DD`),
+`lanes[]` (each: `name` string plus integer `searches_performed`,
+`sources_consulted`, `findings`, all >= 0), `findings[]`.
+
+Each finding (no extra keys) requires ALL of: `id` (64-char lowercase hex),
+`category`, `title`, `status` (`candidate`, `validated`, `issue_created`,
+`in_progress`, `implemented`, `benchmark_failed`, `merged`, `rejected`,
+`obsolete`, `superseded`), `priority` (`high`, `medium`, `low`),
+`difficulty` (`easy`, `medium`, `hard`), `risk` (`low`, `medium`, `high`),
+`risk_numeric` (integer 1-5), `confidence` (number 0-1), `score`
+(number >= 0), `performance_impact` / `user_value` / `feasibility`
+(integers 1-10), `classification` (`NEW`, `CORE_PARTIAL`, `CORE_COMPLETE`,
+`PLUGIN_UNIQUE`, `COMPETITOR_ONLY`, `EXPERIMENTAL`, `IRRELEVANT`,
+`REMOVE_OBSOLETE`, `ALREADY_IMPLEMENTED`), `tier` (`A`, `B`, `C`),
+`evidence[]` (each entry needs at least `url` starting with `http://` or
+`https://`; optional `version`, `published`), `implementation` (object with
+`files[]` and `functions[]` string arrays), `estimated_impact` (object with
+numeric `queries`, `frontend_kb`, `request_ms`), `measured_impact: null`
+on first submission, `fallback` (string), `acceptance_criteria[]`
+(non-empty strings).
+
+Emit compact single-line JSON (`jq -c`): the CI extractor anchors on the
+first `"schema_version":` line and backtracks to its opening brace, keeping
+the last complete document — compact single-line output is canonical, and
+pretty-printed, indented, CRLF, BOM-prefixed, or fenced output is tolerated,
+not preferred. Before stopping, self-verify with
 `echo '<json>' | jq -e .` and
 `echo '<json>' | jq -e 'type == "object" and (.findings | type == "array")'` —
 both must exit 0. If the JSON risks truncation, shorten prose fields

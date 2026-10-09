@@ -95,6 +95,33 @@ else
 	bad "shape gate did not fire (rc=$rc)"
 fi
 
+# 11. Pretty-printed multi-line JSON extracts via brace backtracking: the
+#     opening brace sits on its own line above '"schema_version"'.
+pretty=$( printf '{\n  "schema_version": 1,\n  "run": {"commit":"abc","wordpress_target":"6.2+","php_target":"8.2+","date":"2026-10-09"},\n  "lanes": [],\n  "findings": []\n}' )
+out=$( printf 'chatter\n%s\n' "$pretty" | bash "$EXTRACT" 2>/dev/null ); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"commit":"abc"'; then
+	ok "extracts pretty-printed multi-line JSON"
+else
+	bad "pretty-printed JSON failed (rc=$rc)"
+fi
+
+# 12. A fence sharing its line with the JSON start keeps the document: only
+#     the fence marker is stripped, not the whole line.
+out=$( printf 'progress\n```json %s\n```\n' "$DOC" | bash "$EXTRACT" 2>/dev/null ); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '"schema_version"'; then
+	ok "strips a same-line fence prefix"
+else
+	bad "same-line fence destroyed the document (rc=$rc)"
+fi
+
+# 13. A nonexistent input path fails with an extractor-context message.
+out=$( bash "$EXTRACT" /nonexistent/wppo-raw.txt 2>&1 ); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'not readable'; then
+	ok "reports an unreadable input path"
+else
+	bad "unreadable input gave rc=$rc out=$out"
+fi
+
 echo
 [ "$fails" -eq 0 ] && echo "extract-wppo-findings: all tests passed" || echo "extract-wppo-findings: $fails FAILED"
 exit "$fails"
