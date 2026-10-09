@@ -913,13 +913,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Combine' ) ) {
 					if ( ! is_int( $size_raw ) || $size_raw <= 0 ) {
 						continue;
 					}
-					$size = $size_raw;
-					if ( $size > 0 ) {
-						$size_map[ $queued_handle ] = array(
-							'size'     => $size,
-							'readable' => is_readable( $path ),
-						);
-					}
+					$size_map[ $queued_handle ] = array(
+						'size'     => $size_raw,
+						'readable' => is_readable( $path ),
+					);
 				}
 			}
 

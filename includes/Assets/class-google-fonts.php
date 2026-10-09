@@ -998,7 +998,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// Re-sanitize after the wppo_font_metric_fallback_css filter: a
 			// third-party callback could break out of the <style> block, so
 			// strip breakout tokens before concatenating into the style tag.
+			// The '<' strip is the real guard: legitimate @font-face CSS never
+			// contains '<', so no tag-open can survive regardless of token
+			// spelling (case, whitespace, or split-token callbacks); the
+			// blocklist above stays as defense-in-depth readability.
 			$fallback_css = str_ireplace( array( '</style', '<script', '<!--' ), '', $fallback_css );
+			$fallback_css = str_replace( '<', '', $fallback_css );
 			if ( '' === trim( $fallback_css ) ) {
 				return $buffer;
 			}
