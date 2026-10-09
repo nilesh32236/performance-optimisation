@@ -623,8 +623,15 @@ export const stripCdnRowIds = ( source = {} ) => {
 // Numeric clamps mirroring the server-side sanitizers so a raw server value
 // can never reach state/submit verbatim (display/UX parity — the server
 // stays authoritative).
-// Audit #1401: shared guarded-number core behind the sibling
-// normalizers (idle/ccss/regression) so PHP-parity fixes land once.
+// Audit #1401: shared guarded-number core behind the three sibling
+// normalizers below (idle/ccss/regression) so PHP-parity fixes for those
+// three land once. Scope note (audit #1628 triage): normalizeRetries above
+// and coerceLongestEdge in ImageOptimization.js intentionally sit outside
+// this core — they carry distinct clamp/fallback contracts (retries 0..5
+// fail-open to 5; ccssMaxSize deliberately has no upper clamp, matching
+// Settings_Store::sanitize_scalar_setting which does not clamp it), so a
+// single (min,max,fallback) extraction would change the values written to
+// wppo_settings and break the settings schema.
 // Returns { ok, n }: ok=false means fail open to the caller default.
 // @since 2.3.0
 const parseGuardedNumber = ( value ) => {
