@@ -4365,7 +4365,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * share the same resolver via `get_breakpoint_srcset_for_url()` so
 		 * their toggles/gates stay unchanged, while direct callers should
 		 * prefer this emitter instead of reimplementing the OD → RUM →
-		 * single-high flow.
+		 * single-high flow. Shares one per-response high-preload budget
+		 * with `emit_lcp_preload()` (issue #1703): whichever emitter runs
+		 * first wins, the second degrades to '' in the same response.
 		 *
 		 * @since 2.3.0
 		 * @param string|null $buffer Optional HTML buffer for responsive fallback scans.
@@ -4376,6 +4378,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public function emit_responsive_lcp_preload( ?string $buffer = null ): string {
 			return $this->lcp_preload()->emit_responsive_lcp_preload( $buffer );
+		}
+
+		/**
+		 * Emit the single automatic LCP hero preload (issue #1703).
+		 *
+		 * Issue-named entry point for the opt-in automatic LCP hero path:
+		 * manual picker keeps precedence, otherwise the unified OD + RUM
+		 * chain resolves the candidate and exactly one
+		 * `<link rel="preload" as="image" fetchpriority="high">` is emitted.
+		 * Toggle-off emits nothing (byte-identical output). Shares one
+		 * per-response high-preload budget with
+		 * `emit_responsive_lcp_preload()`: whichever emitter runs first
+		 * wins, the second degrades to '' in the same response.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
+		 * @return string The preload `<link>` tag, or empty string when skipped.
+		 * Facade proxy (ARCH-008): logic lives in {@see Lcp_Preload::emit_lcp_preload}.
+		 */
+		public function emit_lcp_preload( ?string $buffer = null ): string {
+			return $this->lcp_preload()->emit_lcp_preload( $buffer );
 		}
 
 		/**
