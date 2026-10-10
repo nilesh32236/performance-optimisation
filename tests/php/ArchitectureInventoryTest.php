@@ -138,11 +138,13 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 4, $graph['summary']['procedural_nodes'] );
 		// 396/395: the WP-CLI settings subcommands now reach Settings_Command
 		// instead of hand-rolling the snapshot, which adds one runtime edge.
-		// +9/+9/+9 (issue #911): Host_Detect, Apo_Detect and Host_Purger add
-		// three nodes and their runtime/compatibility edges.
+		// +9/+9/+10 (issue #911): Host_Detect, Apo_Detect and Host_Purger add
+		// three nodes and their runtime/compatibility edges. The compatibility
+		// edge count is +10 not +9 because rebasing onto current master brings in
+		// one further compatibility edge from master's own history.
 		$this->assertSame( 405, $graph['summary']['edges'] );
 		$this->assertSame( 404, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 215, $graph['summary']['compatibility_edges'] );
+		$this->assertSame( 216, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );
