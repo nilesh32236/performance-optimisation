@@ -781,7 +781,12 @@ if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'ge
 		$has_more_sites = ( count( $sites ) === $limit );
 		foreach ( $sites as $site ) {
 			if ( function_exists( 'switch_to_blog' ) ) {
-				switch_to_blog( $site->blog_id );
+				// WP_Site::$blog_id is a numeric-string per core's own docblock
+				// (`@var string` + `@phpstan-var numeric-string`), while
+				// switch_to_blog() is `@param int`. PHP coerces the numeric-string
+				// today so this is latent rather than broken, but casting makes
+				// the call match its documented contract.
+				switch_to_blog( (int) $site->blog_id );
 			}
 			// Per-site data only — network files were already cleaned once
 			// by the initial wppo_cleanup_site() call above (once-guarded).
