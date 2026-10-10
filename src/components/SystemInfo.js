@@ -393,6 +393,72 @@ const SystemInfo = () => {
 							),
 						} }
 					/>
+					{ info.host && (
+						<InfoTable
+							title={ __(
+								'Hosting',
+								'performance-optimisation'
+							) }
+							data={ {
+								slug: info.host?.slug,
+								banned_conflict: boolLabel(
+									info.host?.banned_conflict,
+									__( 'Yes', 'performance-optimisation' ),
+									__( 'No', 'performance-optimisation' )
+								),
+								apo_active: boolLabel(
+									info.host?.apo_active,
+									__( 'Yes', 'performance-optimisation' ),
+									__( 'No', 'performance-optimisation' )
+								),
+								page_cache:
+									info.host?.who_caches_what?.page_cache,
+								purge_route:
+									info.host?.who_caches_what?.purge_route,
+								...( info.host?.degrade_reason
+									? {
+											degrade_reason:
+												info.host.degrade_reason,
+									  }
+									: {} ),
+								...( info.host?.apo_reason
+									? {
+											apo_reason: info.host.apo_reason,
+									  }
+									: {} ),
+							} }
+							labels={ {
+								slug: __(
+									'Managed Host',
+									'performance-optimisation'
+								),
+								banned_conflict: __(
+									'Host Cache Conflict',
+									'performance-optimisation'
+								),
+								apo_active: __(
+									'Cloudflare APO',
+									'performance-optimisation'
+								),
+								page_cache: __(
+									'Page Cache Owner',
+									'performance-optimisation'
+								),
+								purge_route: __(
+									'Purge Route',
+									'performance-optimisation'
+								),
+								degrade_reason: __(
+									'Host Degrade Reason',
+									'performance-optimisation'
+								),
+								apo_reason: __(
+									'APO Degrade Reason',
+									'performance-optimisation'
+								),
+							} }
+						/>
+					) }
 					<InfoTable
 						title={ __( 'OPcache', 'performance-optimisation' ) }
 						data={ info.opcache }

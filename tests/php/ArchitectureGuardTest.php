@@ -33,7 +33,7 @@ final class ArchitectureGuardTest extends TestCase {
 		$this->assertSame( 'pass', $result['status'], (string) json_encode( $result['violations'] ) );
 		$this->assertSame( 20, $result['summary']['boundary_edges']['checked'] );
 		$this->assertSame( 11, $result['summary']['schedule_owners']['checked'] );
-		$this->assertSame( 33, $result['summary']['static_state_owners']['checked'] );
+		$this->assertSame( 35, $result['summary']['static_state_owners']['checked'] );
 		$this->assertSame( 0, $result['summary']['boundary_edges']['violations'] );
 		$this->assertSame( 0, $result['summary']['schedule_owners']['violations'] );
 		$this->assertSame( 0, $result['summary']['static_state_owners']['violations'] );

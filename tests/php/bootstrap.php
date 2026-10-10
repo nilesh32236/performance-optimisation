@@ -325,6 +325,16 @@ trait WPPO_Test_Bootstrap {
 			// $wp_version/get_bloginfo fixtures never leak across tests.
 			\PerformanceOptimise\Inc\Wp_Version::reset_memo();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Host_Detect', 'reset_cache' ) ) {
+			// Host detection memoizes per process: reset so server-marker
+			// and filter fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Host_Detect::reset_cache();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Apo_Detect', 'reset_cache' ) ) {
+			// APO verdict memoizes per process: reset so filter/option
+			// fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Apo_Detect::reset_cache();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

@@ -432,6 +432,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 *              filesystem failure.
 		 * @since 1.0.0
 		 */
+		/**
+		 * Human-readable degrade reason when create() must refuse, or ''.
+		 *
+		 * Refuses on managed-host page-cache bans (Kinsta/WP Engine) and on
+		 * Cloudflare APO double-cache. Notify-only: the drop-in is left
+		 * untouched and purges fan out to the host / Cloudflare instead.
+		 *
+		 * @since NEXT
+		 * @return string Reason string, or '' when creation may proceed.
+		 */
+		public static function get_dropin_degrade_reason(): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Host_Detect', 'get_degrade_reason' ) ) {
+					$reason = Host_Detect::get_degrade_reason();
+					if ( '' !== $reason ) {
+						return $reason;
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Apo_Detect', 'get_degrade_reason' ) ) {
+					$reason = Apo_Detect::get_degrade_reason();
+					if ( '' !== $reason ) {
+						return $reason;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * Creates the advanced-cache.php file.
+		 *
+		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
+		 * The generated drop-in honours the per-page `.wppo-no-cache` marker that the
+		 * Cache class writes for DONOTCACHEPAGE pages. This is a best-effort serve-time
+		 * check: a page that is already cached when a plugin first sets the constant is
+		 * served from the stale file before WordPress boots (so the marker is never
+		 * written) until a cache clear, post invalidation, or the one-time version
+		 * upgrade purge removes it.
+		 *
+		 * On banned-conflict managed hosts and under Cloudflare APO (issue
+		 * #911) creation is refused via {@see get_dropin_degrade_reason()}:
+		 * notify-only, the drop-in is left untouched and purges fan out to
+		 * the host / Cloudflare instead.
+		 *
+		 * @return bool True when the drop-in is left in a correct state (regenerated,
+		 *              already ours, or a foreign drop-in left untouched), false on
+		 *              filesystem failure or host/APO degrade refusal.
+		 * @since 1.0.0
+		 */
 		public static function create(): bool {
 
 			global $wp_filesystem;
@@ -439,6 +490,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			if ( self::foreign_dropin_present() ) {
 				// Another plugin owns the drop-in; leave it alone. Not a failure.
 				return true;
+			}
+
+			// Host-aware degrade (issue #911): on banned-conflict hosts and
+			// under Cloudflare APO, refuse to install the static drop-in.
+			// Notify-only — never overwrite, never fatal.
+			$degrade_reason = self::get_dropin_degrade_reason();
+			if ( '' !== $degrade_reason ) {
+				try {
+					if ( function_exists( 'do_action' ) ) {
+						do_action( 'wppo_debug_log', 'Skipped writing advanced-cache.php: ' . $degrade_reason );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
 			}
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {

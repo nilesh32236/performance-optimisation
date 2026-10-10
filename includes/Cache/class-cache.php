@@ -3392,6 +3392,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Host-aware degrade (issue #911): on banned-conflict managed
+			// hosts (Kinsta/WP Engine) and under Cloudflare APO, the host or
+			// APO owns HTML caching — skip the WPPO static write
+			// (notify-only; purges fan out to the host / Cloudflare).
+			// Fail-open toward uncached, never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Host_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Host_Detect', 'is_banned_conflict' ) && Host_Detect::is_banned_conflict() ) {
+					return true;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Apo_Detect' ) && method_exists( 'PerformanceOptimise\Inc\Apo_Detect', 'is_apo_active' ) && Apo_Detect::is_apo_active() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// WooCommerce safe mode: cart/checkout/account, wc-ajax, add-to-cart, session/cart cookies.
 			// Filter wppo_woo_cacheable (guarded by has_filter) can re-allow a URL.
 			// Explicit Store API guard (greppable intent, survives a future
