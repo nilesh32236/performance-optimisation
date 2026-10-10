@@ -746,10 +746,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! file_exists( $path ) ) {
 					continue;
 				}
+				$deleted = false;
 				if ( $wp_filesystem ) {
-					$wp_filesystem->delete( $path );
-				} else {
-					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
+					$deleted = (bool) $wp_filesystem->delete( $path );
+				}
+				if ( ! $deleted ) {
+					if ( function_exists( 'clearstatcache' ) ) {
+						clearstatcache( true, $path );
+					}
+					if ( ! file_exists( $path ) ) {
+						// ENOENT race: gone between the first check and the
+						// delete attempt, nothing left to do.
+						continue;
+					}
+					if ( ! function_exists( 'unlink' ) ) {
+						continue;
+					}
+					// No-silence fallback: a surviving state file forces the
+					// circuit breaker open again on the next read, so the
+					// file must go even when WP_Filesystem is unavailable.
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Circuit-state invalidation fallback when WP_Filesystem is unavailable.
+					$deleted = unlink( $path );
+					if ( ! $deleted ) {
+						if ( function_exists( 'clearstatcache' ) ) {
+							clearstatcache( true, $path );
+						}
+						// Tolerate the ENOENT race; a surviving file
+						// re-opens the circuit on the next read, but a
+						// permission failure has nothing further to try here.
+						continue;
+					}
 				}
 			}
 		}

@@ -1031,7 +1031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Script_Strategy' ) ) {
 		 * wp_script_add_data(), so this legacy fallback is only registered on older
 		 * core (WP 6.2) where the native strategy is silently ignored. Retained
 		 * while the plugin floor is 6.2 (issue #1203: removal deferred until the
-		 * minimum supported WP is raised to 6.3; see TODO(#553) in setup_hooks()).
+		 * minimum supported WP is raised to 6.3; see Note(#553) in setup_hooks()).
 		 * Fill-gaps-only: a tag already carrying `defer`, `async` (core, theme,
 		 * or LiteSpeed delay), or `type="module"` is returned untouched so no
 		 * `async defer` double-attribute markup is emitted (issue #1218). The

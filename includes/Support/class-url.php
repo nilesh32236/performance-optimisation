@@ -195,8 +195,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Url' ) ) {
 			};
 
 			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
-			$cache_key = $blog_id . ':' . md5( serialize( $exclude_urls ) ); // We use serialize since it's faster and guaranteed safe for arrays of strings internally generated.
+			// JSON encoding is deterministic for string lists and avoids the
+			// version-sensitive serialize() payload for a cache key.
+			$encoded   = function_exists( 'wp_json_encode' ) ? wp_json_encode( $exclude_urls ) : false;
+			$cache_key = $blog_id . ':' . md5( is_string( $encoded ) ? $encoded : serialize( $exclude_urls ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- legacy fallback when wp_json_encode is unavailable.
 
 			if ( ! isset( self::$exclusion_rule_cache[ $cache_key ] ) ) {
 				$home_base = self::cached_home_url();

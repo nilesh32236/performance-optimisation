@@ -281,8 +281,26 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$redis = new \Redis();
 		$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
 
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		if ( @$redis->$func( $host, $port, $timeout ) ) {
+		// Connection failures return WP_Error below. A temporary error
+		// handler (instead of the @ operator) keeps extension warnings out
+		// of production output; the WP_DEBUG-gated catch in wppo_redis_connect()
+		// stays the single diagnosable logging path with a static message.
+		$handler_set = function_exists( 'set_error_handler' );
+		if ( $handler_set ) {
+			set_error_handler( // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Temporary scoped suppression of phpredis connect warnings (restored in finally); replaces the @ operator.
+				static function () {
+					return true;
+				}
+			);
+		}
+		try {
+			$connected = $redis->$func( $host, $port, $timeout );
+		} finally {
+			if ( $handler_set && function_exists( 'restore_error_handler' ) ) {
+				restore_error_handler();
+			}
+		}
+		if ( $connected ) {
 			if ( ! empty( $password ) && false === $redis->auth( $password ) ) { // Audit #1434: Yoda.
 				$redis->close();
 				return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
