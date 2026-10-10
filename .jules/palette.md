@@ -65,3 +65,6 @@
 ## 2026-10-09 - Dynamic Tooltip Shadows
 **Learning:** The `.wppo-tooltip-content` box-shadow used a hardcoded `rgba(0, 0, 0, 0.15)` instead of a design-system variable, meaning any global shadow scaling wouldn't apply here.
 **Action:** Replaced the hardcoded RGB shadow with `var(--wppo-shadow)` token in `_tooltip.scss`.
+## 2025-02-15 - Remove hardcoded fallback hex from native variable usages
+**Learning:** When using mapped native variables like `--wppo-primary` (which falls back to `--wp-admin-theme-color`), supplying a local hardcoded fallback (e.g. `var(--wppo-primary, #007cb6)`) bypasses the theme adaptation if the mapped variable system isn't fully established locally or encounters issues. Hardcoded backups within `var()` defeat dynamic theming.
+**Action:** Strictly omit local hex fallbacks from `var()` usages when mapping to a defined root token that already handles theme fallback.
