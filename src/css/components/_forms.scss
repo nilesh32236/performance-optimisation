@@ -260,7 +260,7 @@
 .wppo-file-input-wrapper {
 	&:focus-within {
 		> .wppo-button {
-			outline: solid 2px var(--wppo-primary, #007cb6);
+			outline: solid 2px var(--wppo-primary);
 			outline-offset: 2px;
 		}
 	}

@@ -235,7 +235,7 @@
 
 		// The one focus treatment for the whole plugin.
 		&:focus-visible {
-			outline: solid 2px var(--wppo-primary, #2271b1);
+			outline: solid 2px var(--wppo-primary);
 			outline-offset: 2px;
 		}
 	}
