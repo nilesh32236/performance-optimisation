@@ -529,4 +529,49 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 			}
 		}
 	}
+
+	/**
+	 * The Redis-unavailable fail-open path in set_multiple().
+	 *
+	 * @covers \WP_Object_Cache::set_multiple()
+	 * @covers \WP_Object_Cache::fail_open_null_client()
+	 *
+	 * @return void
+	 */
+	public function test_set_multiple_degrades_gracefully_when_redis_is_null(): void {
+		$cache = new \WP_Object_Cache();
+
+		// Drive the INCONSISTENT state the null guard specifically defends: the
+		// drop-in believes it is connected, but the client is null. Both
+		// properties must be forced, because the earlier
+		// `! $this->redis_connected` fail-open path returns the exact same shape
+		// for a merely-disconnected cache — a test that leaves redis_connected
+		// false passes against the wrong branch.
+		$redis = new \ReflectionProperty( $cache, 'redis' );
+		$redis->setAccessible( true );
+		$redis->setValue( $cache, null );
+
+		$connected = new \ReflectionProperty( $cache, 'redis_connected' );
+		$connected->setAccessible( true );
+		$connected->setValue( $cache, true );
+
+		$results = $cache->set_multiple(
+			array(
+				'k1' => 'v1',
+				'k2' => 'v2',
+			),
+			'default',
+			0
+		);
+
+		// Fail-open: every key is reported as accepted rather than throwing or
+		// reporting a partial success.
+		$this->assertSame(
+			array(
+				'k1' => true,
+				'k2' => true,
+			),
+			$results
+		);
+	}
 }
