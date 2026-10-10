@@ -528,7 +528,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 2305,
+        "lines": 2314,
         "methods": 27,
         "public_methods": 17,
         "large_methods": 7,
@@ -4357,14 +4357,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Scheduler",
-        "lines": 1862,
+        "lines": 1878,
         "methods": 37,
         "public_methods": 25,
         "large_methods": 2,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "schedule_page_cron_jobs",
-            "line": 807,
+            "line": 815,
             "lines": 159
         },
         "method_prefixes": {

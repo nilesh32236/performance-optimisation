@@ -576,7 +576,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_clear_scheduled_hook( 'wppo_generate_static_url' );
 			}
 
-			Scheduler::schedule_recurring_event( 'wppo_img_conversion', time(), 'hourly' );
+			// Gate the schedule on the setting, exactly like the preload block
+			// above: a site with image optimisation off must not carry an
+			// hourly conversion event it will never act on, and disabling the
+			// feature clears a stale event left behind by a settings change.
+			if ( ! empty( $options['image_optimisation']['convertImg'] ) ) {
+				Scheduler::schedule_recurring_event( 'wppo_img_conversion', time(), 'hourly' );
+			} else {
+				wp_clear_scheduled_hook( 'wppo_img_conversion' );
+			}
 
 			Scheduler::schedule_recurring_event( 'wppo_database_cleanup_cron', time(), 'daily' );
 
@@ -1737,13 +1745,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function img_convert_cron() {
+			// Belt-and-braces alongside the schedule guard above: a stale
+			// event left over from before the feature was disabled must stop
+			// doing work instead of converting until the next schedule pass
+			// clears it. Checked before taking the lock so a disabled feature
+			// never contends for it.
+			$options = Util::get_settings();
+			if ( empty( $options['image_optimisation']['convertImg'] ) ) {
+				return;
+			}
 			if ( get_transient( Util::transient_key( 'wppo_img_convert_lock' ) ) ) {
 				return;
 			}
 			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 5 * MINUTE_IN_SECONDS );
 
 			try {
-				$options       = Util::get_settings();
 				$img_converter = new Img_Converter( $options );
 
 				$img_info = Img_Converter::get_img_info();
