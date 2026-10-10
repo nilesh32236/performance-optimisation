@@ -74,6 +74,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * killed Redis never turns into a pre-boot fatal.
 		 */
 		public function __construct() {
+			// @psalm-suppress InvalidGlobal The drop-in boots pre-WordPress; importing $table_prefix is the core pattern.
 			global $table_prefix;
 
 			// Resolve $table_prefix once so the multisite / single-site /
@@ -154,8 +155,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * $this->redis_replica (when available) and sets $this->redis_connected to
 		 * true; on failure leaves or sets $this->redis_connected to false and clears
 		 * any replica.
+		 *
+		 * @return void
 		 */
-		private function connect_redis() {
+		private function connect_redis(): void {
 			static $connect_attempts = 0;
 			++$connect_attempts;
 
@@ -204,7 +207,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return;
 			}
 
-			$use_tls      = $config['use_tls'] ?? false;
+			$use_tls      = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 			$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
 			$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
 			$password     = defined( 'WPPO_REDIS_PASSWORD' ) ? WPPO_REDIS_PASSWORD : ( false !== $env_password ? $env_password : ( $config['password'] ?? '' ) );
@@ -283,7 +286,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 					$r_host = $replica['host'] ?? '127.0.0.1';
 					$r_port = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-					$r_pass = $replica['password'] ?? $password;
+					$r_pass = isset( $replica['password'] ) ? (string) $replica['password'] : (string) $password;
 					try {
 						$tmp_replica = new \Redis();
 						if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {
@@ -291,7 +294,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 						}
 						if ( $tmp_replica->connect( $r_host, $r_port, $timeout ) ) {
 							$replica_auth_ok = true;
-							if ( ! empty( $r_pass ) ) {
+							if ( '' !== $r_pass ) {
 								$replica_auth_ok = $tmp_replica->auth( $r_pass );
 							}
 
@@ -306,10 +309,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					}
 				}
 
-				if ( $this->redis_connected && $this->redis ) {
+				if ( null !== $this->redis ) {
 					if ( function_exists( 'wppo_apply_redis_options' ) ) {
 						wppo_apply_redis_options( $this->redis, $config );
-						if ( $this->redis_replica ) {
+						if ( null !== $this->redis_replica ) {
 							wppo_apply_redis_options( $this->redis_replica, $config );
 						}
 					}
@@ -349,6 +352,25 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+		}
+
+		/**
+		 * Fail open when the client handle is null despite the connected flag.
+		 *
+		 * A null handle with the flag set means a mid-request teardown left
+		 * inconsistent state (normally unreachable: every teardown clears
+		 * the flag). Reconcile the flag and emit the throttled outage log
+		 * for observability parity with the exception path. Deliberately
+		 * does NOT call record_redis_failure(): a torn-down handle is not a
+		 * Redis outage and must not count toward the circuit breaker.
+		 *
+		 * @since NEXT
+		 * @param string $operation Operation label for the log line.
+		 * @return void
+		 */
+		private function fail_open_null_client( string $operation ): void {
+			$this->redis_connected = false;
+			$this->log_redis_failure_once( 'WPPO Redis object cache: ' . $operation . ' with torn-down client — serving from memory.' );
 		}
 
 		/**
@@ -651,8 +673,8 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags
 			$clean_reason = function_exists( 'wp_strip_all_tags' ) ? wp_strip_all_tags( $reason ) : strip_tags( $reason );
 			$payload      = array(
-				'reason'     => substr( (string) $clean_reason, 0, 200 ),
-				'error_code' => substr( (string) $error_code, 0, 64 ),
+				'reason'     => substr( $clean_reason, 0, 200 ),
+				'error_code' => substr( $error_code, 0, 64 ),
 				'tripped_at' => time(),
 				'failures'   => isset( $state['count'] ) ? (int) $state['count'] : 0,
 			);
@@ -660,6 +682,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// wp_json_encode() may not exist yet at drop-in boot; json_encode() is the early-boot fallback.
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
 			$encoded = function_exists( 'wp_json_encode' ) ? wp_json_encode( $payload ) : json_encode( $payload );
+			// Keep the '' check alongside is_string for exact prior semantics:
+			// an empty-string encode would otherwise be written as an empty
+			// state file, which a later decode treats as missing/corrupt state.
 			if ( is_string( $encoded ) && '' !== $encoded ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents,WordPress.PHP.NoSilencedErrors.Discouraged
 				@file_put_contents( $state_file, $encoded, LOCK_EX );
@@ -675,23 +700,27 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$renamed = @rename( $dropin, $parked );
 				if ( $renamed ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . (int) $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in auto-disabled to ' . basename( $parked ) . '. Re-enable from Performance → Object Cache once Redis recovers.' );
+					error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in auto-disabled to ' . basename( $parked ) . '. Re-enable from Performance → Object Cache once Redis recovers.' );
 					return;
 				}
 			}
 
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . (int) $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in left in place (rename skipped or failed). Serving from memory.' );
+			error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in left in place (rename skipped or failed). Serving from memory.' );
 		}
 
 		/**
 		 * Retrieves the actual key prefixed correctly.
 		 *
-		 * @param string $key   Cache key.
-		 * @param string $group Cache group.
+		 * Accepts int keys (core passes numeric IDs straight through) and
+		 * normalizes to string once, here, so no call site needs its own cast.
+		 *
+		 * @param int|string $key   Cache key.
+		 * @param string     $group Cache group.
 		 * @return string Prefix cache key.
 		 */
 		private function get_key( $key, $group = '' ) {
+			$key   = (string) $key;
 			$group = empty( $group ) ? 'default' : $group;
 
 			if ( in_array( $group, $this->global_groups, true ) ) {
@@ -728,9 +757,22 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$local_key = $this->get_key( $key, $group );
 
+			// The redis_connected flag alone cannot prove non-null to static
+			// analysis; capture a local so every call below is provably safe
+			// and a torn-down client still fails open to memory.
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'add' );
+				if ( isset( $this->cache[ $local_key ] ) ) {
+					return false;
+				}
+				$this->cache[ $local_key ] = $data;
+				return true;
+			}
+
 			try {
 				if ( $expire ) {
-					return $this->redis->set(
+					return $redis->set(
 						$local_key,
 						$data,
 						array(
@@ -739,7 +781,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 						)
 					);
 				}
-				return $this->redis->setnx( $local_key, $data );
+				return $redis->setnx( $local_key, $data );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
 				if ( isset( $this->cache[ $local_key ] ) ) {
@@ -767,12 +809,19 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$formatted_key = $this->get_key( $key, $group );
 
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'set' );
+				$this->cache[ $formatted_key ] = $data;
+				return true;
+			}
+
 			try {
 				if ( $expire > 0 ) {
-					return $this->redis->setex( $formatted_key, $expire, $data );
+					return $redis->setex( $formatted_key, $expire, $data );
 				}
 
-				return $this->redis->set( $formatted_key, $data );
+				return $redis->set( $formatted_key, $data );
 			} catch ( \Throwable $e ) {
 				// First failed write after a healthy connection: degrade to the
 				// in-memory store and log once so outages are diagnosable
@@ -815,9 +864,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $this->cache[ $local_key ];
 			}
 
+			// Prefer the replica for reads; either handle may be null after a
+			// mid-request teardown, in which case serve from memory.
+			$redis_instance = null !== $this->redis_replica ? $this->redis_replica : $this->redis;
+			if ( null === $redis_instance ) {
+				$this->fail_open_null_client( 'get' );
+				if ( isset( $this->cache[ $local_key ] ) ) {
+					$found = true;
+					return $this->cache[ $local_key ];
+				}
+				$found = false;
+				return false;
+			}
+
 			try {
-				$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
-				$value          = $redis_instance->get( $local_key );
+				$value = $redis_instance->get( $local_key );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'read_fail', $e->getMessage() );
 				if ( isset( $this->cache[ $local_key ] ) ) {
@@ -881,9 +942,19 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $values;
 			}
 
+			$redis_instance = null !== $this->redis_replica ? $this->redis_replica : $this->redis;
+			if ( null === $redis_instance ) {
+				$this->fail_open_null_client( 'get_multiple' );
+				foreach ( $keys_to_fetch as $key ) {
+					if ( ! isset( $values[ $key ] ) ) {
+						$values[ $key ] = false;
+					}
+				}
+				return $values;
+			}
+
 			try {
-				$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
-				$redis_values   = $redis_instance->mGet( $formatted_keys );
+				$redis_values = $redis_instance->mGet( $formatted_keys );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'read_fail', $e->getMessage() );
 				foreach ( $keys_to_fetch as $key ) {
@@ -913,7 +984,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @param array  $data   Array of keys and values.
 		 * @param string $group  Cache group.
 		 * @param int    $expire Expiration.
-		 * @return bool True on success.
+		 * @return array Array of per-key results, keyed by input key.
 		 */
 		public function set_multiple( $data, $group = 'default', $expire = 0 ) {
 			if ( empty( $data ) ) {
@@ -935,10 +1006,19 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $results;
 			}
 
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'set_multiple' );
+				foreach ( $data as $key => $value ) {
+					$results[ $key ] = true;
+				}
+				return $results;
+			}
+
 			try {
 				if ( $expire > 0 ) {
 					// We must use a pipeline for mSet with expiration.
-					$pipeline = $this->redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
+					$pipeline = $redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
 					foreach ( $formatted_data as $k => $v ) {
 						$pipeline->setex( $k, $expire, $v );
 					}
@@ -956,7 +1036,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					return $results;
 				}
 
-				$ok = $this->redis->mSet( $formatted_data );
+				$ok = $redis->mSet( $formatted_data );
 				foreach ( $data as $key => $value ) {
 					$results[ $key ] = $ok;
 				}
@@ -985,8 +1065,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return true;
 			}
 
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'delete' );
+				return true;
+			}
+
 			try {
-				$this->redis->del( $local_key );
+				$redis->del( $local_key );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'delete_fail', $e->getMessage() );
 			}
@@ -998,7 +1084,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 *
 		 * @param array  $keys  Array of keys.
 		 * @param string $group Cache group.
-		 * @return bool True on success.
+		 * @return array Array of per-key results, keyed by input key.
 		 */
 		public function delete_multiple( $keys, $group = 'default' ) {
 			if ( empty( $keys ) ) {
@@ -1023,8 +1109,17 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// Redis DEL returns count of deleted keys, not per-key success.
 			// To match the contract strictly, we could use a pipeline, but standard DEL is more efficient.
 			// We'll use a pipeline to get individual results if strict contract is required.
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'delete_multiple' );
+				foreach ( $keys as $key ) {
+					$results[ $key ] = true;
+				}
+				return $results;
+			}
+
 			try {
-				$pipeline = $this->redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
+				$pipeline = $redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
 				foreach ( $formatted_keys as $k ) {
 					$pipeline->del( $k );
 				}
@@ -1060,8 +1155,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$formatted_key = $this->get_key( $key, $group );
 
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'replace' );
+				return false;
+			}
+
 			try {
-				if ( ! $this->redis->exists( $formatted_key ) ) {
+				if ( ! $redis->exists( $formatted_key ) ) {
 					return false;
 				}
 			} catch ( \Throwable $e ) {
@@ -1096,9 +1197,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			if ( ! $this->redis_connected ) {
 				return true;
 			}
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'flush' );
+				return true;
+			}
 			try {
 				if ( function_exists( 'apply_filters' ) && apply_filters( 'object_cache_allow_flush_all', false ) ) {
-					$ok = $this->redis->flushDb();
+					$ok = $redis->flushDb();
 					if ( ! $ok ) {
 						return false;
 					}
@@ -1134,17 +1240,22 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return void
 		 */
 		private function scan_delete_pattern( string $pattern ): void {
-			if ( $this->redis instanceof \RedisCluster ) {
-				$masters = $this->redis->_masters();
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'scan_delete' );
+				return;
+			}
+			if ( $redis instanceof \RedisCluster ) {
+				$masters = $redis->_masters();
 				foreach ( $masters as $node ) {
 					$cursor = null;
 					do {
-						$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+						$keys = $redis->scan( $cursor, $node, $pattern, 100 );
 						if ( false === $keys ) {
 							break;
 						}
 						if ( is_array( $keys ) && ! empty( $keys ) ) {
-							$this->redis->del( $keys );
+							$redis->del( $keys );
 						}
 					} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
 				}
@@ -1153,12 +1264,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$cursor = null;
 			do {
-				$keys = $this->redis->scan( $cursor, $pattern, 100 );
+				$keys = $redis->scan( $cursor, $pattern, 100 );
 				if ( false === $keys ) {
 					break;
 				}
 				if ( is_array( $keys ) && ! empty( $keys ) ) {
-					$this->redis->del( $keys );
+					$redis->del( $keys );
 				}
 			} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
 		}
@@ -1177,12 +1288,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return bool True when no keys remain under the pattern.
 		 */
 		private function verify_prefix_flushed( string $pattern ): bool {
-			if ( ! $this->redis_connected || ! $this->redis ) {
+			if ( ! $this->redis_connected || null === $this->redis ) {
 				return true;
 			}
 			try {
 				if ( $this->redis instanceof \RedisCluster ) {
-					foreach ( (array) $this->redis->_masters() as $node ) {
+					foreach ( $this->redis->_masters() as $node ) {
 						if ( ! $this->scan_pattern_is_empty( $pattern, $node ) ) {
 							return false;
 						}
@@ -1206,14 +1317,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return bool True when no keys match, or the scan itself failed (fail-open).
 		 */
 		private function scan_pattern_is_empty( string $pattern, $node = null ): bool {
+			// Fail-open: a torn-down client reports clean because the caller
+			// already cleared the in-memory store.
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'scan_verify' );
+				return true;
+			}
 			$pages      = 0;
 			$cursor     = null;
 			$is_cluster = null !== $node;
 			do {
 				if ( $is_cluster ) {
-					$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+					$keys = $redis->scan( $cursor, $node, $pattern, 100 );
 				} else {
-					$keys = $this->redis->scan( $cursor, $pattern, 100 );
+					$keys = $redis->scan( $cursor, $pattern, 100 );
 				}
 				if ( false === $keys ) {
 					return true;
@@ -1273,8 +1391,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return int|bool The new value or false.
 		 */
 		public function incr( $key, $offset = 1, $group = 'default' ) {
+			$local_key = $this->get_key( $key, $group );
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] += $offset;
+				return $this->cache[ $local_key ];
+			}
+
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'incr' );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
@@ -1283,10 +1411,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			try {
-				return $this->redis->incrBy( $this->get_key( $key, $group ), $offset );
+				return $redis->incrBy( $local_key, $offset );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
-				$local_key = $this->get_key( $key, $group );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
@@ -1304,8 +1431,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return int|bool The new value or false.
 		 */
 		public function decr( $key, $offset = 1, $group = 'default' ) {
+			$local_key = $this->get_key( $key, $group );
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] -= $offset;
+				return $this->cache[ $local_key ];
+			}
+
+			$redis = $this->redis;
+			if ( null === $redis ) {
+				$this->fail_open_null_client( 'decr' );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
@@ -1314,10 +1451,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			try {
-				return $this->redis->decrBy( $this->get_key( $key, $group ), $offset );
+				return $redis->decrBy( $local_key, $offset );
 			} catch ( \Throwable $e ) {
 				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
-				$local_key = $this->get_key( $key, $group );
 				if ( ! isset( $this->cache[ $local_key ] ) ) {
 					$this->cache[ $local_key ] = 0;
 				}
@@ -1329,7 +1465,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		/**
 		 * Sets the list of global groups.
 		 *
-		 * @param array $groups Global groups.
+		 * Mirrors core: accepts a single group name or a list.
+		 *
+		 * @param string|string[] $groups Global group name or list of names.
 		 * @return void
 		 */
 		public function add_global_groups( $groups ) {
@@ -1340,7 +1478,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		/**
 		 * Sets the list of groups that should not be cached in Redis.
 		 *
-		 * @param array $groups Non-persistent groups.
+		 * Mirrors core: accepts a single group name or a list.
+		 *
+		 * @param string|string[] $groups Non-persistent group name or list of names.
 		 * @return void
 		 */
 		public function add_non_persistent_groups( $groups ) {
@@ -1390,7 +1530,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
  * @param int|string $key    Cache key.
  * @param mixed      $data   Cache data.
  * @param string     $group  Cache group.
- * @param int        $expire Expiration.
+ * @param int|string $expire Expiration in seconds (core passes int; string values are coerced).
  * @return bool True on success.
  */
 function wp_cache_add( $key, $data, $group = '', $expire = 0 ) {
@@ -1404,7 +1544,7 @@ function wp_cache_add( $key, $data, $group = '', $expire = 0 ) {
  * @param int|string $key    Cache key.
  * @param mixed      $data   Cache data.
  * @param string     $group  Cache group.
- * @param int        $expire Expiration.
+ * @param int|string $expire Expiration in seconds (core passes int; string values are coerced).
  * @return bool True on success.
  */
 function wp_cache_set( $key, $data, $group = '', $expire = 0 ) {
@@ -1440,8 +1580,10 @@ function wp_cache_delete( $key, $group = '' ) {
 
 /**
  * Flushes the object cache.
+ *
+ * @return bool True when the flush verified clean, false otherwise.
  */
-function wp_cache_flush() {
+function wp_cache_flush(): bool {
 	global $wp_object_cache;
 	return $wp_object_cache->flush();
 }
@@ -1459,8 +1601,10 @@ function wp_cache_flush_group( $group ) {
 
 /**
  * Initializes the object cache.
+ *
+ * @return void
  */
-function wp_cache_init() {
+function wp_cache_init(): void {
 	global $wp_object_cache;
 	// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
 	$wp_object_cache = new WP_Object_Cache();
@@ -1472,7 +1616,7 @@ function wp_cache_init() {
  * @param int|string $key    Cache key.
  * @param mixed      $data   Cache data.
  * @param string     $group  Cache group.
- * @param int        $expire Expiration.
+ * @param int|string $expire Expiration in seconds (core passes int; string values are coerced).
  * @return bool True on success.
  */
 function wp_cache_replace( $key, $data, $group = '', $expire = 0 ) {
@@ -1483,9 +1627,10 @@ function wp_cache_replace( $key, $data, $group = '', $expire = 0 ) {
 /**
  * Adds global groups.
  *
- * @param array $groups Global groups.
+ * @param string|string[] $groups Global group name or list of names.
+ * @return void
  */
-function wp_cache_add_global_groups( $groups ) {
+function wp_cache_add_global_groups( $groups ): void {
 	global $wp_object_cache;
 	$wp_object_cache->add_global_groups( $groups );
 }
@@ -1493,9 +1638,10 @@ function wp_cache_add_global_groups( $groups ) {
 /**
  * Adds non-persistent groups.
  *
- * @param array $groups Non-persistent groups.
+ * @param string|string[] $groups Non-persistent group name or list of names.
+ * @return void
  */
-function wp_cache_add_non_persistent_groups( $groups ) {
+function wp_cache_add_non_persistent_groups( $groups ): void {
 	global $wp_object_cache;
 	$wp_object_cache->add_non_persistent_groups( $groups );
 }
@@ -1538,14 +1684,14 @@ function wp_cache_decr( $key, $offset = 1, $group = '' ) {
 function wp_cache_close() {
 	global $wp_object_cache;
 	if ( isset( $wp_object_cache ) && $wp_object_cache instanceof WP_Object_Cache ) {
-		if ( $wp_object_cache->redis_connected && $wp_object_cache->redis ) {
+		if ( $wp_object_cache->redis_connected && null !== $wp_object_cache->redis ) {
 			try {
 				$wp_object_cache->redis->close();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 		}
-		if ( $wp_object_cache->redis_replica ) {
+		if ( null !== $wp_object_cache->redis_replica ) {
 			try {
 				$wp_object_cache->redis_replica->close();
 			} catch ( \Throwable $e ) {
@@ -1572,10 +1718,10 @@ function wp_cache_get_multiple( $keys, $group = '', $force = false ) {
 /**
  * Sets multiple values to the cache.
  *
- * @param array  $data   Array of keys and values.
- * @param string $group  Cache group.
- * @param int    $expire Expiration.
- * @return bool True on success.
+ * @param array      $data   Array of keys and values.
+ * @param string     $group  Cache group.
+ * @param int|string $expire Expiration in seconds (core passes int; string values are coerced).
+ * @return array Array of per-key results, keyed by input key.
  */
 function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
 	global $wp_object_cache;
@@ -1587,7 +1733,7 @@ function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
  *
  * @param array  $keys  Array of keys.
  * @param string $group Cache group.
- * @return bool True on success.
+ * @return array Array of per-key results, keyed by input key.
  */
 function wp_cache_delete_multiple( $keys, $group = '' ) {
 	global $wp_object_cache;
@@ -1635,9 +1781,9 @@ if ( ! function_exists( 'wp_cache_set_salted' ) ) {
 	 *
 	 * @param string          $cache_key The cache key under which to store the data.
 	 * @param mixed           $data      The data to be cached.
-	 * @param string          $group     The cache group to which the data belongs.
+	 * @param string          $group     The group to which the data belongs.
 	 * @param string|string[] $salt      The salt indicating when the cache group was last updated.
-	 * @param int             $expire    When to expire the cache contents, in seconds.
+	 * @param int|string      $expire    Expiration in seconds (core passes int; string values are coerced).
 	 * @return bool True on success, false on failure.
 	 */
 	function wp_cache_set_salted( $cache_key, $data, $group, $salt, $expire = 0 ) {
@@ -1696,7 +1842,7 @@ if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
 	 * @param mixed[]         $data   Associative array of keys and values to store.
 	 * @param string          $group  The group to which the cached data belongs.
 	 * @param string|string[] $salt   The salt indicating when the cache group was last updated.
-	 * @param int             $expire When to expire the cache contents, in seconds.
+	 * @param int|string      $expire Expiration in seconds (core passes int; string values are coerced).
 	 * @return bool[] Array of return values keyed by cache key.
 	 */
 	function wp_cache_set_multiple_salted( $data, $group, $salt, $expire = 0 ) {
