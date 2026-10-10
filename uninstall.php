@@ -613,6 +613,14 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		// `delete_metadata( 'user', null, ... )` with a null object id deletes
 		// the key for EVERY user and never touches another plugin's meta, so
 		// this cannot remove data the plugin does not own.
+		//
+		// The `@param int $object_id` annotation is contradicted by the
+		// function's own docblock, which says of $delete_all: "whether to delete
+		// the matching metadata entries for all objects, IGNORING the specified
+		// $object_id". The SQL it builds only appends `AND object_id = %d`
+		// when `! $delete_all`, so with `true` the null id is never read. Null is
+		// the documented "all objects" form and is safe here; Psalm's
+		// NullArgument is a false positive against the `int` annotation.
 		foreach (
 			array(
 				'wppo_welcome_dismissed',
@@ -621,6 +629,11 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 				'wppo_nginx_redis_config_dismissed',
 			) as $wppo_user_meta_key
 		) {
+			/**
+			 * Delete this plugin-owned user-meta key for EVERY user.
+			 *
+			 * @psalm-suppress NullArgument Core accepts null here when $delete_all is true.
+			 */
 			delete_metadata( 'user', null, $wppo_user_meta_key, '', true );
 		}
 
