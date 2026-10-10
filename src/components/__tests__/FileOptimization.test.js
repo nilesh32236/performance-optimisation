@@ -14,6 +14,7 @@ import FileOptimization, {
 	normalizeCcssMaxSize,
 	normalizeRegressionThreshold,
 	normalizeDeliveryMode,
+	normalizeUsedCssDelivery,
 	stripPreviewParams,
 	withCdnRowIds,
 	stripCdnRowIds,
@@ -2001,6 +2002,58 @@ describe( 'FileOptimization Component', () => {
 			expect( normalizeDeliveryMode( [ 'delay' ] ) ).toBe( 'file' );
 			expect( normalizeDeliveryMode( 42 ) ).toBe( 'file' );
 			expect( normalizeDeliveryMode( 'eager' ) ).toBe( 'file' );
+		} );
+	} );
+
+	describe( 'normalizeUsedCssDelivery (issue #1410)', () => {
+		it( 'accepts file/inline case-insensitively', () => {
+			expect( normalizeUsedCssDelivery( 'inline' ) ).toBe( 'inline' );
+			expect( normalizeUsedCssDelivery( ' Inline ' ) ).toBe( 'inline' );
+			expect( normalizeUsedCssDelivery( 'FILE' ) ).toBe( 'file' );
+		} );
+
+		it( 'fails open to file for non-strings and unknown targets', () => {
+			expect( normalizeUsedCssDelivery( [ 'inline' ] ) ).toBe( 'file' );
+			expect( normalizeUsedCssDelivery( 42 ) ).toBe( 'file' );
+			expect( normalizeUsedCssDelivery( 'delay' ) ).toBe( 'file' );
+			expect( normalizeUsedCssDelivery( '' ) ).toBe( 'file' );
+			expect( normalizeUsedCssDelivery( undefined ) ).toBe( 'file' );
+		} );
+
+		it( 'renders the inline-vs-file output select and persists the choice', async () => {
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				message: 'Settings updated successfully.',
+			} );
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+			const select = screen.getByLabelText( /Used CSS Output/i );
+			expect( select ).toBeInTheDocument();
+			expect( select ).toHaveValue( 'file' );
+
+			fireEvent.change( select, { target: { value: 'inline' } } );
+			expect( select ).toHaveValue( 'inline' );
+
+			const submitButton = screen.getByRole( 'button', {
+				name: /Save Settings/i,
+			} );
+			await act( async () => {
+				fireEvent.click( submitButton );
+			} );
+
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						usedCssDelivery: 'inline',
+					} ),
+				} )
+			);
 		} );
 	} );
 

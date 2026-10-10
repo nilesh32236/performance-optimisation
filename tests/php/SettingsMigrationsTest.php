@@ -192,6 +192,7 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 					'usedCssQueueCap'      => 50,
 					'ccssViewportVariants' => false,
 					'usedCSSDeliveryMode'  => 'file',
+					'usedCssDelivery'      => 'file',
 					'ccssGenTimeout'       => 25,
 					'ccssInlineBudgetKb'   => 14,
 					'ccssCommerceExclude'  => true,
@@ -202,6 +203,7 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 					'usedCssQueueCap'      => 7,
 					'ccssViewportVariants' => true,
 					'usedCSSDeliveryMode'  => 'inline',
+					'usedCssDelivery'      => 'inline',
 					'ccssGenTimeout'       => 60,
 					'ccssInlineBudgetKb'   => 20,
 					'ccssCommerceExclude'  => false,
@@ -270,10 +272,12 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 				array(
 					'autoLcpPreload'    => false,
 					'autoDiscoverFonts' => false,
+					'preloadCssFirstN'  => 0,
 				),
 				array(
 					'autoLcpPreload'    => true,
 					'autoDiscoverFonts' => true,
+					'preloadCssFirstN'  => 3,
 				),
 				array( 'enablePreloadCache' => true ),
 				false,

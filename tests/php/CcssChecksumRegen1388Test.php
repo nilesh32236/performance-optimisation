@@ -431,6 +431,8 @@ class CcssChecksumRegen1388Test extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 14, $file['ccssInlineBudgetKb'] );
 		$this->assertTrue( $file['ccssCommerceExclude'] );
 		$this->assertTrue( $file['ccssChecksumRegen'] );
+		// Issue #1410 key backfills alongside the 1388 keys (file = current behaviour).
+		$this->assertSame( 'file', $file['usedCssDelivery'] );
 		// Pre-existing values survive the backfill.
 		$this->assertSame( 5, $file['ccssQueueCap'] );
 	}
@@ -467,6 +469,7 @@ class CcssChecksumRegen1388Test extends \PHPUnit\Framework\TestCase {
 					'usedCssQueueCap'      => 50,
 					'ccssViewportVariants' => false,
 					'usedCSSDeliveryMode'  => 'file',
+					'usedCssDelivery'      => 'file',
 					'ccssGenTimeout'       => 25,
 					'ccssInlineBudgetKb'   => 20,
 					'ccssCommerceExclude'  => false,

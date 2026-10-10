@@ -95,10 +95,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * - remove: strip full stylesheets; auto-downgrades to delay when the
 		 *           builder smoke check fails (never unstyled, never fatal).
 		 *
+		 * Not to be confused with DELIVERY_TARGETS (inline-vs-file output,
+		 * issue #1410): this axis decides *when* full stylesheets load, the
+		 * other decides whether the used-CSS sidecar is a file link or an
+		 * inline `<style>` tag.
+		 *
 		 * @since 2.2.0
 		 * @var string[]
 		 */
 		public const DELIVERY_MODES = array( 'file', 'delay', 'async', 'remove' );
+
+		/**
+		 * Allowed used-CSS inline-vs-file delivery targets (issue #1410).
+		 *
+		 * Orthogonal to DELIVERY_MODES: 'file' keeps the cacheable separate
+		 * stylesheet link (current behaviour, repeat-view wins); 'inline'
+		 * inlines the used-CSS sidecar as a `<style>` tag (first-visit LCP,
+		 * no extra stylesheet request). Defaults to 'file' so existing
+		 * installs are byte-identical until the operator opts in.
+		 *
+		 * Not to be confused with DELIVERY_MODES (file/delay/async/remove,
+		 * issue #1220): despite the shared 'file' value and near-identical
+		 * key names (`usedCssDelivery` vs `usedCSSDeliveryMode`), the two
+		 * axes are independent — the admin UI labels this one 'Used CSS
+		 * Output (inline vs file)' and the other 'Used CSS Delivery Mode'.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const DELIVERY_TARGETS = array( 'file', 'inline' );
+
+		/**
+		 * Maximum used-CSS sidecar size inlined as a `<style>` tag (issue #1410).
+		 *
+		 * Larger sidecars stay a separate cacheable file (repeat-view win)
+		 * instead of bloating every first-view HTML response. Fail-open:
+		 * oversize inlines degrade to the file link, never to unstyled output.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_INLINE_BYTES = 102400;
 
 		/**
 		 * Age in seconds after which used-CSS counts as stale for the UI warning (issue #1220).
@@ -2537,6 +2574,189 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Effective used-CSS inline-vs-file delivery target (issue #1410).
+		 *
+		 * Additive `file_optimisation.usedCssDelivery` key, orthogonal to the
+		 * `usedCSSDeliveryMode` file/delay/async/remove axis: 'inline' inlines
+		 * the used-CSS sidecar, 'file' keeps the separate stylesheet link.
+		 * Unknown or missing values fail open to 'file' (current behaviour).
+		 *
+		 * @param array|null $file_opts Optional file_optimisation settings (defaults to plugin settings).
+		 * @return string One of self::DELIVERY_TARGETS.
+		 * @since NEXT
+		 */
+		public static function get_used_css_delivery_target( ?array $file_opts = null ): string {
+			try {
+				if ( null === $file_opts ) {
+					$settings  = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? Util::get_settings() : array();
+					$file_opts = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+				}
+				$target = isset( $file_opts['usedCssDelivery'] ) ? strtolower( trim( (string) $file_opts['usedCssDelivery'] ) ) : 'file';
+				if ( in_array( $target, self::DELIVERY_TARGETS, true ) ) {
+					return $target;
+				}
+				return 'file';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'file';
+			}
+		}
+
+		/**
+		 * Whether used CSS should be inlined as a `<style>` tag (issue #1410).
+		 *
+		 * Convenience wrapper over {@see get_used_css_delivery_target()}.
+		 * Fail-open: any failure returns false (separate file link).
+		 *
+		 * @param array|null $file_opts Optional file_optimisation settings (defaults to plugin settings).
+		 * @return bool True when the inline delivery target is selected.
+		 * @since NEXT
+		 */
+		public static function is_used_css_inline_enabled( ?array $file_opts = null ): bool {
+			try {
+				return 'inline' === self::get_used_css_delivery_target( $file_opts );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Effective preload-first-N stylesheet count (issue #1410).
+		 *
+		 * Additive `preload_settings.preloadCssFirstN` key: the first N
+		 * enqueued stylesheets are preloaded automatically so the LCP warning
+		 * clears without manual URLs. 0 disables (manual URLs only, current
+		 * behaviour). Out-of-range values saturate to the nearest bound
+		 * (matching the sanitizer and normalizePreloadCssFirstN() in
+		 * PreloadSettings.js) as defense-in-depth.
+		 *
+		 * @param array|null $preload_opts Optional preload_settings (defaults to plugin settings).
+		 * @return int Stylesheet count to auto-preload (0-5).
+		 * @since NEXT
+		 */
+		public static function get_preload_css_first_n( ?array $preload_opts = null ): int {
+			try {
+				if ( null === $preload_opts ) {
+					$settings     = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? Util::get_settings() : array();
+					$preload_opts = isset( $settings['preload_settings'] ) && is_array( $settings['preload_settings'] ) ? $settings['preload_settings'] : array();
+				}
+				$count = isset( $preload_opts['preloadCssFirstN'] ) && is_numeric( $preload_opts['preloadCssFirstN'] ) ? (int) $preload_opts['preloadCssFirstN'] : 0;
+				return min( 5, max( 0, $count ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Whether used-CSS inlining is allowed on this request (issue #1410).
+		 *
+		 * Honors the existing `wppo_inline_combined_css` falsy escape hatch
+		 * (e.g. operators serving CSS from a CDN) so an inline opt-out keeps
+		 * working for the used-CSS inline target. Fail-open: any failure, a
+		 * missing filter API, or no registered callback returns true only when
+		 * no explicit falsy vote was cast — a falsy filter always wins.
+		 *
+		 * @return bool True when inlining is allowed.
+		 * @since NEXT
+		 */
+		public static function is_used_css_inline_allowed(): bool {
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return true;
+				}
+				return (bool) apply_filters( 'wppo_inline_combined_css', true );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Read a used-CSS sidecar for inline output (issue #1410).
+		 *
+		 * Bounded (MAX_INLINE_BYTES + 1 probe byte) and sanitized for `<style>`
+		 * embedding (save-time sanitization re-applied as defense-in-depth
+		 * plus `</` sequences neutralized so a sidecar modified on disk
+		 * cannot break out of the style element). Per-request memoized keyed
+		 * by path + size + mtime (bounded to 5 entries) so uncached/dynamic
+		 * pages pay the file I/O once per view. Fail-open: any failure
+		 * returns ''.
+		 *
+		 * @param string $path Absolute sidecar path.
+		 * @return string Sanitized CSS, or '' when unreadable/empty/oversize.
+		 * @since NEXT
+		 */
+		public static function get_used_css_inline_css( string $path ): string {
+			static $memo = array();
+			try {
+				if ( '' === trim( $path ) ) {
+					return '';
+				}
+				if ( ! @file_exists( $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- probe only, fail-open below.
+					return '';
+				}
+				$size = @filesize( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- probe only, fail-open below.
+				if ( false === $size || $size <= 0 || $size > self::MAX_INLINE_BYTES ) {
+					return '';
+				}
+				$mtime    = @filemtime( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- memo key only, fail-open below.
+				$memo_key = $path . '|' . (int) $size . '|' . ( false === $mtime ? 0 : (int) $mtime );
+				if ( isset( $memo[ $memo_key ] ) ) {
+					return $memo[ $memo_key ];
+				}
+				$css = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local sidecar read, fail-open below.
+				if ( ! is_string( $css ) || '' === trim( $css ) ) {
+					return '';
+				}
+				if ( strlen( $css ) > self::MAX_INLINE_BYTES ) {
+					return '';
+				}
+				// Defense-in-depth: re-apply save-time sanitization so a
+				// sidecar modified on disk outside the save path is never
+				// emitted verbatim into a `<style>` tag.
+				$css = self::sanitize_used_css_output( $css );
+				if ( ! is_string( $css ) || '' === trim( $css ) ) {
+					return '';
+				}
+				// Neutralize a `</style` breakout (case-insensitive) while
+				// keeping the CSS equivalent for the parser.
+				$css = (string) preg_replace( '/<\/style/i', '<\/style', $css );
+				if ( ! is_string( $css ) || '' === trim( $css ) ) {
+					return '';
+				}
+				if ( count( $memo ) >= 5 ) {
+					$memo = array();
+				}
+				$memo[ $memo_key ] = $css;
+				return $css;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Build the inline used-CSS `<style>` tag (issue #1410).
+		 *
+		 * @param string $css Sanitized CSS (see {@see get_used_css_inline_css()}).
+		 * @return string Inline style tag, or '' when the CSS is empty.
+		 * @since NEXT
+		 */
+		public static function build_inline_used_css_tag( string $css ): string {
+			try {
+				if ( '' === trim( $css ) ) {
+					return '';
+				}
+				return '<style id="wppo-used-css-inline">' . $css . '</style>';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Timestamp of the last full used-CSS regeneration (issue #1220).
 		 *
 		 * Fail-open: unreadable storage returns 0.
@@ -2564,8 +2784,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * on) so operators know when builder/theme edits outran regeneration.
 		 * Read-only and fail-open.
 		 *
-		 * @return array{last_regen:int,last_regen_human:string,is_stale:bool,cooldown_remaining:int,delivery_mode:string}
+		 * @return array{last_regen:int,last_regen_human:string,is_stale:bool,cooldown_remaining:int,delivery_mode:string,delivery_target:string}
 		 * @since 2.2.0
+		 * @since NEXT Added delivery_target (issue #1410).
 		 */
 		public static function get_staleness_info(): array {
 			$info = array(
@@ -2574,6 +2795,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				'is_stale'           => false,
 				'cooldown_remaining' => 0,
 				'delivery_mode'      => 'file',
+				'delivery_target'    => 'file',
 			);
 			try {
 				$last               = self::get_last_full_regen_time();
@@ -2593,8 +2815,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$settings = Util::get_settings();
 					$enabled  = ! empty( $settings['file_optimisation']['removeUnusedCSS'] );
 				}
-				$info['is_stale']      = $enabled && ( $last <= 0 || ( time() - $last ) > self::STALE_THRESHOLD_SECONDS );
-				$info['delivery_mode'] = self::get_used_css_delivery_mode();
+				$info['is_stale']        = $enabled && ( $last <= 0 || ( time() - $last ) > self::STALE_THRESHOLD_SECONDS );
+				$info['delivery_mode']   = self::get_used_css_delivery_mode();
+				$info['delivery_target'] = self::get_used_css_delivery_target();
 				if ( function_exists( 'get_option' ) ) {
 					$targeted = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
 					if ( $targeted > 0 ) {
@@ -4433,11 +4656,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $buffer       The HTML buffer.
 		 * @param string $used_css_url The URL of the used-CSS file (with version).
 		 * @param array  $handles      Array of style handles to remove and include in fallback.
+		 * @param string $used_css_path Optional absolute sidecar path (enables the #1410 inline target).
 		 * @return string Modified HTML buffer.
 		 * @since 1.9.0
 		 * @since 2.2.0 Added file/delay/async/remove delivery modes.
+		 * @since NEXT Added inline-vs-file delivery target ($used_css_path).
 		 */
-		private function inject_used_css( string $buffer, string $used_css_url, array $handles ): string {
+		private function inject_used_css( string $buffer, string $used_css_url, array $handles, string $used_css_path = '' ): string {
 			global $wp_styles;
 
 			$original_buffer = $buffer;
@@ -4563,9 +4788,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			// Build used-CSS link + noscript fallback.
-			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 			$used_css_tag = '<link id="wppo-used-css" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">';
-			if ( 'async' === $delivery_mode ) {
+			$inlined      = false;
+			// Inline-vs-file delivery target (issue #1410): when the operator
+			// opted into 'inline', the used-CSS sidecar is inlined as a
+			// `<style>` tag (first-visit LCP, no extra stylesheet request)
+			// instead of the cacheable separate file link (repeat-view wins).
+			// Every failure degrades to the file link above — never to
+			// unstyled output, never fatal. Builder pages whose purged CSS
+			// lost builder coverage keep the file link (never unstyled).
+			if ( self::is_used_css_inline_enabled( is_array( $file_opts_for_mode ) ? $file_opts_for_mode : array() ) ) {
+				$inline_css = '';
+				if ( ! self::is_used_css_inline_allowed() ) {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'inline_disabled_filter', $handles );
+					}
+				} elseif ( $server_strict_csp || $this->has_strict_csp( $buffer_after_strip ) ) {
+					// A strict CSP without 'unsafe-inline' blocks inline
+					// `<style>` just like the async/delay inline loaders —
+					// keep the blocking file link instead (fail-open).
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'inline_downgraded_to_file_csp', $handles );
+					}
+				} elseif ( '' === trim( $used_css_path ) ) {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'inline_no_path', $handles );
+					}
+				} else {
+					$inline_css = self::get_used_css_inline_css( $used_css_path );
+					if ( '' === $inline_css ) {
+						if ( $this->is_safe_fallback_enabled() ) {
+							$this->log_used_css_fallback( 'inline_unreadable_or_oversize', $handles );
+						}
+					} elseif ( ! self::passes_elementor_smoke( $buffer_after_strip, $inline_css ) ) {
+						$inline_css = '';
+						if ( $this->is_safe_fallback_enabled() ) {
+							$this->log_used_css_fallback( 'inline_smoke', $handles );
+						}
+					}
+				}
+				if ( '' !== $inline_css ) {
+					$inline_tag = self::build_inline_used_css_tag( $inline_css );
+					if ( '' !== $inline_tag ) {
+						$used_css_tag = $inline_tag;
+						$inlined      = true;
+					}
+				}
+			}
+			if ( 'async' === $delivery_mode && ! $inlined ) {
 				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 				$used_css_tag = '<link id="wppo-used-css" rel="preload" as="style" href="' . esc_url( $used_css_url ) . '" onload="this.onload=null;this.rel=\'stylesheet\';this.media=\'all\'" data-wppo-used-css-async="1">';
 			}
@@ -4582,9 +4853,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 			}
 
-			if ( 'async' === $delivery_mode ) {
+			if ( 'async' === $delivery_mode && ! $inlined ) {
 				// No-JS clients must still get styled content: noscript carries
-				// both the used-CSS and the full originals.
+				// both the used-CSS and the full originals. Inlined output
+				// already styles no-JS clients, so it keeps the originals-only
+				// fallback below instead of re-adding the file link.
 				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 				$used_css_tag .= "\n" . '<noscript><link id="wppo-used-css-noscript" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">' . $noscript_fallback . '</noscript>';
 			} else {
@@ -4911,7 +5184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 									}
 								}
 							}
-							return $this->inject_used_css( $buffer, $used_css_url, $handles );
+							return $this->inject_used_css( $buffer, $used_css_url, $handles, $used_css_path );
 						}
 					}
 				}
@@ -4967,7 +5240,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$used_css_url = $used_css_url . '?ver=' . $ver;
 
 			$handles = array_keys( $css_assets );
-			return $this->inject_used_css( $buffer, $used_css_url, $handles );
+			return $this->inject_used_css( $buffer, $used_css_url, $handles, $used_css_path );
 		}
 	}
 }

@@ -228,6 +228,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private const MAX_AUTO_FONT_PRELOADS = 2;
 
 		/**
+		 * Maximum automatic first-N stylesheet preloads per page (issue #1410).
+		 *
+		 * Bounds the preload-first-N loop so a mis-stored count can never
+		 * flood the head with preload hints. Mirrors the
+		 * `preloadCssFirstN` 0-5 sanitize clamp (defense-in-depth).
+		 *
+		 * @since NEXT
+		 */
+		private const MAX_PRELOAD_CSS_FIRST_N = 5;
+
+		/**
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
@@ -6966,7 +6977,120 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			// Preload-first-N stylesheets (issue #1410): automatically preload
+			// the first N enqueued stylesheets so the LCP warning clears
+			// without manual URLs. 0 disables (manual URLs only, current
+			// behaviour). Manual URLs win on conflict; bounded; fail-open.
+			try {
+				$preload_first_n = 0;
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_preload_css_first_n' ) ) {
+					$preload_first_n = \PerformanceOptimise\Inc\Used_CSS::get_preload_css_first_n( is_array( $preload_settings ) ? $preload_settings : array() );
+				}
+				if ( $preload_first_n > 0 ) {
+					$manual_css_urls = isset( $preload_css_urls ) && is_array( $preload_css_urls ) ? $preload_css_urls : array();
+					$this->emit_preload_css_first_n( $preload_first_n, $manual_css_urls );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$this->image_optimisation->preload_images();
+		}
+
+		/**
+		 * Emit automatic preload hints for the first N enqueued stylesheets (issue #1410).
+		 *
+		 * Reads `$wp_styles->queue` in enqueue order and preloads up to $count
+		 * registered stylesheets as `style` so above-the-fold CSS is fetched at
+		 * high priority without manual URLs. Manual preload URLs win on
+		 * conflict (deduped, case-insensitive). Bounded by
+		 * MAX_PRELOAD_CSS_FIRST_N. Fail-open: any failure emits nothing —
+		 * the page renders exactly as before (standard render-blocking links).
+		 *
+		 * @since NEXT
+		 *
+		 * @param int   $count Number of stylesheets to preload (clamped to 1-5).
+		 * @param array $manual_urls Already-emitted manual CSS URLs (dedup set).
+		 * @return void
+		 */
+		private function emit_preload_css_first_n( int $count, array $manual_urls = array() ): void {
+			try {
+				if ( $count <= 0 ) {
+					return;
+				}
+				$count = min( self::MAX_PRELOAD_CSS_FIRST_N, $count );
+				global $wp_styles;
+				if ( ! isset( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+					return;
+				}
+				$seen = array();
+				foreach ( $manual_urls as $manual_url ) {
+					if ( is_string( $manual_url ) && '' !== trim( $manual_url ) ) {
+						$seen[ strtolower( trim( $manual_url ) ) ] = true;
+					}
+				}
+				$emitted = 0;
+				foreach ( $wp_styles->queue as $handle ) {
+					if ( $emitted >= $count ) {
+						break;
+					}
+					if ( ! is_string( $handle ) || '' === trim( $handle ) ) {
+						continue;
+					}
+					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						continue;
+					}
+					$src = $wp_styles->registered[ $handle ]->src ?? '';
+					if ( ! is_string( $src ) || '' === trim( $src ) ) {
+						continue;
+					}
+					// Print-only stylesheets never block first paint — skip so
+					// the bounded budget is spent on render-blocking CSS.
+					// A media list is an OR: 'print, screen' still applies to
+					// screens, so only skip when every comma-separated part
+					// is print-only (e.g. 'print', 'PRINT', 'only print',
+					// 'print and (...)', 'only print and (...)').
+					$media = $wp_styles->registered[ $handle ]->args ?? 'all';
+					if ( is_string( $media ) ) {
+						$parts = array_map( 'trim', explode( ',', strtolower( $media ) ) );
+						$parts = array_filter(
+							$parts,
+							static function ( $part ) {
+								return '' !== $part;
+							}
+						);
+						if ( ! empty( $parts ) ) {
+							$all_print = true;
+							foreach ( $parts as $part ) {
+								if ( 1 !== preg_match( '/^(?:only\s+)?print(?:\s+and\b|\s*\(|$)/', $part ) ) {
+									$all_print = false;
+									break;
+								}
+							}
+							if ( $all_print ) {
+								continue;
+							}
+						}
+					}
+					if ( 0 === strpos( $src, '//' ) ) {
+						$url = ( function_exists( 'is_ssl' ) && is_ssl() ? 'https:' : 'http:' ) . $src;
+					} else {
+						$url = (bool) preg_match( '/^https?:\/\//i', $src ) ? $src : Util::cached_content_url( $src );
+					}
+					if ( ! is_string( $url ) || '' === trim( $url ) ) {
+						continue;
+					}
+					$key = strtolower( trim( $url ) );
+					if ( isset( $seen[ $key ] ) ) {
+						continue;
+					}
+					$seen[ $key ] = true;
+					Util::generate_preload_link( $url, 'preload', 'style' );
+					++$emitted;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

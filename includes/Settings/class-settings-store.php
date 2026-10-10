@@ -585,9 +585,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 
 				// Used-CSS delivery mode (issue #1220) — allowlist
 				// file/delay/async/remove. Unknown values fail open to file.
+				// Distinct from the orthogonal usedCssDelivery (inline-vs-file
+				// output target, issue #1410) below — do not merge the axes.
 				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
 					$mode                   = strtolower( trim( (string) $value ) );
 					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
+					continue;
+				}
+
+				// Used-CSS inline-vs-file delivery target (issue #1410) —
+				// orthogonal to usedCSSDeliveryMode above: 'inline' inlines the
+				// used-CSS sidecar as a <style> tag (first-visit LCP),
+				// 'file' keeps the cacheable separate stylesheet link
+				// (repeat-view wins). Unknown values fail open to 'file'
+				// (current behaviour, byte-identical).
+				if ( 'usedCssDelivery' === $safe_key && ! is_array( $value ) ) {
+					$target                 = strtolower( trim( (string) $value ) );
+					$sanitized[ $safe_key ] = in_array( $target, array( 'file', 'inline' ), true ) ? $target : 'file';
+					continue;
+				}
+
+				// Preload-first-N stylesheets (issue #1410) — int clamped to
+				// 0-5 (0 = off). Out-of-range values saturate to the nearest
+				// bound (matching normalizePreloadCssFirstN() in
+				// PreloadSettings.js) so the UI and server agree.
+				if ( 'preloadCssFirstN' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 0;
+						continue;
+					}
+					$count                  = is_numeric( $value ) ? (int) $value : 0;
+					$sanitized[ $safe_key ] = min( 5, max( 0, $count ) );
 					continue;
 				}
 
@@ -832,6 +860,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
 					'usedCSSDeliveryMode'          => 'file',
+					'usedCssDelivery'              => 'file',
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
@@ -911,6 +940,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 					'preloadSitemap'           => false,
 					'autoLcpPreload'           => false,
 					'autoDiscoverFonts'        => false,
+					'preloadCssFirstN'         => 0,
 				),
 				'image_optimisation'    => array(
 					'lazyLoadImages'             => false,
@@ -1197,6 +1227,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			}
 			if ( ! isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
 				$options['preload_settings']['autoDiscoverFonts'] = false;
+			}
+			// Preload-first-N stylesheets (issue #1410, 0 = off, manual URLs only).
+			if ( ! isset( $options['preload_settings']['preloadCssFirstN'] ) ) {
+				$options['preload_settings']['preloadCssFirstN'] = 0;
+			}
+			// Used-CSS inline-vs-file delivery target (issue #1410, file = current behaviour).
+			if ( ! isset( $options['file_optimisation']['usedCssDelivery'] ) ) {
+				$options['file_optimisation']['usedCssDelivery'] = 'file';
 			}
 			if ( ! isset( $options['llms_txt'] ) || ! is_array( $options['llms_txt'] ) ) {
 				$options['llms_txt'] = array();
