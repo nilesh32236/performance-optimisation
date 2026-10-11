@@ -199,10 +199,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return false;
 			}
 
+			// Centralisation rule (issue #1821): live .htaccess writes must go
+			// through atomic_write_verified()/Filesystem above; direct
+			// insert_with_markers() below is the legacy-only fallback, reached
+			// solely when the atomic path reports unsupported (null), never on
+			// a verified failure (false).
 			$result = insert_with_markers( $htaccess_file, self::MARKER, $rules );
 
 			if ( ! $result ) {
 				if ( null !== $backup ) {
+					// Legacy-only fallback restore (atomic unsupported path).
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
 					// Check the restore verification result: a failed restore
 					// (disk-full, racing writer) must surface as failure, not
@@ -219,6 +225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 
 			if ( ! self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== $desired_normalized ) ) {
 				if ( null !== $backup ) {
+					// Legacy-only fallback restore (atomic unsupported path).
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
 					// Re-read after the legacy-path restore so a torn
 					// restore (disk-full, racing writer) is not silently
@@ -671,15 +678,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			$begin = '# BEGIN ' . self::MARKER;
 			$end   = '# END ' . self::MARKER;
 
-			$begin_count = substr_count( $contents, $begin );
-			$end_count   = substr_count( $contents, $end );
+			// Centralisation (issue #1821): the duplicate-marker assertion
+			// is owned by Filesystem::verify_marker_block() so every live
+			// htaccess mutation shares one verifier; the inline counts below
+			// remain as the fallback when the helper is unavailable.
+			if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'verify_marker_block' ) ) {
+				try {
+					if ( ! Filesystem::verify_marker_block( $contents, $begin, $end, $expect_block ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			} else {
+				$begin_count = substr_count( $contents, $begin );
+				$end_count   = substr_count( $contents, $end );
 
-			if ( ! $expect_block ) {
-				return 0 === $begin_count && 0 === $end_count;
+				if ( ! $expect_block ) {
+					return 0 === $begin_count && 0 === $end_count;
+				}
+
+				if ( 1 !== $begin_count || 1 !== $end_count ) {
+					return false;
+				}
+
+				$start = strpos( $contents, $begin );
+				$stop  = strpos( $contents, $end );
+				if ( false === $start || false === $stop || $stop <= $start ) {
+					return false;
+				}
 			}
 
-			if ( 1 !== $begin_count || 1 !== $end_count ) {
-				return false;
+			if ( ! $expect_block ) {
+				return true;
 			}
 
 			$start = strpos( $contents, $begin );

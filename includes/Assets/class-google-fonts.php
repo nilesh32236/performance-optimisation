@@ -653,13 +653,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// Save the rewritten CSS.
 			$filesystem = Util::init_filesystem();
 			if ( $filesystem ) {
-				$filesystem->put_contents( $css_file, $css, FS_CHMOD_FILE );
+				// Centralisation (issue #1821): derived CSS goes through the
+				// atomic helper so a killed run never leaves a half-written file.
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+					Util::atomic_file_put_contents( $filesystem, $css_file, $css );
+				} else {
+					$filesystem->put_contents( $css_file, $css, FS_CHMOD_FILE );
+				}
 			} else {
 				// Audit #1453: containment assert before the raw fallback write
 				// ($css_file is internally constructed, never user-controlled).
 				$resolved_css = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $css_file ) : $css_file;
 				$content_root = function_exists( 'wp_normalize_path' ) && defined( 'WP_CONTENT_DIR' ) ? trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) ) : '';
 				if ( '' !== $content_root && 0 === strpos( $resolved_css, $content_root ) ) {
+					// WP_Filesystem is unavailable so the atomic helper (which needs
+					// $fs) cannot run; the file is regenerated on the next run.
+					// Non-live fallback: intentional.
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 					file_put_contents( $css_file, $css );
 				}

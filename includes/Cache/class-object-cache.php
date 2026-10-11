@@ -2148,6 +2148,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'put_contents' ) || ! method_exists( $wp_filesystem, 'get_contents' ) || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'move' ) || ! method_exists( $wp_filesystem, 'delete' ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 			}
+			// Centralisation (issue #1821): prefer the shared verified writer
+			// (same-dir tmp + byte-identical re-read + PHP syntax check +
+			// backup + rename + post-rename re-verify with restore). The
+			// bespoke tmp+rename below remains as the legacy-only fallback
+			// when the helper is unavailable.
+			if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'atomic_write_php_verified' ) ) {
+				try {
+					$shared_template = $wp_filesystem->get_contents( $this->template_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$shared_template = false;
+				}
+				if ( is_string( $shared_template ) && '' !== $shared_template && false !== strpos( $shared_template, self::DROPIN_MARKER ) && 0 === strpos( ltrim( $shared_template ), '<?php' ) ) {
+					try {
+						if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+							return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+					}
+					$dropin_marker = self::DROPIN_MARKER;
+					$self          = $this;
+					try {
+						$shared = Filesystem::atomic_write_php_verified(
+							$wp_filesystem,
+							$this->dropin_path,
+							$shared_template,
+							static function ( $contents ) use ( $dropin_marker, $self ): bool {
+								if ( ! is_string( $contents ) || false === strpos( $contents, $dropin_marker ) || 0 !== strpos( ltrim( $contents ), '<?php' ) ) {
+									return false;
+								}
+								// Mid-write foreign recheck (legacy parity): a
+								// foreign drop-in appearing while the tmp was
+								// staged must never be overwritten.
+								try {
+									if ( file_exists( $self->dropin_path ) && ! $self->is_own_dropin() ) {
+										return false;
+									}
+								} catch ( \Throwable $ignored_foreign ) {
+									unset( $ignored_foreign );
+									return false;
+								}
+								return true;
+							}
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$shared = false;
+					}
+					if ( true === $shared ) {
+						$this->sweep_orphan_dropin_tmp( $wp_filesystem );
+						self::restrict_file_mode( $wp_filesystem, $this->dropin_path );
+						return true;
+					}
+					if ( false === $shared ) {
+						// A foreign drop-in appearing mid-write is never
+						// overwritten (legacy parity: foreign_dropin error).
+						try {
+							if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+								return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+						}
+						return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
+					}
+					// Null: transport lacks methods for the shared writer —
+					// fall through to the legacy tmp+rename path below.
+				}
+			}
 			try {
 				$template = $wp_filesystem->get_contents( $this->template_path );
 			} catch ( \Throwable $e ) {
@@ -2516,36 +2588,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 */
 		private static function protect_config_file(): void {
 			try {
-				if ( function_exists( 'insert_with_markers' ) ) {
-					$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
-					// Both authz generations are emitted behind IfModule guards:
-					// a bare `Require all denied` is Apache 2.4-only syntax and a
-					// server without mod_authz_core answers 500 for the whole
-					// wp-content tree rather than ignoring the directive.
-					// FilesMatch (audit #1357) covers the .wppo-bak backup and
-					// tmp staging siblings too: a crash between backup creation
-					// and the post-success sweep must not leave topology source
-					// fetchable as plain text.
-					$rule = array(
-						'<FilesMatch "(?i)^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
-						'<IfModule mod_authz_core.c>',
-						'Require all denied',
-						'</IfModule>',
-						'<IfModule !mod_authz_core.c>',
-						'Order allow,deny',
-						'Deny from all',
-						'</IfModule>',
-						'</FilesMatch>',
-					);
+				$fs = Util::init_filesystem();
+				// Both authz generations are emitted behind IfModule guards:
+				// a bare `Require all denied` is Apache 2.4-only syntax and a
+				// server without mod_authz_core answers 500 for the whole
+				// wp-content tree rather than ignoring the directive.
+				// FilesMatch (audit #1357) covers the .wppo-bak backup and
+				// tmp staging siblings too: a crash between backup creation
+				// and the post-success sweep must not leave topology source
+				// fetchable as plain text.
+				$rule     = array(
+					'<FilesMatch "(?i)^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
+					'<IfModule mod_authz_core.c>',
+					'Require all denied',
+					'</IfModule>',
+					'<IfModule !mod_authz_core.c>',
+					'Order allow,deny',
+					'Deny from all',
+					'</IfModule>',
+					'</FilesMatch>',
+				);
+				$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
+				// Centralisation (issue #1821): prefer an atomic splice+write
+				// through the Filesystem helper with duplicate-marker
+				// verification; direct insert_with_markers() below is the
+				// legacy-only fallback when atomic is unsupported.
+				$htaccess_done = false;
+				if ( $fs && class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'atomic_file_put_contents' ) ) {
+					$htaccess_done = self::write_htaccess_block_atomic( $fs, $htaccess, (string) self::CONFIG_HTACCESS_MARKER, $rule );
+				}
+				if ( ! $htaccess_done && function_exists( 'insert_with_markers' ) ) {
+					// Legacy-only fallback (atomic unsupported path).
 					insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
+					if ( $fs && class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'verify_marker_block' ) ) {
+						try {
+							$check = method_exists( $fs, 'get_contents' ) && method_exists( $fs, 'exists' ) && $fs->exists( $htaccess ) ? $fs->get_contents( $htaccess ) : null;
+							if ( is_string( $check ) && ! Filesystem::verify_marker_block( $check, '# BEGIN ' . (string) self::CONFIG_HTACCESS_MARKER, '# END ' . (string) self::CONFIG_HTACCESS_MARKER, true ) ) {
+								// Legacy-only fallback restore (atomic unsupported path).
+								insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, array() );
+							}
+						} catch ( \Throwable $ignored_verify ) {
+							unset( $ignored_verify );
+						}
+					}
 				}
 				// IIS: a web.config deny for the config file (created only when
 				// absent so an existing site config is never clobbered). Nginx
 				// has no directory-level config — see the server-level rule
-				// documented on this method.
+				// documented on this method. Centralisation (issue #1821):
+				// create-only through the Filesystem helper so a killed write
+				// can never leave a half-written web.config.
 				$web_config = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/web.config';
-				$fs         = Util::init_filesystem();
-				if ( $fs && ! $fs->exists( $web_config ) ) {
+				if ( ! $fs ) {
+					$fs = Util::init_filesystem();
+				}
+				if ( $fs && method_exists( $fs, 'exists' ) && ! $fs->exists( $web_config ) ) {
 					$xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 					$xml .= "<configuration>\n";
 					$xml .= "  <location path=\"wppo-redis-config.php\">\n";
@@ -2558,10 +2655,101 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					$xml .= "    </system.webServer>\n";
 					$xml .= "  </location>\n";
 					$xml .= "</configuration>\n";
-					$fs->put_contents( $web_config, $xml, FS_CHMOD_FILE );
+					if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'atomic_file_put_contents' ) ) {
+						try {
+							Filesystem::atomic_file_put_contents( $fs, $web_config, $xml );
+						} catch ( \Throwable $ignored_xml ) {
+							unset( $ignored_xml );
+						}
+					} elseif ( method_exists( $fs, 'put_contents' ) ) {
+						// Legacy-only fallback (helper unavailable).
+						$fs->put_contents( $web_config, $xml, FS_CHMOD_FILE );
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+		}
+
+		/**
+		 * Splice a marker block into wp-content/.htaccess atomically.
+		 *
+		 * Centralisation primitive (issue #1821) for the Redis-config shield
+		 * block: reads the current file, splices the marker block in place
+		 * (preserving every other block and order), and writes through
+		 * Filesystem::atomic_file_put_contents() with the shared
+		 * duplicate-marker verifier, so a killed or concurrent write aborts
+		 * with the live file untouched. Returns false when the transport
+		 * cannot support atomic writes so the caller falls back to the
+		 * legacy-only insert_with_markers() path. Never throws.
+		 *
+		 * @param mixed  $fs Filesystem object.
+		 * @param string $htaccess Absolute .htaccess path.
+		 * @param string $marker Marker name (e.g. `WPPO Redis Config`).
+		 * @param array  $rule Rule lines.
+		 * @return bool True on verified atomic write.
+		 * @since NEXT
+		 */
+		private static function write_htaccess_block_atomic( $fs, string $htaccess, string $marker, array $rule ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $htaccess || '' === $marker ) {
+					return false;
+				}
+				if ( ! method_exists( $fs, 'exists' ) || ! method_exists( $fs, 'get_contents' ) ) {
+					return false;
+				}
+				foreach ( $rule as $line ) {
+					if ( ! is_string( $line ) || false !== strpos( $line, "\r" ) || false !== strpos( $line, "\n" ) || false !== strpos( $line, "\0" ) ) {
+						return false;
+					}
+				}
+				$begin = '# BEGIN ' . $marker;
+				$end   = '# END ' . $marker;
+				$block = '';
+				if ( array() !== $rule ) {
+					$block = $begin . "\n" . implode( "\n", $rule ) . "\n" . $end . "\n";
+				}
+				$current = '';
+				if ( $fs->exists( $htaccess ) ) {
+					$current = $fs->get_contents( $htaccess );
+					if ( ! is_string( $current ) ) {
+						return false;
+					}
+				}
+				$start = strpos( $current, $begin );
+				$stop  = strpos( $current, $end );
+				if ( false !== $start && false !== $stop && $stop > $start ) {
+					$line_end = strpos( $current, "\n", $stop );
+					$head     = substr( $current, 0, $start );
+					$tail     = false === $line_end ? '' : substr( $current, $line_end + 1 );
+					if ( '' === $block ) {
+						$new_contents = rtrim( $head, "\r\n" ) . ( '' === $tail ? '' : "\n" . ltrim( $tail, "\r\n" ) );
+					} else {
+						$new_contents = $head . $block . ltrim( $tail, "\r\n" );
+					}
+				} elseif ( '' === $block ) {
+					return true;
+				} elseif ( '' === $current ) {
+					$new_contents = $block;
+				} else {
+					$new_contents = rtrim( $current, "\r\n" ) . "\n" . $block;
+				}
+				if ( $new_contents === $current ) {
+					return true;
+				}
+				$expect_block = '' !== $block;
+				$written      = Filesystem::atomic_file_put_contents(
+					$fs,
+					$htaccess,
+					$new_contents,
+					static function ( $contents ) use ( $begin, $end, $expect_block ): bool {
+						return Filesystem::verify_marker_block( (string) $contents, $begin, $end, $expect_block );
+					}
+				);
+				return (bool) $written;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 

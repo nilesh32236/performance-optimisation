@@ -351,11 +351,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			$ok = true;
 			if ( $fs && method_exists( $fs, 'put_contents' ) ) {
-				$ok = $fs->put_contents( $path, $content, FS_CHMOD_FILE );
-				$ok = $fs->put_contents( $path_full, $content_full, FS_CHMOD_FILE ) && $ok;
+				// Centralisation (issue #1821): derived text files go through
+				// the atomic helper so a killed cron run never leaves a
+				// half-written llms.txt behind.
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+					$ok = Util::atomic_file_put_contents( $fs, $path, $content );
+					$ok = Util::atomic_file_put_contents( $fs, $path_full, $content_full ) && $ok;
+				} else {
+					$ok = $fs->put_contents( $path, $content, FS_CHMOD_FILE );
+					$ok = $fs->put_contents( $path_full, $content_full, FS_CHMOD_FILE ) && $ok;
+				}
 			} else {
+				// Non-live fallback: intentional — WP_Filesystem is unavailable
+				// in this early/cron context so the atomic helper (which needs
+				// $fs) cannot run; a torn write is regenerated on the next run.
 				$written = file_put_contents( $path, $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				$ok      = false !== $written;
+				// Non-live fallback: intentional (second derived file, same context).
 				$written = file_put_contents( $path_full, $content_full ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				$ok      = ( false !== $written ) && $ok;
 			}

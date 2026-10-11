@@ -2152,8 +2152,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				$fs = Util::init_filesystem();
 				if ( $fs ) {
-					$fs->put_contents( $checksum_path, $checksum, FS_CHMOD_FILE );
+					// Centralisation (issue #1821): checksum sidecar goes through
+					// the atomic helper when available.
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+						Util::atomic_file_put_contents( $fs, $checksum_path, $checksum );
+					} elseif ( method_exists( $fs, 'put_contents' ) ) {
+						$fs->put_contents( $checksum_path, $checksum, FS_CHMOD_FILE );
+					}
 				} else {
+					// Non-live sidecar: intentional — checksum freshness fallback
+					// only; the atomic helper needs $fs, unavailable here.
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Local checksum sidecar fallback.
 					file_put_contents( $checksum_path, $checksum );
 				}

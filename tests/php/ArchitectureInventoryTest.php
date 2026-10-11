@@ -142,9 +142,14 @@ final class ArchitectureInventoryTest extends TestCase {
 		// three nodes and their runtime/compatibility edges. The compatibility
 		// edge count is +10 not +9 because rebasing onto current master brings in
 		// one further compatibility edge from master's own history.
-		$this->assertSame( 405, $graph['summary']['edges'] );
-		$this->assertSame( 404, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 216, $graph['summary']['compatibility_edges'] );
+		// +3/+3/+5 (issue #1821): drop-in and htaccess writers now reach the
+		// shared Filesystem verifier/atomic helpers (Advanced_Cache_Handler,
+		// Object_Cache, Htaccess_Handler), adding three runtime edges and
+		// five compatibility edges (class_exists/method_exists/static-call
+		// probes per call site).
+		$this->assertSame( 408, $graph['summary']['edges'] );
+		$this->assertSame( 407, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 221, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );
@@ -298,10 +303,15 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
 		$this->assertCount( 68, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 341, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		// 341 -> 344 (issue #1821): the three new Filesystem-bound runtime
+		// edges join the existing runtime cycle.
+		$this->assertCount( 344, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
-		$this->assertCount( 22, $graph['metrics']['cycles_by_classification']['compatibility'][0]['members'] );
-		$this->assertCount( 72, $graph['metrics']['cycles_by_classification']['compatibility'][0]['edges'] );
+		// 22 -> 23 (issue #1821): the Filesystem verifier/atomic helpers join
+		// the existing compatibility cycle via the new call-site probes.
+		$this->assertCount( 23, $graph['metrics']['cycles_by_classification']['compatibility'][0]['members'] );
+		// 72 -> 74 (issue #1821): same compatibility-cycle growth as above.
+		$this->assertCount( 74, $graph['metrics']['cycles_by_classification']['compatibility'][0]['edges'] );
 
 		$candidates = $graph['duplicate_candidates'];
 		$this->assertCount( 18, $candidates );

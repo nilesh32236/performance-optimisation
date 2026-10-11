@@ -294,6 +294,87 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return false;
 			}
 
+			// Centralisation (issue #1821): the shared verified writer owns
+			// every live drop-in mutation (same-dir tmp + byte-identical
+			// re-read + PHP syntax check + backup + rename + post-rename
+			// re-verify with restore). The legacy `.wppo-backup` persistent
+			// backup and the foreign-drop-in rechecks are preserved around it,
+			// and the bespoke tmp+rename below remains as the legacy-only
+			// fallback when the helper is unavailable.
+			if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'atomic_write_php_verified' ) ) {
+				try {
+					$handler_path = self::get_dropin_path();
+					$backup_path  = self::get_dropin_backup_path();
+					if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( $handler_path ) && ! self::is_our_dropin() ) {
+						self::log_dropin_issue( __( 'Skipped writing advanced-cache.php: a foreign drop-in is present.', 'performance-optimisation' ) );
+						return true;
+					}
+					// Best-effort persistent backup of the previous working file
+					// before the write (legacy parity); a failed backup must not
+					// block the rename.
+					if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && $wp_filesystem->exists( $handler_path ) && self::is_our_dropin() ) {
+						$backed_up = $wp_filesystem->copy( $handler_path, $backup_path, true, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+						if ( ! $backed_up ) {
+							self::log_dropin_issue( __( 'Could not back up advanced-cache.php before replacing it.', 'performance-optimisation' ) );
+						}
+					}
+					$shared = Filesystem::atomic_write_php_verified(
+						$wp_filesystem,
+						$handler_path,
+						$handler_code,
+						static function ( $contents ): bool {
+							if ( ! is_string( $contents ) || false === strpos( $contents, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $contents ), '<?php' ) ) {
+								return false;
+							}
+							// Mid-write foreign recheck (legacy parity): a foreign
+							// drop-in appearing while the tmp was staged must
+							// never be overwritten — abort and leave it untouched.
+							try {
+								global $wp_filesystem;
+								if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( self::get_dropin_path() ) && ! self::is_our_dropin() ) {
+									return false;
+								}
+							} catch ( \Throwable $ignored_foreign ) {
+								unset( $ignored_foreign );
+								return false;
+							}
+							return true;
+						}
+					);
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$shared = false;
+				}
+				if ( true === $shared ) {
+					return true;
+				}
+				if ( false === $shared ) {
+					// A foreign drop-in appearing mid-write is left untouched
+					// (legacy parity: not a failure).
+					try {
+						if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && isset( $handler_path ) && $wp_filesystem->exists( $handler_path ) && ! self::is_our_dropin() ) {
+							self::log_dropin_issue( __( 'Skipped writing advanced-cache.php: a foreign drop-in appeared during the write.', 'performance-optimisation' ) );
+							return true;
+						}
+					} catch ( \Throwable $ignored_foreign ) {
+						unset( $ignored_foreign );
+					}
+					// Restore the persistent backup over a torn live file
+					// (legacy parity); best-effort and never fatal.
+					try {
+						if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && isset( $handler_path, $backup_path ) && $wp_filesystem->exists( $backup_path ) ) {
+							$wp_filesystem->copy( $backup_path, $handler_path, true, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+						}
+					} catch ( \Throwable $ignored_restore ) {
+						unset( $ignored_restore );
+					}
+					self::log_dropin_issue( __( 'Could not verify advanced-cache.php after write; previous backup restored where available.', 'performance-optimisation' ) );
+					return false;
+				}
+				// Null: transport lacks methods for the shared writer —
+				// fall through to the legacy tmp+rename path below.
+			}
+
 			if ( ! is_object( $wp_filesystem ) ) {
 				self::log_dropin_issue( __( 'Could not write advanced-cache.php: WP_Filesystem unavailable.', 'performance-optimisation' ) );
 				return false;
@@ -995,6 +1076,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			try {
 				$wp_filesystem->delete( self::get_dropin_backup_path() );
+				// The shared verified writer (issue #1821) stages via `.tmp.`
+				// siblings and keeps one `.wppo-bak` generation: sweep those
+				// residue shapes too (plus `.wppo-tmp-` for cross-writer safety).
+				$handler_file = self::get_dropin_path();
+				if ( method_exists( $wp_filesystem, 'delete' ) ) {
+					$wp_filesystem->delete( $handler_file . '.wppo-bak' );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'sweep_atomic_tmp' ) && function_exists( 'dirname' ) && function_exists( 'basename' ) ) {
+					try {
+						Filesystem::sweep_atomic_tmp( $wp_filesystem, dirname( $handler_file ), basename( $handler_file ) );
+					} catch ( \Throwable $ignored_sweep ) {
+						unset( $ignored_sweep );
+					}
+				}
 
 				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
 					return;

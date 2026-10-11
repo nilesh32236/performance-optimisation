@@ -118,21 +118,48 @@ if ( ! function_exists( 'wppo_cleanup_dropin_artifacts' ) ) {
 	 * Delete advanced-cache backup/tmp siblings (fail-open).
 	 *
 	 * Removes `advanced-cache.php.wppo-backup` and orphaned
-	 * `advanced-cache.php.tmp.*` files from crashed atomic writes.
+	 * `advanced-cache.php.tmp.*` files from crashed atomic writes, plus the
+	 * shared-writer (issue #1821) `.wppo-bak` / `.wppo-tmp-*` residue shapes
+	 * for advanced-cache.php, object-cache.php, and wppo-redis-config.php —
+	 * including per-blog tmp names — even when the live files are gone.
 	 *
 	 * @return void
 	 */
 	function wppo_cleanup_dropin_artifacts(): void {
+		$live_files = array(
+			WP_CONTENT_DIR . '/advanced-cache.php',
+			WP_CONTENT_DIR . '/object-cache.php',
+			WP_CONTENT_DIR . '/wppo-redis-config.php',
+		);
+		foreach ( $live_files as $live ) {
+			$backup = $live . '.wppo-bak';
+			if ( file_exists( $backup ) ) {
+				wp_delete_file( $backup );
+			}
+			$legacy_backup = $live . '.wppo-backup';
+			if ( file_exists( $legacy_backup ) ) {
+				wp_delete_file( $legacy_backup );
+			}
+		}
 		$backup = WP_CONTENT_DIR . '/advanced-cache.php.wppo-backup';
 		if ( file_exists( $backup ) ) {
 			wp_delete_file( $backup );
 		}
-		$pattern = WP_CONTENT_DIR . '/advanced-cache.php.tmp.*';
-		$matches = glob( $pattern ); // phpcs:ignore WordPress.WP.AlternativeFunctions.glob_glob
-		if ( is_array( $matches ) ) {
-			foreach ( $matches as $tmp_file ) {
-				if ( is_file( $tmp_file ) ) {
-					wp_delete_file( $tmp_file );
+		$patterns = array(
+			WP_CONTENT_DIR . '/advanced-cache.php.tmp.*',
+			WP_CONTENT_DIR . '/advanced-cache.php.wppo-tmp-*',
+			WP_CONTENT_DIR . '/object-cache.php.tmp.*',
+			WP_CONTENT_DIR . '/object-cache.php.wppo-tmp-*',
+			WP_CONTENT_DIR . '/wppo-redis-config.php.tmp.*',
+			WP_CONTENT_DIR . '/wppo-redis-config.php.wppo-tmp-*',
+		);
+		foreach ( $patterns as $pattern ) {
+			$matches = glob( $pattern ); // phpcs:ignore WordPress.WP.AlternativeFunctions.glob_glob
+			if ( is_array( $matches ) ) {
+				foreach ( $matches as $tmp_file ) {
+					if ( is_file( $tmp_file ) ) {
+						wp_delete_file( $tmp_file );
+					}
 				}
 			}
 		}

@@ -863,7 +863,7 @@ class WPPO_AdvancedCache_FS_Mock {
 	 * @return bool
 	 */
 	private function is_backup_path( $path ): bool {
-		return '.wppo-backup' === substr( (string) $path, -13 );
+		return '.wppo-backup' === substr( (string) $path, -12 );
 	}
 
 	/**

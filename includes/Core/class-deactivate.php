@@ -364,7 +364,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				}
 			}
 
-			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE ); // Legacy-only fallback (atomic unsupported path).
 
 			return $ok ? null : 'wp_config_write_failed';
 		}

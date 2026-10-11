@@ -2596,14 +2596,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
 		 *
-		 * @param mixed  $fs Filesystem object exposing put_contents()/move()/delete().
-		 * @param string $path Final file path.
-		 * @param string $contents File contents.
+		 * @param mixed         $fs Filesystem object exposing put_contents()/move()/delete().
+		 * @param string        $path Final file path.
+		 * @param string        $contents File contents.
+		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool True on success.
 		 * @since 2.0.0
+		 * @since NEXT Added the `$expect` verifier passthrough.
 		 */
-		public static function atomic_file_put_contents( $fs, string $path, string $contents ): bool {
-			return Filesystem::atomic_file_put_contents( $fs, $path, $contents );
+		public static function atomic_file_put_contents( $fs, string $path, string $contents, $expect = null ): bool {
+			return Filesystem::atomic_file_put_contents( $fs, $path, $contents, $expect );
+		}
+
+		/**
+		 * Whether marker-delimited contents hold at most one block.
+		 *
+		 * Central duplicate-marker verifier (issue #1821): every live
+		 * drop-in and htaccess mutation must pass through this assertion
+		 * before the rename.
+		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
+		 * @param string $contents Full file contents to check.
+		 * @param string $begin    Begin marker.
+		 * @param string $end      End marker.
+		 * @return bool True when valid (zero or one complete blocks).
+		 * @since NEXT
+		 */
+		public static function verify_no_duplicate_markers( string $contents, string $begin, string $end ): bool {
+			return Filesystem::verify_no_duplicate_markers( $contents, $begin, $end );
+		}
+
+		/**
+		 * Whether marker-delimited contents hold exactly one ordered block.
+		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
+		 * @param string $contents Full file contents to check.
+		 * @param string $begin    Begin marker.
+		 * @param string $end      End marker.
+		 * @param bool   $expect_block Whether a block must be present.
+		 * @return bool True when the expectation holds.
+		 * @since NEXT
+		 */
+		public static function verify_marker_block( string $contents, string $begin, string $end, bool $expect_block = true ): bool {
+			return Filesystem::verify_marker_block( $contents, $begin, $end, $expect_block );
+		}
+
+		/**
+		 * Sweep orphaned atomic-write tmp/backup siblings in a directory.
+		 *
+		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
+		 *
+		 * @param mixed  $fs Filesystem object exposing dirlist()/exists()/delete().
+		 * @param string $dir Absolute directory to sweep.
+		 * @param string $prefix Filename prefix to match.
+		 * @return int Number of siblings deleted.
+		 * @since NEXT
+		 */
+		public static function sweep_atomic_tmp( $fs, string $dir, string $prefix ): int {
+			return Filesystem::sweep_atomic_tmp( $fs, $dir, $prefix );
 		}
 
 		/**

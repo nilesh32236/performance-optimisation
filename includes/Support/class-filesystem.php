@@ -1258,31 +1258,286 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		}
 
 		/**
+		 * Whether marker-delimited contents hold at most one block.
+		 *
+		 * Central duplicate-marker verifier (issue #1821): every live
+		 * drop-in and htaccess mutation must pass through this assertion
+		 * before the rename, so a duplicated `# BEGIN` / `# END` block can
+		 * never be moved over the live file — the write aborts and the live
+		 * file stays untouched. Pure string check, never throws.
+		 *
+		 * @param string $contents Full file contents to check.
+		 * @param string $begin    Begin marker (e.g. `# BEGIN wppo_rules`).
+		 * @param string $end      End marker (e.g. `# END wppo_rules`).
+		 * @return bool True when valid (zero or one complete blocks, BEGIN before END).
+		 * @since NEXT
+		 */
+		public static function verify_no_duplicate_markers( string $contents, string $begin, string $end ): bool {
+			return self::verify_marker_block( $contents, $begin, $end, true ) || self::verify_marker_block_absent( $contents, $begin, $end );
+		}
+
+		/**
+		 * Whether marker-delimited contents hold exactly one ordered block.
+		 *
+		 * Shared core behind {@see Filesystem::verify_no_duplicate_markers()}:
+		 * asserts exactly one `$begin`, exactly one `$end`, and BEGIN before
+		 * END. Pure string check, never throws.
+		 *
+		 * @param string $contents Full file contents to check.
+		 * @param string $begin    Begin marker.
+		 * @param string $end      End marker.
+		 * @param bool   $expect_block Whether a block must be present.
+		 * @return bool True when the expectation holds.
+		 * @since NEXT
+		 */
+		public static function verify_marker_block( string $contents, string $begin, string $end, bool $expect_block = true ): bool {
+			try {
+				if ( '' === $begin || '' === $end ) {
+					return false;
+				}
+				$begin_count = substr_count( $contents, $begin );
+				$end_count   = substr_count( $contents, $end );
+				if ( ! $expect_block ) {
+					return 0 === $begin_count && 0 === $end_count;
+				}
+				if ( 1 !== $begin_count || 1 !== $end_count ) {
+					return false;
+				}
+				$start = strpos( $contents, $begin );
+				$stop  = strpos( $contents, $end );
+				return false !== $start && false !== $stop && $stop > $start;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether marker-delimited contents hold zero blocks.
+		 *
+		 * Convenience wrapper for the removal case (rules disabled): the
+		 * live file must contain neither marker. Pure string check, never
+		 * throws.
+		 *
+		 * @param string $contents Full file contents to check.
+		 * @param string $begin    Begin marker.
+		 * @param string $end      End marker.
+		 * @return bool True when neither marker is present.
+		 * @since NEXT
+		 */
+		public static function verify_marker_block_absent( string $contents, string $begin, string $end ): bool {
+			return self::verify_marker_block( $contents, $begin, $end, false );
+		}
+
+		/**
+		 * Sweep orphaned atomic-write tmp/backup siblings in a directory.
+		 *
+		 * Bounded `dirlist()` scan (skipped when the listing exceeds 2000
+		 * entries, so shared-host `/tmp` scans stay cheap) deleting entries
+		 * that start with `$prefix` plus the known residue suffixes
+		 * (`.tmp.`, `.wppo-tmp-`, `.wppo-bak`, `.wppo-backup`). Best-effort
+		 * only and never throws; a sweep racing a concurrent writer merely
+		 * fails that writer's verification (fail-closed), never corrupts
+		 * the live file. Multisite-safe: callers pass per-blog tmp names
+		 * via the prefix, so no cross-site deletes occur.
+		 *
+		 * @param mixed  $fs Filesystem object exposing dirlist()/exists()/delete().
+		 * @param string $dir Absolute directory to sweep.
+		 * @param string $prefix Filename prefix to match (e.g. basename of the live file).
+		 * @return int Number of siblings deleted.
+		 * @since NEXT
+		 */
+		public static function sweep_atomic_tmp( $fs, string $dir, string $prefix ): int {
+			$removed = 0;
+			try {
+				if ( ! is_object( $fs ) || ! method_exists( $fs, 'dirlist' ) || ! method_exists( $fs, 'delete' ) ) {
+					return 0;
+				}
+				if ( '' === $dir || '' === $prefix ) {
+					return 0;
+				}
+				$exists = method_exists( $fs, 'exists' ) ? (bool) $fs->exists( $dir ) : true;
+				if ( ! $exists ) {
+					return 0;
+				}
+				$listing = $fs->dirlist( $dir );
+				if ( ! is_array( $listing ) ) {
+					return 0;
+				}
+				if ( count( $listing ) > 2000 ) {
+					return 0;
+				}
+				foreach ( $listing as $name => $info ) {
+					$entry = is_string( $name ) ? $name : '';
+					if ( '' === $entry && is_array( $info ) && isset( $info['name'] ) && is_string( $info['name'] ) ) {
+						$entry = $info['name'];
+					}
+					if ( '' === $entry || 0 !== strpos( $entry, $prefix ) ) {
+						continue;
+					}
+					$tail = substr( $entry, strlen( $prefix ) );
+					if ( false === strpos( $tail, '.tmp.' ) && false === strpos( $tail, '.wppo-tmp-' ) && false === strpos( $tail, '.wppo-bak' ) && false === strpos( $tail, '.wppo-backup' ) ) {
+						continue;
+					}
+					try {
+						if ( $fs->delete( rtrim( $dir, '/' ) . '/' . $entry ) ) {
+							++$removed;
+						}
+					} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort sibling delete must never throw.
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $removed;
+		}
+
+		/**
+		 * Build a same-directory tmp path for atomic writes.
+		 *
+		 * Always a sibling of the live file (string concatenation, never a
+		 * system-temp fallback) so the later rename stays on one filesystem
+		 * and stays atomic on every transport (`direct`, FTP, SSH): unlike
+		 * `wp_tempnam()`, this never touches the local disk and never degrades
+		 * to a cross-filesystem copy+unlink. Delegates to
+		 * {@see Filesystem::atomic_tmp_path()} (wide rand range plus PID/uniqid
+		 * segments, so concurrent writers never share a tmp name).
+		 * Never throws; returns '' when no path works.
+		 *
+		 * @param string $final_path Final file path the tmp sits beside.
+		 * @return string Tmp path, or '' when none could be built.
+		 * @since NEXT
+		 */
+		private static function new_atomic_tmp( string $final_path ): string {
+			try {
+				return self::atomic_tmp_path( $final_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Best-effort file mode of an existing target (chmod parity).
+		 *
+		 * Reads `fileperms()` masked to `0777` so a tmp staged beside the
+		 * live file inherits the deployment mode instead of resetting it
+		 * to `FS_CHMOD_FILE` on hosts with custom modes. Returns 0 when
+		 * indeterminable; callers fall back to `FS_CHMOD_FILE`. Never throws.
+		 *
+		 * @param string $path Existing file path.
+		 * @return int Mode bits, or 0 when unknown.
+		 * @since NEXT
+		 */
+		private static function target_file_mode( string $path ): int {
+			try {
+				if ( '' === $path || ! function_exists( 'fileperms' ) ) {
+					return 0;
+				}
+				$perms = @fileperms( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort mode probe; failure falls back to FS_CHMOD_FILE.
+				if ( false === $perms ) {
+					return 0;
+				}
+				$mode = (int) $perms & 0777;
+				return $mode > 0 ? $mode : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Register a shutdown sweep deleting a tmp file if still present.
+		 *
+		 * A kill mid-write must never leave residue that a later sweep
+		 * mistakes for fresh state: the shutdown handler removes `$tmp`
+		 * when it still exists at request end. Best-effort and never throws;
+		 * skipped when `register_shutdown_function()` is unavailable.
+		 *
+		 * @param mixed  $fs Filesystem object exposing exists()/delete().
+		 * @param string $tmp Tmp path to sweep.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function register_tmp_shutdown_sweep( $fs, string $tmp ): void {
+			try {
+				if ( '' === $tmp || ! is_object( $fs ) || ! method_exists( $fs, 'delete' ) || ! function_exists( 'register_shutdown_function' ) ) {
+					return;
+				}
+				register_shutdown_function(
+					static function () use ( $fs, $tmp ): void {
+						try {
+							if ( method_exists( $fs, 'exists' ) ) {
+								if ( ! $fs->exists( $tmp ) ) {
+									return;
+								}
+							}
+							$fs->delete( $tmp );
+						} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Shutdown sweep must never throw.
+						}
+					}
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Atomically write contents via tmp-file + rename.
 		 *
-		 * Writes to a unique sibling tmp file in the same directory and then
-		 * moves it over the final path, so interrupted writes never leave
-		 * partial output behind. A failed move cleans up the tmp file and
-		 * reports failure — there is intentionally no non-atomic direct-write
-		 * fallback, so readers can never observe a torn file.
+		 * Central live-file writer (issue #1821): every drop-in and htaccess
+		 * mutation must route through this helper (or
+		 * {@see Filesystem::atomic_write_php_verified()} for PHP) so a killed
+		 * or concurrent write can never leave a half-written live file.
+		 * Direct `file_put_contents()` to live paths outside this helper is
+		 * forbidden — see the source scanner in
+		 * `tests/php/AtomicWriteCentralisationTest.php`.
 		 *
-		 * @param mixed  $fs Filesystem object exposing put_contents()/move()/delete().
-		 * @param string $path Final file path.
-		 * @param string $contents File contents.
+		 * Writes to a unique sibling tmp file in the same directory (same
+		 * filesystem, so the rename stays atomic on every transport),
+		 * with chmod parity to the existing target, optionally asserts a caller
+		 * `$expect` verifier against the staged bytes, then moves it over
+		 * the final path and re-verifies the live bytes. A failed move or
+		 * verification cleans up the tmp and reports failure — there is
+		 * intentionally no non-atomic direct-write fallback, so readers can
+		 * never observe a torn file. Tmp residue is additionally swept on
+		 * shutdown.
+		 *
+		 * @param mixed         $fs Filesystem object exposing put_contents()/move()/delete().
+		 * @param string        $path Final file path.
+		 * @param string        $contents File contents.
+		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool True on success.
 		 * @since 2.4.0
+		 * @since NEXT Added the `$expect` verifier, chmod parity, and shutdown sweep.
 		 */
-		public static function atomic_file_put_contents( $fs, string $path, string $contents ): bool {
+		public static function atomic_file_put_contents( $fs, string $path, string $contents, $expect = null ): bool {
 			if ( '' === $path || ! is_object( $fs ) || ! method_exists( $fs, 'put_contents' ) || ! method_exists( $fs, 'move' ) || ! method_exists( $fs, 'delete' ) ) {
 				return false;
 			}
-			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			$tmp   = self::atomic_tmp_path( $path );
+			$chmod       = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$target_mode = self::target_file_mode( $path );
+			if ( $target_mode > 0 ) {
+				$chmod = $target_mode;
+			}
+			$tmp = self::new_atomic_tmp( $path );
 			if ( '' === $tmp ) {
 				return false;
 			}
+			self::register_tmp_shutdown_sweep( $fs, $tmp );
 			try {
 				if ( ! $fs->put_contents( $tmp, $contents, $chmod ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					$staged = $fs->get_contents( $tmp );
+					if ( ! is_string( $staged ) || $staged !== $contents ) {
+						$fs->delete( $tmp );
+						return false;
+					}
+				}
+				if ( null !== $expect && ! call_user_func( $expect, $contents ) ) {
 					$fs->delete( $tmp );
 					return false;
 				}
@@ -1290,6 +1545,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				if ( ! $moved ) {
 					$fs->delete( $tmp );
 					return false;
+				}
+				if ( $target_mode > 0 && method_exists( $fs, 'chmod' ) ) {
+					try {
+						$fs->chmod( $path, $target_mode );
+					} catch ( \Throwable $ignored_chmod ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort mode restore must never fail the write.
+					}
+				}
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					$written = $fs->get_contents( $path );
+					if ( ! is_string( $written ) || $written !== $contents ) {
+						$fs->delete( $tmp );
+						return false;
+					}
+					if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
+						$fs->delete( $tmp );
+						return false;
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1470,6 +1742,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool|null True on verified success, false on verified failure, null when unsupported.
 		 * @since 2.4.0
+		 * @since NEXT Added chmod parity and shutdown sweep.
 		 */
 		public static function atomic_write_php_verified( $fs, string $path, string $contents, $expect = null ): ?bool {
 			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
@@ -1481,7 +1754,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 			if ( '' === $path || '' === $contents ) {
 				return false;
 			}
-			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$chmod       = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$target_mode = self::target_file_mode( $path );
+			if ( $target_mode > 0 ) {
+				$chmod = $target_mode;
+			}
 			try {
 				$original = '';
 				if ( $fs->exists( $path ) ) {
@@ -1490,10 +1767,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 						return false;
 					}
 				}
-				$tmp = self::atomic_tmp_path( $path );
+				$tmp = self::new_atomic_tmp( $path );
 				if ( '' === $tmp ) {
 					return false;
 				}
+				self::register_tmp_shutdown_sweep( $fs, $tmp );
 				if ( ! $fs->put_contents( $tmp, $contents, $chmod ) ) {
 					$fs->delete( $tmp );
 					return false;

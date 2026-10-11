@@ -170,7 +170,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				if ( ! $fs->is_dir( $dir ) ) {
 					Util::prepare_cache_dir( $dir );
 				}
-				$written = $fs->put_contents( $cache_file, $contents, FS_CHMOD_FILE );
+				// Centralisation (issue #1821): compiled translation cache goes
+				// through the atomic helper so a killed request never leaves a
+				// half-written PHP file that opcache could load.
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+					$written = Util::atomic_file_put_contents( $fs, $cache_file, $contents );
+				} else {
+					$written = $fs->put_contents( $cache_file, $contents, FS_CHMOD_FILE );
+				}
 			} else {
 				if ( ! is_dir( $dir ) ) {
 					if ( function_exists( 'wp_mkdir_p' ) ) {
@@ -188,7 +195,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				}
 				// Direct file_put_contents is the deliberate last-resort fallback;
 				// WP_Filesystem->put_contents() is attempted first above and its
-				// success/failure drives the return value.
+				// success/failure drives the return value. Non-live fallback:
+				// intentional — the atomic helper needs $fs, unavailable here.
 				$written = false !== file_put_contents( $cache_file, $contents ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			}
 

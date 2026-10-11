@@ -1997,6 +1997,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 					}
 					$tmp = $staging . '/fb-' . $i . '.bin';
 					++$i;
+					// Non-live temp staging: intentional — crash-safe spill of the
+					// in-memory snapshot outside the wipe tree (never a live
+					// file); restored via restore_snapshot() after the delete.
 					$written = file_put_contents( $tmp, $contents, LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 					if ( false === $written || 0 === $written ) {
 						continue;
