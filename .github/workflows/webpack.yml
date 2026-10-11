@@ -6,14 +6,12 @@ on:
     paths-ignore:
       - 'build/**'
       - '**.md'
-      - '.distignore'
       - '.gitignore'
   pull_request:
     branches: ["master"]
     paths-ignore:
       - 'build/**'
       - '**.md'
-      - '.distignore'
 
 permissions:
   contents: read
