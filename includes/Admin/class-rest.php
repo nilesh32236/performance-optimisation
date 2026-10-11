@@ -3539,7 +3539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					if ( empty( $handles ) ) { // phpstan-ignore-line empty.variable -- $handles always array here.
+					if ( empty( $handles ) ) { // @phpstan-ignore-line empty.variable -- $handles always array here.
 						$handles = array( 'jquery-core' );
 					}
 				}
