@@ -311,9 +311,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 					}
 					// Best-effort persistent backup of the previous working file
 					// before the write (legacy parity); a failed backup must not
-					// block the rename.
+					// block the rename. Uses the same target-mode parity as
+					// the shared writer so the backup and live file keep
+					// identical modes on hosts with custom drop-in modes.
 					if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && $wp_filesystem->exists( $handler_path ) && self::is_our_dropin() ) {
-						$backed_up = $wp_filesystem->copy( $handler_path, $backup_path, true, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+						$backup_chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+						try {
+							$probe = @fileperms( $handler_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort mode parity probe; failure keeps FS_CHMOD_FILE.
+							if ( false !== $probe ) {
+								$probe_mode = (int) $probe & 0777;
+								if ( $probe_mode > 0 ) {
+									$backup_chmod = $probe_mode;
+								}
+							}
+						} catch ( \Throwable $ignored_mode ) {
+							unset( $ignored_mode );
+						}
+						$backed_up = $wp_filesystem->copy( $handler_path, $backup_path, true, $backup_chmod );
 						if ( ! $backed_up ) {
 							self::log_dropin_issue( __( 'Could not back up advanced-cache.php before replacing it.', 'performance-optimisation' ) );
 						}
@@ -360,10 +374,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 						unset( $ignored_foreign );
 					}
 					// Restore the persistent backup over a torn live file
-					// (legacy parity); best-effort and never fatal.
+					// (legacy parity); best-effort and never fatal. Restores
+					// with the backup's mode so permissions stay in parity
+					// with the pre-write file.
 					try {
 						if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && isset( $handler_path, $backup_path ) && $wp_filesystem->exists( $backup_path ) ) {
-							$wp_filesystem->copy( $backup_path, $handler_path, true, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+							$restore_chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+							try {
+								$restore_probe = @fileperms( $backup_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort mode parity probe; failure keeps FS_CHMOD_FILE.
+								if ( false !== $restore_probe ) {
+									$restore_mode = (int) $restore_probe & 0777;
+									if ( $restore_mode > 0 ) {
+										$restore_chmod = $restore_mode;
+									}
+								}
+							} catch ( \Throwable $ignored_restore_mode ) {
+								unset( $ignored_restore_mode );
+							}
+							$wp_filesystem->copy( $backup_path, $handler_path, true, $restore_chmod );
 						}
 					} catch ( \Throwable $ignored_restore ) {
 						unset( $ignored_restore );

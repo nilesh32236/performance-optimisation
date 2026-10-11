@@ -1335,11 +1335,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Bounded `dirlist()` scan (skipped when the listing exceeds 2000
 		 * entries, so shared-host `/tmp` scans stay cheap) deleting entries
 		 * that start with `$prefix` plus the known residue suffixes
-		 * (`.tmp.`, `.wppo-tmp-`, `.wppo-bak`, `.wppo-backup`). Best-effort
+		 * (`.tmp.`, `.wppo-tmp-`, `.wppo-bak`). Best-effort
 		 * only and never throws; a sweep racing a concurrent writer merely
 		 * fails that writer's verification (fail-closed), never corrupts
 		 * the live file. Multisite-safe: callers pass per-blog tmp names
 		 * via the prefix, so no cross-site deletes occur.
+		 *
+		 * The persistent legacy `.wppo-backup` sibling is deliberately
+		 * excluded: Advanced_Cache_Handler preserves it across writes, so
+		 * callers that intend to remove it (drop-in removal, uninstall)
+		 * must delete it explicitly rather than via this sweep.
 		 *
 		 * @param mixed  $fs Filesystem object exposing dirlist()/exists()/delete().
 		 * @param string $dir Absolute directory to sweep.
@@ -1376,7 +1381,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 						continue;
 					}
 					$tail = substr( $entry, strlen( $prefix ) );
-					if ( false === strpos( $tail, '.tmp.' ) && false === strpos( $tail, '.wppo-tmp-' ) && false === strpos( $tail, '.wppo-bak' ) && false === strpos( $tail, '.wppo-backup' ) ) {
+					if ( false === strpos( $tail, '.tmp.' ) && false === strpos( $tail, '.wppo-tmp-' ) && false === strpos( $tail, '.wppo-bak' ) ) {
 						continue;
 					}
 					try {
@@ -1464,6 +1469,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				if ( '' === $tmp || ! is_object( $fs ) || ! method_exists( $fs, 'delete' ) || ! function_exists( 'register_shutdown_function' ) ) {
 					return;
 				}
+				static $registered = array();
+				if ( isset( $registered[ $tmp ] ) ) {
+					return;
+				}
+				$registered[ $tmp ] = true;
 				register_shutdown_function(
 					static function () use ( $fs, $tmp ): void {
 						try {

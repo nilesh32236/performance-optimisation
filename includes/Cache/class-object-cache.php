@@ -2169,22 +2169,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						unset( $e );
 						return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 					}
-					$dropin_marker = self::DROPIN_MARKER;
-					$self          = $this;
+					$dropin_marker  = self::DROPIN_MARKER;
+					$self           = $this;
+					$fs_for_recheck = $wp_filesystem;
 					try {
 						$shared = Filesystem::atomic_write_php_verified(
 							$wp_filesystem,
 							$this->dropin_path,
 							$shared_template,
-							static function ( $contents ) use ( $dropin_marker, $self ): bool {
+							static function ( $contents ) use ( $dropin_marker, $self, $fs_for_recheck ): bool {
 								if ( ! is_string( $contents ) || false === strpos( $contents, $dropin_marker ) || 0 !== strpos( ltrim( $contents ), '<?php' ) ) {
 									return false;
 								}
 								// Mid-write foreign recheck (legacy parity): a
 								// foreign drop-in appearing while the tmp was
-								// staged must never be overwritten.
+								// staged must never be overwritten. Prefer the
+								// transport's exists()/get_contents() so
+								// FTP/SSH writes probe the remote host rather
+								// than the local disk; native checks remain as
+								// fallback. Fail-closed on any read error.
 								try {
-									if ( file_exists( $self->dropin_path ) && ! $self->is_own_dropin() ) {
+									$live_path = $self->get_dropin_path();
+									if ( is_object( $fs_for_recheck ) && method_exists( $fs_for_recheck, 'exists' ) && method_exists( $fs_for_recheck, 'get_contents' ) ) {
+										try {
+											if ( $fs_for_recheck->exists( $live_path ) ) {
+												$live = $fs_for_recheck->get_contents( $live_path );
+												if ( ! is_string( $live ) || strlen( $live ) >= 1048576 ) {
+													return false;
+												}
+												if ( ! self::is_own_dropin_content( $live ) ) {
+													return false;
+												}
+											}
+										} catch ( \Throwable $ignored_transport ) {
+											unset( $ignored_transport );
+											return false;
+										}
+										return true;
+									}
+									if ( file_exists( $live_path ) && ! $self->is_own_dropin() ) {
 										return false;
 									}
 								} catch ( \Throwable $ignored_foreign ) {

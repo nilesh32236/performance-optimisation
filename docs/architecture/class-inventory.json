@@ -1205,14 +1205,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 1117,
+        "lines": 1145,
         "methods": 14,
         "public_methods": 11,
         "large_methods": 2,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "create",
-            "line": 567,
+            "line": 595,
             "lines": 436
         },
         "method_prefixes": {
@@ -1233,7 +1233,7 @@
         "private_state_properties": 0,
         "protected_state_properties": 0,
         "public_state_properties": 0,
-        "external_dependencies": 42,
+        "external_dependencies": 43,
         "wordpress_dependencies": 8,
         "filesystem_dependencies": 9,
         "network_dependencies": 0,
@@ -1714,7 +1714,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 3429,
+        "lines": 3452,
         "methods": 56,
         "public_methods": 29,
         "large_methods": 12,
@@ -1722,7 +1722,7 @@
         "largest_method": {
             "name": "publish_dropin_atomic",
             "line": 2147,
-            "lines": 188
+            "lines": 211
         },
         "method_prefixes": {
             "get": 12,
@@ -4987,7 +4987,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Support",
-        "lines": 2701,
+        "lines": 2711,
         "methods": 47,
         "public_methods": 38,
         "large_methods": 5,

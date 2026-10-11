@@ -141,10 +141,7 @@ if ( ! function_exists( 'wppo_cleanup_dropin_artifacts' ) ) {
 				wp_delete_file( $legacy_backup );
 			}
 		}
-		$backup = WP_CONTENT_DIR . '/advanced-cache.php.wppo-backup';
-		if ( file_exists( $backup ) ) {
-			wp_delete_file( $backup );
-		}
+		// Covered by the $live_files loop above; no standalone delete needed.
 		$patterns = array(
 			WP_CONTENT_DIR . '/advanced-cache.php.tmp.*',
 			WP_CONTENT_DIR . '/advanced-cache.php.wppo-tmp-*',
