@@ -67,6 +67,7 @@
 # Internal audit, planning and design artifacts — never ship in the release ZIP
 /AUDIT/
 /AUDIT_PLAN.md
+/TASK.md
 /AUTONOMOUS_PLAN.md
 /COMPETITIVE_GAP_ANALYSIS.md
 /PERFORMANCE.md

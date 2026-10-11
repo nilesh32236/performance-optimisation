@@ -117,7 +117,7 @@ class DistignoreDevPackageTest extends \PHPUnit\Framework\TestCase {
 	public function test_internal_agent_artifacts_are_excluded_from_the_release(): void {
 		$patterns = $this->distignore_patterns();
 		foreach (
-			array( '/wppo-agent-rules.md', '/empty_commit.sh', '/tools', '/.wordpress-org' )
+			array( '/wppo-agent-rules.md', '/empty_commit.sh', '/tools', '/.wordpress-org', '/TASK.md' )
 			as $required
 		) {
 			$this->assertContains(
