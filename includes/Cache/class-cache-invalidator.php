@@ -418,7 +418,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						try {
 							$from_const = \PerformanceOptimise\Inc\Used_CSS::VIEWPORT_VARIANTS;
-							if ( is_array( $from_const ) && ! empty( $from_const ) ) {
+							if ( is_array( $from_const ) ) {
 								$filtered = array_values( array_filter( array_map( 'strval', $from_const ) ) );
 								if ( ! empty( $filtered ) ) {
 									$variant_slugs = $filtered;

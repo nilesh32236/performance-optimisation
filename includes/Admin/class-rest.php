@@ -3539,7 +3539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					if ( empty( $handles ) ) {
+					if ( ! $handles ) {
 						$handles = array( 'jquery-core' );
 					}
 				}

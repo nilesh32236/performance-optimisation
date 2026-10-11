@@ -86,3 +86,8 @@
 **Bug/Gap:** `set_error_handler` callbacks returning `void` or missing explicit return types failed strict static analysis.
 **Root Cause:** PHP's `set_error_handler` requires a callable returning a boolean, where returning `false` continues to the standard error handler. A `void` return implicitly returns `null` (falsy), failing the strict `callable(...): bool` signature.
 **Test Added:** Fixed type signatures to `static function (): bool { return true; }` and ran PHPStan to verify.
+
+## 2026-10-12 - Fix redundant empty() checks on non-falsy variables
+**Bug/Gap:** PHPStan static analysis errors related to `empty.variable` and `notIdentical.alwaysTrue` were failing in various classes (Cache_Invalidator, Woo_Detect, Rest).
+**Root Cause:** Code performed `! empty()` checks on variables PHPStan knew could not be falsy based on prior type narrowing, or checked `!== null` when `! is_scalar()` already proved the value could only be null.
+**Test Added:** Replaced redundant `empty()` logic with boolean or scalar type evaluation. Validated via `vendor/bin/phpstan analyse includes/`.
