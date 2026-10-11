@@ -956,7 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 					}
 				}
 
-				$all_pass = ! empty( $checks );
+				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks ) && ! empty( $preload_checks ) && ! empty( $cart_checks ); // @phpstan-ignore-line
 				foreach ( $checks as $check ) {
 					if ( empty( $check['pass'] ) ) {
 						$all_pass = false;
