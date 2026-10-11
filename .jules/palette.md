@@ -68,3 +68,6 @@
 ## 2025-02-15 - Remove hardcoded fallback hex from native variable usages
 **Learning:** When using mapped native variables like `--wppo-primary` (which falls back to `--wp-admin-theme-color`), supplying a local hardcoded fallback (e.g. `var(--wppo-primary, #007cb6)`) bypasses the theme adaptation if the mapped variable system isn't fully established locally or encounters issues. Hardcoded backups within `var()` defeat dynamic theming.
 **Action:** Strictly omit local hex fallbacks from `var()` usages when mapping to a defined root token that already handles theme fallback.
+## 2026-08-31 - Always Use `aria-hidden` on Decorative Icons
+**Learning:** When using decorative icons (like `FontAwesomeIcon`) alongside visible text labels within actionable buttons, screen readers can sometimes announce the icon content unnecessarily, causing confusion and verbal clutter for users relying on assistive technologies.
+**Action:** Always append `aria-hidden="true"` to these decorative icons to prevent redundant or confusing screen reader announcements, especially when the surrounding container already has a fully descriptive label.
