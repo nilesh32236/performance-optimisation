@@ -108,9 +108,13 @@ export default function QuickActionsCard( { onNavigate } ) {
 						'performance-optimisation'
 					) }
 					onClick={ clearCache }
+					aria-describedby="clear-cache-hint"
 					label={
 						<>
-							<FontAwesomeIcon icon={ faBroom } />{ ' ' }
+							<FontAwesomeIcon
+								icon={ faBroom }
+								aria-hidden="true"
+							/>{ ' ' }
 							{ __(
 								'Clear the page cache',
 								'performance-optimisation'
@@ -118,7 +122,7 @@ export default function QuickActionsCard( { onNavigate } ) {
 						</>
 					}
 				/>
-				<p className="wppo-overview__action-hint">
+				<p className="wppo-overview__action-hint" id="clear-cache-hint">
 					{ __(
 						'The next visitor gets a freshly generated page.',
 						'performance-optimisation'
@@ -132,12 +136,18 @@ export default function QuickActionsCard( { onNavigate } ) {
 							className="wppo-button wppo-button--link"
 							onClick={ goTo( 'media' ) }
 						>
-							<FontAwesomeIcon icon={ faImages } />{ ' ' }
+							<FontAwesomeIcon
+								icon={ faImages }
+								aria-hidden="true"
+							/>{ ' ' }
 							{ __(
 								'Review images',
 								'performance-optimisation'
 							) }
-							<FontAwesomeIcon icon={ faArrowRight } />
+							<FontAwesomeIcon
+								icon={ faArrowRight }
+								aria-hidden="true"
+							/>
 						</button>
 					</li>
 					<li>
@@ -146,12 +156,18 @@ export default function QuickActionsCard( { onNavigate } ) {
 							className="wppo-button wppo-button--link"
 							onClick={ goTo( 'data-system' ) }
 						>
-							<FontAwesomeIcon icon={ faDatabase } />{ ' ' }
+							<FontAwesomeIcon
+								icon={ faDatabase }
+								aria-hidden="true"
+							/>{ ' ' }
 							{ __(
 								'Review the database',
 								'performance-optimisation'
 							) }
-							<FontAwesomeIcon icon={ faArrowRight } />
+							<FontAwesomeIcon
+								icon={ faArrowRight }
+								aria-hidden="true"
+							/>
 						</button>
 					</li>
 					<li>
@@ -160,12 +176,18 @@ export default function QuickActionsCard( { onNavigate } ) {
 							className="wppo-button wppo-button--link"
 							onClick={ goTo( 'speed' ) }
 						>
-							<FontAwesomeIcon icon={ faGaugeHigh } />{ ' ' }
+							<FontAwesomeIcon
+								icon={ faGaugeHigh }
+								aria-hidden="true"
+							/>{ ' ' }
 							{ __(
 								'Tune speed settings',
 								'performance-optimisation'
 							) }
-							<FontAwesomeIcon icon={ faArrowRight } />
+							<FontAwesomeIcon
+								icon={ faArrowRight }
+								aria-hidden="true"
+							/>
 						</button>
 					</li>
 				</ul>

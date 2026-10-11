@@ -1453,7 +1453,7 @@ const PluginSetting = ( { options } ) => {
 					) }
 					icon={ <FontAwesomeIcon icon={ faUndo } /> }
 				>
-					<p className="wppo-text-muted wppo-mb-16">
+					<p className="wppo-text-muted wppo-mb-16" id="undo-desc">
 						{ __(
 							'Restores your settings to how they were before the last save or import. Useful if a recent change broke your site.',
 							'performance-optimisation'
@@ -1472,6 +1472,7 @@ const PluginSetting = ( { options } ) => {
 						onClick={ restoreSettings }
 						isLoading={ isRestoring }
 						disabled={ ! undoAvailable }
+						aria-describedby="undo-desc"
 						label={ __(
 							'Undo Last Change',
 							'performance-optimisation'
@@ -1500,13 +1501,19 @@ const PluginSetting = ( { options } ) => {
 						) }
 						icon={ <FontAwesomeIcon icon={ faFileExport } /> }
 					>
-						<p className="wppo-text-muted wppo-mb-16">
+						<p
+							className="wppo-text-muted wppo-mb-16"
+							id="export-desc-1"
+						>
 							{ __(
 								'Download your current plugin settings as a JSON file for backup or migration to another site.',
 								'performance-optimisation'
 							) }
 						</p>
-						<p className="wppo-text-muted wppo-text-small wppo-mb-16">
+						<p
+							className="wppo-text-muted wppo-text-small wppo-mb-16"
+							id="export-desc-2"
+						>
 							{ __(
 								'Sensitive keys are redacted automatically. File is formatted JSON.',
 								'performance-optimisation'
@@ -1515,6 +1522,7 @@ const PluginSetting = ( { options } ) => {
 						<LoadingSubmitButton
 							className="wppo-button wppo-button--secondary"
 							onClick={ exportSettings }
+							aria-describedby="export-desc-1 export-desc-2"
 							label={ __(
 								'Download JSON',
 								'performance-optimisation'
@@ -1617,6 +1625,7 @@ const PluginSetting = ( { options } ) => {
 								} }
 								disabled={ ! selectedFile || isImporting }
 								isLoading={ isImporting }
+								aria-describedby="import-config-desc"
 								label={ __(
 									'Import Settings',
 									'performance-optimisation'
