@@ -178,8 +178,7 @@ jobs:
       github.event.action != 'closed' &&
       github.actor != 'github-actions[bot]' &&
       !endsWith(github.actor, '[bot]') &&
-      !startsWith(github.event.pull_request.head.ref, 'autofix/') &&
-      !contains(github.event.pull_request.labels.*.name, 'autofix') &&
+        !contains(github.event.pull_request.labels.*.name, 'autofix') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
       (
@@ -558,7 +557,8 @@ jobs:
           contains(github.event.pull_request.labels.*.name, 'autofix') &&
           !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
           !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
-          !contains(github.event.pull_request.labels.*.name, 'autofix:ready')
+          !contains(github.event.pull_request.labels.*.name, 'autofix:ready') &&
+          !startsWith(github.event.pull_request.head.ref, 'autofix/')
         ) ||
         (
           github.event_name == 'issue_comment' &&
