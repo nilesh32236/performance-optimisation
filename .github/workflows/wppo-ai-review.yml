@@ -29,8 +29,13 @@ name: AI Multi-Agent Review
 #     mid-execution.  New triggers queue behind the running job.
 #
 #  3. The `review` job has an explicit guard: it skips when the pusher is a
-#     bot (actor ends with [bot]) OR when the PR branch is an autofix/ branch.
-#     This prevents the review job from even starting on bot commits.
+#     bot (actor ends with [bot]), and it also skips PRs carrying the
+#     `autofix`, `autofix:approved` or `autofix:merged` LABELS, i.e. PRs the
+#     autofix loop is already working on.
+#     It no longer excludes PRs whose BRANCH is autofix/*: that exclusion made
+#     every autofix PR unreviewable and therefore unmergeable, so it moved to
+#     the `autofix` job's own trigger (inside the pull_request branch), which
+#     is where it actually prevents a loop. Do not reintroduce it here.
 #
 #  4. The `autofix` job has its own per-PR inner concurrency group so that
 #     parallel fix runs on the same PR are serialised, not cancelled.
