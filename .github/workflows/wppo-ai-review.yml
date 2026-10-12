@@ -174,8 +174,10 @@ jobs:
   # Triggered on human-created PRs only.
   # Skipped when:
   #   - The actor is a bot (github-actions[bot], opencode-ai-reviewer[bot], etc.)
-  #   - The PR branch is autofix/* (bot-managed)
   #   - The PR already has an autofix-family label
+  # (The autofix/* BRANCH exclusion is deliberately absent — see the header note.
+  # It blocks review of every autofix PR; the loop prevention it was for now
+  # lives on the autofix job's own trigger, inside the pull_request branch.)
   review:
     name: AI Code Review
     if: |
