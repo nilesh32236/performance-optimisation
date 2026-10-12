@@ -553,7 +553,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						'Automated Database Cleanup',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faCalendarAlt } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faCalendarAlt }
+							aria-hidden="true"
+						/>
+					}
 				>
 					<div className="wppo-field-group">
 						<div className="wppo-field">
@@ -694,7 +699,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						'Total Database Overhead',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faDatabase } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faDatabase }
+							aria-hidden="true"
+						/>
+					}
 					footer={
 						<LoadingSubmitButton
 							className="wppo-button wppo-button--secondary"
