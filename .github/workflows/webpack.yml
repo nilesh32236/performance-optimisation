@@ -24,6 +24,12 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      # Needed by the workflow-referenced-labels step: repo labels are an
+      # issues-scoped resource, so GET /repos/{owner}/{repo}/labels 403s with
+      # contents: read alone. The check fails closed, so without this the step
+      # would go red on every run for a permissions reason rather than a
+      # missing label -- a spurious red default-branch gate.
+      issues: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
