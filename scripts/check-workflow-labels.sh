@@ -2,8 +2,9 @@
 #
 # check-workflow-labels.sh
 #
-# A check that can fail: asserts that every GitHub label every workflow in
-# .github/workflows/ references actually exists in this repository.
+# A check that CAN fail, and that IS run (webpack.yml -> opencode-installer):
+# asserts that every GitHub label every workflow in .github/workflows/ references
+# actually exists in this repository.
 #
 # Why this exists: growth-monitor.yml created an issue with
 #   gh issue create --label growth-monitor
@@ -13,10 +14,16 @@
 # a broken scheduled run rather than a red default-branch gate.
 # model-intelligence.yml had the same latent shape with `model-registry`.
 #
-# A workflow that creates its own label with `gh label create --force` is
-# self-healing and cannot fail this way; upstream-monitor.yml in the reviewer
-# repo does exactly that. Those lines are detected and their labels skipped, so
-# the check never demands a label the workflow would have made anyway.
+# Two rules this check follows, both of which a simpler version violated:
+#
+#   1. It must be WIRED INTO CI. A guard nothing executes cannot fail, and a
+#      check that cannot fail is the same defect as the bug it guards.
+#   2. Self-created labels are skipped INCLUDING QUOTED ones. A workflow running
+#      `gh label create "audit"` makes its own label and demanding it would be a
+#      false positive. An earlier version's regex matched none of the ten quoted
+#      `gh label create` lines here, so the skip matched nothing while the check
+#      still reported PASS -- the worse failure mode, because it looks like it
+#      works.
 #
 # Usage:  scripts/check-workflow-labels.sh
 # Exit:   0 = every referenced label exists or is self-created
@@ -50,17 +57,21 @@ if ! gh api "repos/$REPO/labels?per_page=100" --jq '.[].name' > "$EXISTING" 2>/d
   exit 1
 fi
 
-# Labels this repo's own workflows create, so they need not pre-exist.
-grep -rhoE 'gh label create [A-Za-z0-9:._-]+' "$WORKFLOW_DIR" 2>/dev/null \
-  | awk '{print $4}' > "$CREATED" || true
+# Labels this repo's own workflows create, QUOTED OR NOT. The trim strips quote
+# characters; without it the skip set holds \"audit\" while the reference set
+# holds audit, and the two never match.
+grep -rhoE 'gh label create ["'"'"']?[A-Za-z0-9:._-]+' "$WORKFLOW_DIR" 2>/dev/null \
+  | sed -E 's/^gh label create //' \
+  | tr -d "\"'" \
+  | grep -v '^$' \
+  | sort -u > "$CREATED" || true
 
-# Referenced labels. The capture is [^[:space:]&|]+ because a label name never
-# contains whitespace: anything after the first space is the next argument of
-# the shell command and must not be swallowed into the label name.
+# Referenced labels. Capture is [^[:space:]&|]+ because a label name never
+# contains whitespace: what follows the first space is the next shell argument.
 grep -rhoE -- '--label[= ]+[^[:space:]&|]+' "$WORKFLOW_DIR" 2>/dev/null \
   | sed -E 's/^--label[= ]+//' \
   | tr ',' '\n' \
-  | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" \
+  | tr -d "\"'" \
   | grep -v '^$' \
   | sort -u \
   | while IFS= read -r label; do

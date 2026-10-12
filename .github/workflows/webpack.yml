@@ -43,7 +43,14 @@ jobs:
       # secrets.GH_PAT. Referencing it by branch means whoever can push that
       # branch owns code execution in this repository, so every reference must
       # stay on an immutable commit SHA.
-      - name: Pinned reviewer ref regression
+        run: bash .github/scripts/tests/reviewer-ref-pinned.sh
+      - name: Workflow-referenced labels
+        # A guard that nothing runs cannot fail. growth-monitor.yml referenced a
+        # `growth-monitor` label that did not exist; the step that needed it only
+        # broke when a material change fired the schedule.
+        run: bash scripts/check-workflow-labels.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/tests/reviewer-ref-pinned.sh
 
   js-build:
