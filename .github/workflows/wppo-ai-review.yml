@@ -29,8 +29,13 @@ name: AI Multi-Agent Review
 #     mid-execution.  New triggers queue behind the running job.
 #
 #  3. The `review` job has an explicit guard: it skips when the pusher is a
-#     bot (actor ends with [bot]) OR when the PR branch is an autofix/ branch.
-#     This prevents the review job from even starting on bot commits.
+#     bot (actor ends with [bot]), and it also skips PRs carrying the
+#     `autofix`, `autofix:approved` or `autofix:merged` LABELS, i.e. PRs the
+#     autofix loop is already working on.
+#     It no longer excludes PRs whose BRANCH is autofix/*: that exclusion made
+#     every autofix PR unreviewable and therefore unmergeable, so it moved to
+#     the `autofix` job's own trigger (inside the pull_request branch), which
+#     is where it actually prevents a loop. Do not reintroduce it here.
 #
 #  4. The `autofix` job has its own per-PR inner concurrency group so that
 #     parallel fix runs on the same PR are serialised, not cancelled.
@@ -169,8 +174,10 @@ jobs:
   # Triggered on human-created PRs only.
   # Skipped when:
   #   - The actor is a bot (github-actions[bot], opencode-ai-reviewer[bot], etc.)
-  #   - The PR branch is autofix/* (bot-managed)
   #   - The PR already has an autofix-family label
+  # (The autofix/* BRANCH exclusion is deliberately absent — see the header note.
+  # It blocks review of every autofix PR; the loop prevention it was for now
+  # lives on the autofix job's own trigger, inside the pull_request branch.)
   review:
     name: AI Code Review
     if: |
@@ -178,8 +185,7 @@ jobs:
       github.event.action != 'closed' &&
       github.actor != 'github-actions[bot]' &&
       !endsWith(github.actor, '[bot]') &&
-      !startsWith(github.event.pull_request.head.ref, 'autofix/') &&
-      !contains(github.event.pull_request.labels.*.name, 'autofix') &&
+        !contains(github.event.pull_request.labels.*.name, 'autofix') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
       (
@@ -558,7 +564,8 @@ jobs:
           contains(github.event.pull_request.labels.*.name, 'autofix') &&
           !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
           !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
-          !contains(github.event.pull_request.labels.*.name, 'autofix:ready')
+          !contains(github.event.pull_request.labels.*.name, 'autofix:ready') &&
+          !startsWith(github.event.pull_request.head.ref, 'autofix/')
         ) ||
         (
           github.event_name == 'issue_comment' &&
