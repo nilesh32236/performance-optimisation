@@ -1,6 +1,6 @@
 # Phase G — Measurement & Growth Monitoring
 
-Captured: `2026-09-28T13:51:31+00:00`
+Captured: `2026-10-12T15:52:58+00:00`
 
 This report uses public WordPress.org and GitHub repository metadata. It does not collect WordPress visitors, site-owner settings, cookies, or private application traffic.
 
@@ -13,21 +13,21 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 | WordPress.org rating score | 100 | 100 | +0 |
 | WordPress.org rating count | 4 | 4 | +0 |
 | WordPress.org support threads | 0 | 0 | +0 |
-| WordPress.org version | 2.4.0 | 2.4.0 | N/A |
-| WordPress.org last updated | 2026-09-24 1:10am GMT | 2026-09-24 1:10am GMT | N/A |
+| WordPress.org version | 2.4.1 | 2.4.0 | N/A |
+| WordPress.org last updated | 2026-10-03 9:56am GMT | 2026-09-24 1:10am GMT | N/A |
 | GitHub stars | 4 | 4 | +0 |
 | GitHub forks | 0 | 0 | +0 |
-| GitHub open issues | 11 | 5 | +6 |
-| GitHub open PRs | 10 | 3 | +7 |
-| GitHub 14-day views | 731 | 731 | +0 |
-| GitHub 14-day view uniques | 7 | 7 | +0 |
-| GitHub 14-day clones | 16616 | 16616 | +0 |
-| GitHub 14-day clone uniques | 1169 | 1169 | +0 |
+| GitHub open issues | 5 | 18 | -13 |
+| GitHub open PRs | 1 | 9 | -8 |
+| GitHub 14-day views | 167 | 731 | -564 |
+| GitHub 14-day view uniques | 3 | 7 | -4 |
+| GitHub 14-day clones | 11211 | 16616 | -5405 |
+| GitHub 14-day clone uniques | 816 | 1169 | -353 |
 
 ## Operational metrics
 
-- Latest release: `v2.4.0` (2026-09-24T01:09:01Z). **[recorded at capture; becomes v2.4.1 only once 2.4.1 is actually released — not on merge]**
-- Median release gap across the last 10 releases: `4.33` days.
+- Latest release: `v2.4.1` (2026-10-03T09:54:09Z).
+- Median release gap across the last 10 releases: `5.91` days.
 - Regression count, issue-to-merge time, merge-to-release time, structured verification failures, and Playwright failure history are not yet exported as series.
 
 ## Feature coverage
@@ -90,7 +90,12 @@ The following changes are tracked for later comparison. Movement after a change 
 
 The scheduled workflow creates an issue only for sustained listing changes, rating/support regressions, GitHub issue growth, release changes, or a 25% traffic movement on a meaningful baseline. It does not create alerts for daily noise.
 
-Current run: no material change from the previous snapshot.
+Current material reasons:
+
+- GitHub open issues rose by 10 or more
+- WordPress.org listing version changed
+- WordPress.org last-updated timestamp changed
+- GitHub 14-day views changed by 25% or more
 
 ## Privacy boundary
 
