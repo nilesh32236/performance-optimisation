@@ -3389,7 +3389,12 @@ const FileOptimization = ( {
 								'CSS Optimisation',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faCode } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faCode }
+									aria-hidden="true"
+								/>
+							}
 						>
 							{ optimizerDisabled && (
 								<div className="wppo-notice wppo-notice--warning wppo-mb-12">
@@ -4321,7 +4326,12 @@ const FileOptimization = ( {
 								'HTML Optimisation',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faCode } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faCode }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field-group">
 								<Tooltip
@@ -4414,7 +4424,12 @@ const FileOptimization = ( {
 								'JavaScript Loading',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faRocket } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faRocket }
+									aria-hidden="true"
+								/>
+							}
 						>
 							{ optimizerDisabled && (
 								<div className="wppo-notice wppo-notice--warning wppo-mb-12">
@@ -4877,7 +4892,12 @@ const FileOptimization = ( {
 									'Script Rules',
 									'performance-optimisation'
 								) }
-								icon={ <FontAwesomeIcon icon={ faRocket } /> }
+								icon={
+									<FontAwesomeIcon
+										icon={ faRocket }
+										aria-hidden="true"
+									/>
+								}
 							>
 								<div className="wppo-field-group">
 									{ settings.minifyJS && (
@@ -5539,7 +5559,12 @@ const FileOptimization = ( {
 								'WooCommerce Core',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faStore } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faStore }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
@@ -5651,7 +5676,12 @@ const FileOptimization = ( {
 									'LiteSpeed Integration',
 									'performance-optimisation'
 								) }
-								icon={ <FontAwesomeIcon icon={ faServer } /> }
+								icon={
+									<FontAwesomeIcon
+										icon={ faServer }
+										aria-hidden="true"
+									/>
+								}
 							>
 								<div className="wppo-field-group">
 									<div className="wppo-mb-12">
@@ -5842,7 +5872,12 @@ const FileOptimization = ( {
 								'Server Rules',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faServer } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faServer }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field-group">
 								{ serverRulesError ? (
@@ -6051,7 +6086,12 @@ const FileOptimization = ( {
 								'CDN Settings',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faServer } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faServer }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field">
 								<label
@@ -6354,7 +6394,12 @@ const FileOptimization = ( {
 								'Cleanup Core Bloat',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faShieldAlt }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
@@ -6655,7 +6700,12 @@ const FileOptimization = ( {
 								'Heartbeat Control',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faRocket } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faRocket }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<div className="wppo-field">
 								<label

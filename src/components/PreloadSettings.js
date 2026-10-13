@@ -369,7 +369,12 @@ const PreloadSettings = ( { options = {} } ) => {
 			<form onSubmit={ handleSubmit } className="wppo-stacked-cards">
 				<FeatureCard
 					title={ __( 'Cache Warm-up', 'performance-optimisation' ) }
-					icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faHourglassStart }
+							aria-hidden="true"
+						/>
+					}
 				>
 					<div className="wppo-field-group">
 						<SwitchField
@@ -508,7 +513,9 @@ const PreloadSettings = ( { options = {} } ) => {
 						'Third-Party Connections',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faLink } /> }
+					icon={
+						<FontAwesomeIcon icon={ faLink } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						<SwitchField
@@ -618,7 +625,9 @@ const PreloadSettings = ( { options = {} } ) => {
 						'Critical Assets Preloading',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faFont } /> }
+					icon={
+						<FontAwesomeIcon icon={ faFont } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-stacked-cards">
 						<div className="wppo-field-group">
@@ -792,7 +801,9 @@ const PreloadSettings = ( { options = {} } ) => {
 						'Speculative Loading',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faRocket } /> }
+					icon={
+						<FontAwesomeIcon icon={ faRocket } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						<p className="wppo-text-muted wppo-text-small">

@@ -412,7 +412,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 							'performance-optimisation'
 						) }
 					>
-						<FontAwesomeIcon icon={ faGlobe } />
+						<FontAwesomeIcon icon={ faGlobe } aria-hidden="true" />
 					</button>
 					<button
 						type="submit"

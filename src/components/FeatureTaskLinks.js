@@ -81,7 +81,7 @@ export const FEATURE_TASK_LINKS = [
 const FeatureTaskLinks = ( { onNavigate = () => {} } ) => (
 	<FeatureCard
 		title={ __( 'Find a setting', 'performance-optimisation' ) }
-		icon={ <FontAwesomeIcon icon={ faCompass } aria-hidden="true" /> }
+		icon={ <FontAwesomeIcon icon={ faCompass } /> }
 	>
 		<p className="wppo-text-muted">
 			{ __(

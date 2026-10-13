@@ -1003,7 +1003,12 @@ const PluginSetting = ( { options } ) => {
 						'Optimisation Activity Log',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faHistory } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faHistory }
+							aria-hidden="true"
+						/>
+					}
 					footer={
 						logLoaded && logTotalPages > 1 ? (
 							<div className="wppo-log-pagination">
@@ -1071,7 +1076,10 @@ const PluginSetting = ( { options } ) => {
 									'performance-optimisation'
 								) }
 							>
-								<FontAwesomeIcon icon={ faHistory } />
+								<FontAwesomeIcon
+									icon={ faHistory }
+									aria-hidden="true"
+								/>
 								{ __(
 									'Load Activity Log',
 									'performance-optimisation'
@@ -1197,7 +1205,12 @@ const PluginSetting = ( { options } ) => {
 						'Google PageSpeed API Key',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faTachometerAlt } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faTachometerAlt }
+							aria-hidden="true"
+						/>
+					}
 				>
 					<p
 						id="pagespeed-api-key-desc"
@@ -1451,7 +1464,9 @@ const PluginSetting = ( { options } ) => {
 						'Undo Last Settings Change',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faUndo } /> }
+					icon={
+						<FontAwesomeIcon icon={ faUndo } aria-hidden="true" />
+					}
 				>
 					<p className="wppo-text-muted wppo-mb-16" id="undo-desc">
 						{ __(
@@ -1499,7 +1514,12 @@ const PluginSetting = ( { options } ) => {
 							'Export Configuration',
 							'performance-optimisation'
 						) }
-						icon={ <FontAwesomeIcon icon={ faFileExport } /> }
+						icon={
+							<FontAwesomeIcon
+								icon={ faFileExport }
+								aria-hidden="true"
+							/>
+						}
 					>
 						<p
 							className="wppo-text-muted wppo-mb-16"
@@ -1543,7 +1563,12 @@ const PluginSetting = ( { options } ) => {
 								'Import Configuration',
 								'performance-optimisation'
 							) }
-							icon={ <FontAwesomeIcon icon={ faFileImport } /> }
+							icon={
+								<FontAwesomeIcon
+									icon={ faFileImport }
+									aria-hidden="true"
+								/>
+							}
 						>
 							<p
 								className="wppo-text-muted"
