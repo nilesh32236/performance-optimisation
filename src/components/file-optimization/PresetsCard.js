@@ -50,7 +50,7 @@ const PresetsCard = ( {
 } ) => (
 	<FeatureCard
 		title={ __( 'Optimisation Presets', 'performance-optimisation' ) }
-		icon={ <FontAwesomeIcon icon={ faRocket } aria-hidden="true" /> }
+		icon={ <FontAwesomeIcon icon={ faRocket } /> }
 	>
 		{ presetNotice && (
 			<NoticeBanner
