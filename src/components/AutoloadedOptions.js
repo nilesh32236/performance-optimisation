@@ -520,7 +520,7 @@ const AutoloadedOptions = () => {
 	return (
 		<FeatureCard
 			title={ __( 'Autoloaded Options', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faDatabase } /> }
+			icon={ <FontAwesomeIcon icon={ faDatabase } aria-hidden="true" /> }
 			actions={
 				loading && (
 					<span role="status" aria-live="polite">

@@ -653,7 +653,9 @@ const ImageOptimization = ( { options = {} } ) => {
 			<div className="wppo-stacked-cards">
 				<FeatureCard
 					title={ __( 'Lazy Loading', 'performance-optimisation' ) }
-					icon={ <FontAwesomeIcon icon={ faEye } /> }
+					icon={
+						<FontAwesomeIcon icon={ faEye } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						<SwitchField
@@ -891,7 +893,9 @@ const ImageOptimization = ( { options = {} } ) => {
 
 				<FeatureCard
 					title={ __( 'Video & Media', 'performance-optimisation' ) }
-					icon={ <FontAwesomeIcon icon={ faMagic } /> }
+					icon={
+						<FontAwesomeIcon icon={ faMagic } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						<SwitchField
@@ -967,7 +971,9 @@ const ImageOptimization = ( { options = {} } ) => {
 						'Next-Gen Conversion',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faMagic } /> }
+					icon={
+						<FontAwesomeIcon icon={ faMagic } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						{ ( typeof wppoSettings !== 'undefined'
@@ -1176,7 +1182,9 @@ const ImageOptimization = ( { options = {} } ) => {
 						'Responsive Limits',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faMagic } /> }
+					icon={
+						<FontAwesomeIcon icon={ faMagic } aria-hidden="true" />
+					}
 				>
 					<div className="wppo-field-group">
 						<div className="wppo-field">
@@ -1292,7 +1300,12 @@ const ImageOptimization = ( { options = {} } ) => {
 						'Advanced Preloading',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faCloudUploadAlt }
+							aria-hidden="true"
+						/>
+					}
 				>
 					<div className="wppo-stacked-cards">
 						<div className="wppo-field wppo-lcp-candidate">

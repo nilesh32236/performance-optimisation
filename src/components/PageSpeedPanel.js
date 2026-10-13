@@ -426,7 +426,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						disabled={ scanning || pending }
 						aria-pressed={ strategy === 'mobile' }
 					>
-						<FontAwesomeIcon icon={ faMobileAlt } />
+						<FontAwesomeIcon
+							icon={ faMobileAlt }
+							aria-hidden="true"
+						/>
 						{ __( 'Mobile', 'performance-optimisation' ) }
 					</button>
 					<button
@@ -440,7 +443,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						disabled={ scanning || pending }
 						aria-pressed={ strategy === 'desktop' }
 					>
-						<FontAwesomeIcon icon={ faDesktop } />
+						<FontAwesomeIcon
+							icon={ faDesktop }
+							aria-hidden="true"
+						/>
 						{ __( 'Desktop', 'performance-optimisation' ) }
 					</button>
 				</div>

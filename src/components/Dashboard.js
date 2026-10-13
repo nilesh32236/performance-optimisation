@@ -1277,7 +1277,10 @@ const Dashboard = ( {
 			{ isCacheMissing && (
 				<div className="wppo-banner wppo-banner--warning" role="alert">
 					<span className="wppo-banner__icon" aria-hidden="true">
-						<FontAwesomeIcon icon={ faExclamationTriangle } />
+						<FontAwesomeIcon
+							icon={ faExclamationTriangle }
+							aria-hidden="true"
+						/>
 					</span>
 					<span className="wppo-banner__text">
 						{ __(
@@ -1302,7 +1305,10 @@ const Dashboard = ( {
 							{ __( 'Cache Size', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faServer } />
+							<FontAwesomeIcon
+								icon={ faServer }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span
@@ -1359,7 +1365,10 @@ const Dashboard = ( {
 							) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faFileCode } />
+							<FontAwesomeIcon
+								icon={ faFileCode }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span className="wppo-stat-value">
@@ -1389,7 +1398,10 @@ const Dashboard = ( {
 							{ __( 'DB Overhead', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faDatabase } />
+							<FontAwesomeIcon
+								icon={ faDatabase }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
@@ -1425,7 +1437,10 @@ const Dashboard = ( {
 							) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faImages } />
+							<FontAwesomeIcon
+								icon={ faImages }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span

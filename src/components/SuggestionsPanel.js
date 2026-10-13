@@ -334,7 +334,11 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 	return (
 		<div className="wppo-suggestions-panel">
 			<div className="wppo-suggestions-panel__header">
-				<FontAwesomeIcon icon={ faLightbulb } className="wppo-mr-8" />
+				<FontAwesomeIcon
+					icon={ faLightbulb }
+					aria-hidden="true"
+					className="wppo-mr-8"
+				/>
 				<h3 className="wppo-suggestions-panel__title">
 					{ __( 'Suggestions', 'performance-optimisation' ) }
 				</h3>
