@@ -71,3 +71,6 @@
 ## 2026-08-31 - Always Use `aria-hidden` on Decorative Icons
 **Learning:** When using decorative icons (like `FontAwesomeIcon`) alongside visible text labels within actionable buttons, screen readers can sometimes announce the icon content unnecessarily, causing confusion and verbal clutter for users relying on assistive technologies.
 **Action:** Always append `aria-hidden="true"` to these decorative icons to prevent redundant or confusing screen reader announcements, especially when the surrounding container already has a fully descriptive label.
+## 2026-10-14 - Missing FeatureCard Icons
+**Learning:** FeatureCards without an `icon` prop look visually inconsistent and lack the visual affordance other cards have. They should all have an accompanying FontAwesomeIcon with `aria-hidden='true'`.
+**Action:** Ensure all `FeatureCard` components are given a suitable FontAwesomeIcon via the `icon` prop for consistency and aesthetic polish.
