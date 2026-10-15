@@ -40,6 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: |
+          gh label create model-registry --color 1d76db --description 'Automatically generated model-registry changes' 2>/dev/null || true
           if [ "$(jq -r '.material' /tmp/model-refresh.json)" != "true" ]; then
             echo "No material registry change."
             exit 0
