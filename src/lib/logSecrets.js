@@ -14,21 +14,58 @@ export const redactLogSecrets = ( raw ) => {
 	if ( typeof raw !== 'string' || '' === raw ) {
 		return raw;
 	}
-	return raw
-		.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
-		.replace(
-			/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
-			'$1=[redacted]'
-		)
-		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
-		.replace(
-			/([?&](?:key|api[_-]?key|token|secret|password|pwd|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,
-			'$1[redacted]'
-		)
-		.replace(
-			/\b(password|passwd|pwd|secret|token|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
-			'$1=[redacted]'
-		);
+	return (
+		raw
+			.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
+			.replace(
+				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
+				'$1=[redacted]'
+			)
+			// Audit #1831: scheme rules run before the generic Authorization
+			// rule — that pattern stops at whitespace, so redacting the scheme
+			// first keeps "Authorization: Bearer/Basic <cred>" from leaving
+			// <cred> behind.
+			.replace(
+				/\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi,
+				'$1=[redacted]'
+			)
+			.replace(
+				/\b(basic)\s+[A-Za-z0-9\-. _~+/=]{8,}/gi,
+				'$1=[redacted]'
+			)
+			// Digest headers carry quoted key=value params
+			// (username="..", response="..") that the single-token Basic shape
+			// cannot cover; the required '=' keeps plain prose such as "Digest
+			// authentication failed" untouched.
+			.replace(
+				/\b(digest)\s+[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+)(?:\s*,\s*[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+))*/gi,
+				'$1=[redacted]'
+			)
+			.replace( /(authorization)\s*[:=]\s*\S+/gi, '$1=[redacted]' )
+			// Audit #1831: Cookie/Set-Cookie headers carry session identifiers.
+			// The leading value excludes ';' so the trailing (; pair)* can
+			// consume "a=b; c=d" pairs instead of \S+ swallowing the ';'.
+			// The (?<![?&]) guard keeps query strings (?cookie=/&cookie=)
+			// for the query rule below — without it the inserted space
+			// breaks the query value match and "[redacted]" is duplicated.
+			.replace(
+				/(?<![?&])((?:\bcookie\b|\bset-cookie\b)\s*[:=])\s*[^;\s'"]+(?:\s*;\s*[^\s;'"]+)*/gi,
+				'$1 [redacted]'
+			)
+			.replace(
+				/([?&](?:key|api[_-]?key|token|secret|password|passwd|pwd|authorization|cookie|session|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,
+				'$1[redacted]'
+			)
+			// Audit #1831: (^|[^\w]) leading boundary — \b does not split on
+			// '_', so client_secret/access_token/private_key never matched.
+			// Trailing \b is kept (all alternatives end in a word char).
+			// The (?!\s*\[redacted\]) guard keeps this rule from mangling
+			// values an earlier rule already masked ("Cookie: [redacted]").
+			.replace(
+				/(^|[^\w])(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(['"]?)\S+\3/gi,
+				'$1$2=[redacted]'
+			)
+	);
 };
 
 /**

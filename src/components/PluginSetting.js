@@ -1376,10 +1376,10 @@ const PluginSetting = ( { options } ) => {
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
 					icon={
-						<i
-							className="fas fa-tachometer-alt"
+						<FontAwesomeIcon
+							icon={ faTachometerAlt }
 							aria-hidden="true"
-						></i>
+						/>
 					} // Audit #1420: decorative.
 				>
 					<CheckboxOption

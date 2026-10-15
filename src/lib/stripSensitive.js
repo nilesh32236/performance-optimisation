@@ -37,7 +37,7 @@ export const isSensitivePollutionKey = ( key ) =>
  * @since 2.3.0
  */
 export const SECRET_KEY_PATTERN =
-	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce|authorization|cookie|session|sessionid)$/i;
 
 /**
  * Shared walker for secret-key redaction.

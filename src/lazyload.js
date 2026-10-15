@@ -543,21 +543,62 @@ const replayDelayedLifecycleEvents = () => {
  */
 const readModuleData = () => {
 	const el = document.getElementById( 'wp-script-module-data-wppo-lazyload' );
-	if ( ! el || ! el.textContent ) {
-		return {};
+	if ( el && el.textContent ) {
+		try {
+			return JSON.parse( el.textContent );
+		} catch ( _err ) {
+			console.warn(
+				'WPPO: invalid lazyload module data',
+				getLogMessage( _err )
+			);
+		}
 	}
-	try {
-		return JSON.parse( el.textContent );
-	} catch ( _err ) {
-		console.warn(
-			'WPPO: invalid lazyload module data',
-			getLogMessage( _err )
-		);
+	// WP < 6.9 classic-script fallback: PHP injects window globals (see
+	// Main::enqueue_scripts()); merged here so one bundle serves the full
+	// supported matrix (floor 6.2, audit #1831).
+	const fallback = {};
+	if ( typeof window.wppoVideoPlayerLabel === 'string' ) {
+		fallback.videoPlayerLabel = window.wppoVideoPlayerLabel;
 	}
-	return {};
+	if ( typeof window.wppoVideoPlayLabel === 'string' ) {
+		fallback.videoPlayLabel = window.wppoVideoPlayLabel;
+	}
+	return fallback;
 };
 
 const moduleData = readModuleData();
+
+/**
+ * Pick a server-localized label with an English fallback.
+ *
+ * The bundle stays dependency-free by design (no @wordpress/i18n dep), so
+ * these strings are localized in PHP (Main::enqueue path, videoPlayerLabel /
+ * videoPlayLabel keys) with English fallbacks here for when the module data
+ * is absent. One shared pair feeds both iframe.title and the placeholder
+ * aria-label so the two can never drift into untranslatable literals again
+ * (audits #1354, #1831).
+ *
+ * @param {*}      value    Candidate label from module data / globals.
+ * @param {string} fallback English fallback when the candidate is absent.
+ * @return {string} The label to use.
+ */
+const pickVideoLabel = ( value, fallback ) => {
+	if ( typeof value === 'string' && value ) {
+		return value;
+	}
+	return fallback;
+};
+
+const VIDEO_PLAYER_LABEL = pickVideoLabel(
+	moduleData.videoPlayerLabel,
+	'Video player'
+);
+// Falls back to the (possibly localized) player label before English, so a
+// locale with only videoPlayerLabel still announces a translated action.
+const VIDEO_PLAY_LABEL = pickVideoLabel(
+	moduleData.videoPlayLabel,
+	pickVideoLabel( moduleData.videoPlayerLabel, 'Play video' )
+);
 
 /**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
@@ -1986,6 +2027,8 @@ const teardownLazyload = () => {
 	try {
 		delete window.wppoNativeLazy;
 		delete window.wppoDelayConfig;
+		delete window.wppoVideoPlayerLabel;
+		delete window.wppoVideoPlayLabel;
 	} catch {
 		// Non-configurable global; nothing to release.
 	}
@@ -3482,12 +3525,8 @@ const initVideoPlaceholders = () => {
 			iframe.allowFullscreen = true;
 			iframe.loading = 'lazy';
 			// Audit #1354: PHP-provided translation via module data
-			// (server-localized); English fallback otherwise.
-			iframe.title =
-				typeof moduleData.videoPlayerLabel === 'string' &&
-				moduleData.videoPlayerLabel
-					? moduleData.videoPlayerLabel
-					: 'Video player';
+			// (server-localized); English fallback via VIDEO_PLAYER_LABEL.
+			iframe.title = VIDEO_PLAYER_LABEL;
 			iframe.style.cssText =
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
@@ -3610,15 +3649,9 @@ const initVideoPlaceholders = () => {
 			el.setAttribute( 'role', 'button' );
 		}
 		if ( ! el.hasAttribute( 'aria-label' ) ) {
-			// Audit #1354: PHP-provided translation via module data
-			// (server-localized); English fallback otherwise.
-			el.setAttribute(
-				'aria-label',
-				typeof moduleData.videoPlayerLabel === 'string' &&
-					moduleData.videoPlayerLabel
-					? moduleData.videoPlayerLabel
-					: 'Play video'
-			);
+			// Audit #1354/#1831: PHP-provided translation via module data
+			// (server-localized); English fallback via VIDEO_PLAY_LABEL.
+			el.setAttribute( 'aria-label', VIDEO_PLAY_LABEL );
 		}
 		el.addEventListener( 'click', loadVideo );
 		el.addEventListener( 'keydown', ( event ) => {

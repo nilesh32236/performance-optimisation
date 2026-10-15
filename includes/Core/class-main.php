@@ -3371,7 +3371,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					// Audit #1354: translated video iframe title for the lazyload
 					// bundle (English fallback client-side and on the WP < 6.9 path).
+					// Audit #1831: distinct play-button label so assistive tech
+					// announces an action ("Play video") rather than a noun.
 					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
+					$lazy_config['videoPlayLabel']   = __( 'Play video', 'performance-optimisation' );
 
 					if ( $delay_js ) {
 						$idle_timeout = ! empty( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
@@ -3535,6 +3538,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( $use_native_lazy ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
 						}
+
+						// WP < 6.9 fallback: no script-module data tag exists, so
+						// expose the server-localized video labels as window
+						// globals merged by readModuleData() (audit #1831).
+						wp_add_inline_script(
+							'wppo-lazyload',
+							'window.wppoVideoPlayerLabel=' . wp_json_encode( $lazy_config['videoPlayerLabel'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP ) . ';' .
+							'window.wppoVideoPlayLabel=' . wp_json_encode( $lazy_config['videoPlayLabel'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP ) . ';',
+							'before'
+						);
 
 						if ( $delay_js ) {
 							$delay_config = wp_json_encode( $lazy_config['delayConfig'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP );

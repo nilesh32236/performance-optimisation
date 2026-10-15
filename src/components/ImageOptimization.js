@@ -1134,7 +1134,7 @@ const ImageOptimization = ( { options = {} } ) => {
 													<input
 														type="checkbox"
 														id={ `client-mime-${ option.value }` }
-														className="screen-reader-text"
+														className="wppo-screen-reader-text"
 														checked={ mimeList.includes(
 															option.value
 														) }
@@ -1429,7 +1429,7 @@ const ImageOptimization = ( { options = {} } ) => {
 													<input
 														type="checkbox"
 														id={ `type-${ type }` }
-														className="screen-reader-text"
+														className="wppo-screen-reader-text"
 														checked={ settings.selectedPostType.includes(
 															type
 														) }
