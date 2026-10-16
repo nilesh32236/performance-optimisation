@@ -22,35 +22,17 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
-	 * Original $_SERVER value, restored in tearDown().
+	 * Normalise the superglobal before each case.
 	 *
-	 * @var array|string|null
-	 */
-	private $original_accept;
-
-	/**
-	 * Snapshot the superglobal so the suite stays order-independent.
+	 * Deliberately NOT named setUp(): a same-named method here would shadow
+	 * WPPO_Test_Bootstrap::setUp(), so Brain Monkey's own setUp() would never
+	 * run and patched functions would leak between tests (the hazard
+	 * documented in RumCollectTokenSchemaTest).
 	 *
 	 * @return void
 	 */
-	protected function setUp(): void {
-		parent::setUp();
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Test-only snapshot of a superglobal for restore; it is never used as input to the code under test.
-		$this->original_accept = $_SERVER['HTTP_ACCEPT'] ?? null;
-	}
-
-	/**
-	 * Restore the superglobal.
-	 *
-	 * @return void
-	 */
-	protected function tearDown(): void {
-		if ( null === $this->original_accept ) {
-			unset( $_SERVER['HTTP_ACCEPT'] );
-		} else {
-			$_SERVER['HTTP_ACCEPT'] = $this->original_accept;
-		}
-		parent::tearDown();
+	private function clear_accept_header(): void {
+		unset( $_SERVER['HTTP_ACCEPT'] );
 	}
 
 	/**
@@ -59,6 +41,7 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_returns_the_sanitized_string_value(): void {
+		$this->clear_accept_header();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 
@@ -73,10 +56,9 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_fails_closed_when_the_key_is_absent(): void {
+		$this->clear_accept_header();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
-
-		unset( $_SERVER['HTTP_ACCEPT'] );
 
 		$this->assertSame( '', Util::server_string( 'HTTP_ACCEPT' ) );
 		$this->assertSame(
@@ -92,6 +74,7 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_fails_closed_for_an_array_valued_header(): void {
+		$this->clear_accept_header();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 
@@ -111,11 +94,15 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_fails_closed_for_a_non_string_scalar(): void {
+		$this->clear_accept_header();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 
 		$_SERVER['HTTP_ACCEPT'] = 42;
 
-		$this->assertSame( 'fallback', Util::server_string( 'HTTP_ACCEPT', 'fallback' ) );
+		$this->assertSame(
+			'fallback',
+			Util::server_string( 'HTTP_ACCEPT', 'fallback' )
+		);
 	}
 }
