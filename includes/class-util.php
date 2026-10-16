@@ -2588,11 +2588,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Atomically write contents via tmp-file + rename.
 		 *
-		 * Writes to a unique sibling tmp file in the same directory and then
-		 * moves it over the final path, so interrupted writes never leave
-		 * partial output behind. A failed move cleans up the tmp file and
-		 * reports failure — there is intentionally no non-atomic direct-write
-		 * fallback, so readers can never observe a torn file.
+		 * Thin passthrough to
+		 * {@see \PerformanceOptimise\Inc\Filesystem::atomic_file_put_contents()},
+		 * which owns the behaviour: a unique sibling tmp file in the same
+		 * directory (same filesystem, so the rename stays atomic on every
+		 * transport), chmod parity to the existing target, the optional
+		 * `$expect` verifier asserted against both the staged and the live
+		 * bytes, the move over the final path, a post-move re-read
+		 * verification that rolls the live path back to its pre-move bytes on
+		 * mismatch, and a registered shutdown sweep for tmp residue. There is
+		 * intentionally no non-atomic direct-write fallback.
 		 *
 		 * Facade proxy: filesystem ownership lives in {@see \PerformanceOptimise\Inc\Filesystem}.
 		 *
@@ -2602,7 +2607,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool True on success.
 		 * @since 2.0.0
-		 * @since NEXT Added the `$expect` verifier passthrough.
+		 * @since NEXT Added the `$expect` verifier, chmod parity, post-move re-read
+		 *            with rollback, and the shutdown sweep (all owned by Filesystem).
 		 */
 		public static function atomic_file_put_contents( $fs, string $path, string $contents, $expect = null ): bool {
 			return Filesystem::atomic_file_put_contents( $fs, $path, $contents, $expect );

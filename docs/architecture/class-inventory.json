@@ -1435,7 +1435,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 2207,
+        "lines": 2214,
         "methods": 34,
         "public_methods": 34,
         "large_methods": 6,
@@ -4987,10 +4987,10 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Support",
-        "lines": 2711,
+        "lines": 2747,
         "methods": 47,
         "public_methods": 38,
-        "large_methods": 5,
+        "large_methods": 6,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "sanitize_cache_url_path",
@@ -5310,14 +5310,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Shared",
-        "lines": 4912,
+        "lines": 4918,
         "methods": 161,
         "public_methods": 156,
         "large_methods": 5,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "get_with_stampede_lock",
-            "line": 3455,
+            "line": 3461,
             "lines": 197
         },
         "method_prefixes": {

@@ -496,7 +496,7 @@ class WPPO_WcAjax_FS_Capture {
 		if ( false !== strpos( (string) $path, '.tmp.' ) ) {
 			return isset( $this->put_paths[ $path ] );
 		}
-		if ( '.wppo-backup' === substr( (string) $path, -13 ) ) {
+		if ( '.wppo-backup' === substr( (string) $path, -12 ) ) {
 			return isset( $this->put_paths[ $path ] );
 		}
 		foreach ( $this->put_paths as $written_path => $ignored ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Key iteration only.

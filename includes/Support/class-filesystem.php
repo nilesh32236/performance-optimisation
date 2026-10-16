@@ -1551,6 +1551,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 					$fs->delete( $tmp );
 					return false;
 				}
+				// Snapshot the live bytes before the move so a post-move
+				// verification mismatch can be rolled back. Deleting $tmp after
+				// a successful move is a no-op, so without this the bad bytes
+				// stay in the live path and contradict the "readers can never
+				// observe a torn file" guarantee. Mirrors
+				// atomic_write_php_verified()'s restore-on-mismatch.
+				$original = false;
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					try {
+						$has_target = method_exists( $fs, 'exists' ) ? (bool) $fs->exists( $path ) : true;
+						if ( $has_target ) {
+							$snapshot = $fs->get_contents( $path );
+							$original = is_string( $snapshot ) ? $snapshot : false;
+						}
+					} catch ( \Throwable $ignored_snapshot ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort snapshot must never fail the write.
+						$original = false;
+					}
+				}
 				$moved = (bool) $fs->move( $tmp, $path, true );
 				if ( ! $moved ) {
 					$fs->delete( $tmp );
@@ -1563,13 +1581,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 					}
 				}
 				if ( method_exists( $fs, 'get_contents' ) ) {
-					$written = $fs->get_contents( $path );
-					if ( ! is_string( $written ) || $written !== $contents ) {
-						$fs->delete( $tmp );
-						return false;
-					}
-					if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
-						$fs->delete( $tmp );
+					$written  = $fs->get_contents( $path );
+					$verified = is_string( $written ) && $written === $contents
+						&& ( null === $expect || (bool) call_user_func( $expect, $written ) );
+					if ( ! $verified ) {
+						// The move consumed $tmp, so deleting it here would be a
+						// no-op. Restore the pre-move snapshot (or remove the
+						// live path when there was nothing to restore) so the
+						// live file never keeps torn or unverified bytes.
+						try {
+							if ( is_string( $original ) && '' !== $original ) {
+								$fs->put_contents( $path, $original, $chmod );
+							} else {
+								$fs->delete( $path );
+							}
+						} catch ( \Throwable $ignored_rollback ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort rollback must never mask the failure.
+						}
 						return false;
 					}
 				}
@@ -1803,6 +1830,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 					// Best-effort single backup generation; in-memory
 					// $original remains the authoritative restore source.
 					$fs->copy( $path, $path . '.wppo-bak', true );
+					// The backup holds full wp-config.php secrets beside the
+					// live file in the web root, and its non-.php extension
+					// means a fetch serves it as plain text. The post-success
+					// delete below is not enough on its own: a fatal, timeout
+					// or OOM between the copy and that delete would leave the
+					// credentials behind for the rest of the request. Register
+					// the same shutdown sweep the tmp path uses so the residue
+					// cannot survive request teardown.
+					self::register_tmp_shutdown_sweep( $fs, $path . '.wppo-bak' );
 				}
 				if ( ! $fs->move( $tmp, $path, true ) ) {
 					$fs->delete( $tmp );

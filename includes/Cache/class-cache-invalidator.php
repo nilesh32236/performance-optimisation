@@ -1928,8 +1928,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 							continue;
 						}
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
-							Util::atomic_file_put_contents( $fs, (string) $path, $contents );
-							continue;
+							// Only skip the legacy path when the atomic write
+							// actually succeeded. The helper returns false (not
+							// null) for transports lacking move()/delete(), so
+							// an unconditional continue would silently drop the
+							// snapshot entry on FTP/SSH hosts.
+							$atomic_ok = Util::atomic_file_put_contents( $fs, (string) $path, $contents );
+							if ( $atomic_ok ) {
+								continue;
+							}
 						}
 						$fs->put_contents( $path, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
 					} catch ( \Throwable $e ) {
