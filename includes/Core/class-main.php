@@ -3236,6 +3236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Clone options and redact sensitive keys before exposing to the client.
 			$safe_options = $this->get_options();
+			$pagespeed_api_key_configured = ! empty( $safe_options['performance_audit']['pagespeed_api_key'] );
 			if ( isset( $safe_options['performance_audit']['pagespeed_api_key'] ) ) {
 				unset( $safe_options['performance_audit']['pagespeed_api_key'] );
 			}
@@ -3281,7 +3282,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
-						'pagespeedApiKeyConfigured' => ! empty( $safe_options['performance_audit']['pagespeed_api_key'] ),
+						'pagespeedApiKeyConfigured' => $pagespeed_api_key_configured,
 						'highValueUrls'             => $safe_options['performance_audit']['high_value_urls'] ?? array(), // High-value URLs from settings (edited in Tools tab; consumed by preload/PageSpeed rescan cron + llms.txt proxy).
 						'autoFixEnabled'            => (bool) ( $safe_options['performance_audit']['auto_fix_enabled'] ?? false ),
 						'autoRescan'                => $safe_options['performance_audit']['auto_rescan'] ?? '',
