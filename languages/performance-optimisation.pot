@@ -1987,7 +1987,7 @@ msgstr ""
 msgid "Performance Optimisation: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
-#: includes/Core/class-main.php:3386
+#: includes/Core/class-main.php:3379
 msgid "Video player"
 msgstr ""
 
@@ -2248,6 +2248,7 @@ msgstr ""
 msgid "Optimized table %1$s (size: %2$d bytes)."
 msgstr ""
 
+#: includes/Core/class-main.php:3380
 #: includes/Images/class-image-optimisation.php:6056
 #: includes/Images/class-image-optimisation.php:6227
 msgid "Play video"
@@ -8508,6 +8509,10 @@ msgstr ""
 
 #: src/lib/useImageJobPolling.js:68
 msgid "Image optimisation timed out. Please try again."
+msgstr ""
+
+#: src/lib/useImageJobPolling.js:100
+msgid "Status check failed."
 msgstr ""
 
 #: src/lib/useImageJobPolling.js:115

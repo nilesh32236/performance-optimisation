@@ -60,28 +60,35 @@ export const redactLogSecrets = ( raw ) => {
 				'$1$2=[redacted]'
 			)
 			// Audit #1831: Cookie/Set-Cookie headers carry session identifiers.
-			// The leading value excludes ';' so the trailing (; pair)* can
-			// consume "a=b; c=d" pairs instead of \S+ swallowing the ';'.
-			// The (^|[^?&]) guard keeps query strings (?cookie=/&cookie=)
-			// for the query rule below — without it the inserted space
-			// breaks the query value match and "[redacted]" is duplicated.
-			// Expressed as a capture group (not a lookbehind) so engines
-			// without lookbehind support still parse this bundle.
+			// The value is a run of adjacent atoms (a bare run, or a quoted
+			// string) so the legal RFC 6265 quoted form
+			// "session=\"s3cr3t\"; Path=/" is consumed whole instead of
+			// truncating at the opening quote and leaving the secret behind.
+			// The trailing (; atom)* consumes the "a=b; c=d" attribute pairs
+			// rather than letting \S+ swallow the ';'. The (^|[^?&]) guard
+			// keeps query strings (?cookie=/&cookie=) for the query rule below
+			// — without it the inserted space breaks the query value match and
+			// "[redacted]" is duplicated. Expressed as a capture group (not a
+			// lookbehind) so engines without lookbehind support still parse
+			// this bundle.
 			.replace(
-				/(^|[^?&])((?:\bcookie\b|\bset-cookie\b)\s*[:=])\s*[^;\s'"]+(?:\s*;\s*[^\s;'"]+)*/gi,
+				/(^|[^?&])((?:\bcookie\b|\bset-cookie\b)\s*[:=])\s*(?:[^;\s'"]+|"[^"]*"|'[^']*')+(?:\s*;\s*(?:[^;\s'"]+|"[^"]*"|'[^']*')+)*/gi,
 				'$1$2 [redacted]'
 			)
 			.replace(
-				/([?&](?:key|api[_-]?key|token|secret|password|passwd|pwd|authorization|cookie|session|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,
+				/([?&](?:key|api[_-]?key|token|auth[_-]?token|access_token|refresh_token|id_token|csrf_token|xsrf_token|secret|password|passwd|pwd|authorization|cookie|session|client_secret|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,
 				'$1[redacted]'
 			)
-			// Audit #1831: (^|[^\w]) leading boundary — \b does not split on
+			// Audit #1831: (^|[^\w]|_) leading boundary — \b does not split on
 			// '_', so client_secret/access_token/private_key never matched.
-			// Trailing \b is kept (all alternatives end in a word char).
-			// The (?!\s*\[redacted\]) guard keeps this rule from mangling
-			// values an earlier rule already masked ("Cookie: [redacted]").
+			// The explicit '_' alternative also lets this rule reach compound
+			// *_token keys the query alternatives do not enumerate
+			// (refresh_token/id_token/...). Trailing \b is kept (all
+			// alternatives end in a word char). The (?!\s*\[redacted\]) guard
+			// keeps this rule from mangling values an earlier rule already
+			// masked ("Cookie: [redacted]").
 			.replace(
-				/(^|[^\w])(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(['"]?)\S+\3/gi,
+				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(['"]?)\S+\3/gi,
 				'$1$2=[redacted]'
 			)
 	);
@@ -119,7 +126,10 @@ export const MAX_LOG_MESSAGE_LENGTH = 500;
 export const getErrorLogMessage = ( error ) => {
 	let message;
 	if ( error instanceof Error ) {
-		message = error.message || 'Unknown error';
+		message = ( error.message || 'Unknown error' ).slice(
+			0,
+			MAX_LOG_MESSAGE_LENGTH
+		);
 	} else if ( typeof error === 'string' ) {
 		message = error.slice( 0, MAX_LOG_MESSAGE_LENGTH ) || 'Unknown error';
 	} else if ( error === null || typeof error === 'undefined' ) {

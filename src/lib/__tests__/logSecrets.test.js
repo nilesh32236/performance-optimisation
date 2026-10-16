@@ -63,10 +63,25 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 	} );
 
+	it( 'redacts quoted Cookie values without leaving the secret', () => {
+		// RFC 6265 allows a quoted-string cookie value; the value atom must
+		// consume the quotes instead of truncating at the opening quote.
+		expect(
+			redactLogSecrets( 'Set-Cookie: session="s3cr3t"; Path=/' )
+		).toBe( 'Set-Cookie: [redacted]' );
+		expect( redactLogSecrets( "Cookie: token='abc def'; a=b" ) ).toBe(
+			'Cookie: [redacted]'
+		);
+	} );
+
 	it( 'redacts compound query keys', () => {
 		for ( const key of [
 			'client_secret',
 			'access_token',
+			'refresh_token',
+			'id_token',
+			'csrf_token',
+			'xsrf_token',
 			'private_key',
 			'authorization',
 			'cookie',
@@ -85,6 +100,9 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 		expect( redactLogSecrets( 'access_token=tok123' ) ).toBe(
 			'access_token=[redacted]'
+		);
+		expect( redactLogSecrets( 'refresh_token=tok123' ) ).toBe(
+			'refresh_token=[redacted]'
 		);
 		expect( redactLogSecrets( 'private_key: -----BEGIN' ) ).toBe(
 			'private_key=[redacted]'

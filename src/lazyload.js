@@ -2043,6 +2043,7 @@ const teardownLazyload = () => {
 		delete window.wppoDelayConfig;
 		delete window.wppoVideoPlayerLabel;
 		delete window.wppoVideoPlayLabel;
+		delete window.__wppoVideoLabels;
 	} catch {
 		// Non-configurable global; nothing to release.
 	}
@@ -3568,6 +3569,15 @@ const initVideoPlaceholders = () => {
 							return;
 						}
 						if ( ! IFRAME_ATTR_ALLOWLIST.has( name ) ) {
+							return;
+						}
+						// Audit #1831 review: the payload stores the embed's
+						// original title (e.g. the core YouTube block's
+						// "YouTube video player"), so restoring it here would
+						// clobber the server-localized VIDEO_PLAYER_LABEL set
+						// above and make the a11y fix a no-op. Keep the
+						// localized label.
+						if ( 'title' === name ) {
 							return;
 						}
 						// Capability-bearing attributes are value-checked so a

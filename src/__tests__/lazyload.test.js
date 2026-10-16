@@ -1182,6 +1182,33 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			).toBe( 'Reproductor de video' );
 		} );
 
+		it( 'keeps the localized iframe title over a stored title', () => {
+			// Audit #1831 review: PHP stores the embed's original title in
+			// data-wppo-iframe-attrs, so the restore loop must not clobber the
+			// server-localized label (the common core-YouTube-block case).
+			injectModuleData( {
+				videoPlayerLabel: 'Reproductor de video',
+				videoPlayLabel: 'Reproducir video',
+			} );
+			const placeholder = document.createElement( 'div' );
+			placeholder.className = 'wppo-video-placeholder';
+			placeholder.setAttribute(
+				'data-wppo-video-src',
+				'https://www.youtube.com/embed/test'
+			);
+			placeholder.setAttribute(
+				'data-wppo-iframe-attrs',
+				JSON.stringify( { title: 'YouTube video player' } )
+			);
+			document.body.appendChild( placeholder );
+			bootLazyload();
+
+			placeholder.click();
+			expect(
+				placeholder.querySelector( 'iframe' ).getAttribute( 'title' )
+			).toBe( 'Reproductor de video' );
+		} );
+
 		it( 'merges the WP < 6.9 window globals as fallback data', () => {
 			global.wppoVideoPlayerLabel = 'Lettore video';
 			global.wppoVideoPlayLabel = 'Riproduci video';
@@ -1525,6 +1552,7 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( 'wppoDelayConfig' in window ).toBe( false );
 			expect( 'wppoVideoPlayerLabel' in window ).toBe( false );
 			expect( 'wppoVideoPlayLabel' in window ).toBe( false );
+			expect( '__wppoVideoLabels' in window ).toBe( false );
 		} );
 	} );
 
