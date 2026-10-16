@@ -3235,6 +3235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cache_count = (int) ( $cache_stats['cached_pages'] ?? 0 );
 
 			// Clone options and redact sensitive keys before exposing to the client.
+			// Note: This redacted copy is also used to back the internal performance_audit/cache_settings reads below.
 			$safe_options = $this->get_options();
 			// Capture the configured boolean BEFORE the key is unset below.
 			$pagespeed_api_key_configured = ! empty( $safe_options['performance_audit']['pagespeed_api_key'] );
