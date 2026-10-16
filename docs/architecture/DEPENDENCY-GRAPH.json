@@ -11452,7 +11452,7 @@
             "file": "includes/Images/class-img-converter.php",
             "domain": "Images",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 4129,
+            "lines": 4137,
             "property_count": 8,
             "static_property_count": 4,
             "public_property_count": 0,
@@ -11483,8 +11483,8 @@
                 },
                 {
                     "name": "queue_unconverted_library_images",
-                    "line": 3713,
-                    "end_line": 3826,
+                    "line": 3721,
+                    "end_line": 3834,
                     "lines": 114,
                     "visibility": "public",
                     "static": true,
@@ -11558,26 +11558,26 @@
             "references": {
                 "static_calls": {
                     "PerformanceOptimise\\Inc\\Log::add": 2332,
-                    "PerformanceOptimise\\Inc\\Util::cache_salt": 3916,
+                    "PerformanceOptimise\\Inc\\Util::cache_salt": 3924,
                     "PerformanceOptimise\\Inc\\Util::cached_content_url": 2944,
                     "PerformanceOptimise\\Inc\\Util::cached_home_url": 2945,
                     "PerformanceOptimise\\Inc\\Util::destroy_gd_image": 1146,
                     "PerformanceOptimise\\Inc\\Util::get_image_mime_type": 260,
                     "PerformanceOptimise\\Inc\\Util::get_local_path": 2954,
                     "PerformanceOptimise\\Inc\\Util::get_settings": 148,
-                    "PerformanceOptimise\\Inc\\Util::invalidate_option_caches": 4125,
+                    "PerformanceOptimise\\Inc\\Util::invalidate_option_caches": 4133,
                     "PerformanceOptimise\\Inc\\Util::prepare_cache_dir": 623,
                     "PerformanceOptimise\\Inc\\Util::process_urls": 117,
-                    "PerformanceOptimise\\Inc\\Util::server_string": 3492,
+                    "PerformanceOptimise\\Inc\\Util::server_string": 3497,
                     "self::add_img_into_queue": 3087,
                     "self::apply_smart_quality_offsets": 1600,
                     "self::core_handles_both_next_gen": 127,
                     "self::core_handles_next_gen": 123,
                     "self::get_img_info": 2661,
-                    "self::get_img_path": 3633,
+                    "self::get_img_path": 3641,
                     "self::get_smart_quality_role_offset": 1598,
                     "self::get_smart_quality_size_offset": 1597,
-                    "self::invalidate_img_info_cache": 3944,
+                    "self::invalidate_img_info_cache": 3952,
                     "self::is_allowed_source_mime": 615,
                     "self::is_avif_encoder_available": 2070,
                     "self::is_hero_candidate_image": 393,
@@ -11585,8 +11585,8 @@
                     "self::is_path_in_allowlist": 926,
                     "self::is_safe_delete_path": 679,
                     "self::is_safe_write_path": 604,
-                    "self::measure_conversion_sizes": 3581,
-                    "self::order_queue_hero_first": 3783,
+                    "self::measure_conversion_sizes": 3589,
+                    "self::order_queue_hero_first": 3791,
                     "self::set_img_info": 2858,
                     "self::update_img_info_atomic": 2669
                 },
@@ -11620,7 +11620,7 @@
                     "$this->extract_dominant_color": 2181,
                     "$this->generate_lqip": 2182,
                     "$this->get_img_path": 2133,
-                    "$this->get_img_url": 3505,
+                    "$this->get_img_url": 3513,
                     "$this->get_longest_edge_cap": 1092,
                     "$this->get_max_source_pixels": 1053,
                     "$this->get_memory_safe_edge_px": 1961,
@@ -11641,16 +11641,16 @@
                     "$this->resolve_output_format": 1810,
                     "$this->should_discard_oversized_sibling": 1695,
                     "$this->should_skip_small_file": 1897,
-                    "$this->should_suppress_re_queueing": 3507,
+                    "$this->should_suppress_re_queueing": 3515,
                     "$this->store_placeholder_data": 2183,
                     "$this->store_placeholder_data_batch": 3472,
                     "$this->store_placeholder_data_for_upload": 3282,
                     "$this->update_conversion_status": 1743,
-                    "$wpdb->get_col": 3732,
-                    "$wpdb->get_var": 4035,
-                    "$wpdb->prepare": 3732,
-                    "$wpdb->query": 4086,
-                    "$wpdb->update": 4120
+                    "$wpdb->get_col": 3740,
+                    "$wpdb->get_var": 4043,
+                    "$wpdb->prepare": 3740,
+                    "$wpdb->query": 4094,
+                    "$wpdb->update": 4128
                 },
                 "new_expressions": {
                     "\\Imagick": 505,
@@ -11659,7 +11659,7 @@
                 "class_references": [],
                 "class_constant_references": {
                     "\\Imagick": 1375,
-                    "self": 3916
+                    "self": 3924
                 },
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\Img_Converter": 19
@@ -11681,15 +11681,15 @@
                 "external_functions": {
                     "\\Imagick": 505,
                     "__": 2332,
-                    "_prime_post_caches": 3771,
-                    "add_action": 4013,
+                    "_prime_post_caches": 3779,
+                    "add_action": 4021,
                     "apply_filters": 706,
-                    "array_diff": 4072,
-                    "array_fill": 3721,
-                    "array_map": 3760,
+                    "array_diff": 4080,
+                    "array_fill": 3729,
+                    "array_map": 3768,
                     "array_merge": 475,
-                    "array_search": 3566,
-                    "array_unique": 4048,
+                    "array_search": 3574,
+                    "array_unique": 4056,
                     "base64_encode": 2638,
                     "basename": 294,
                     "class_exists": 19,
@@ -11708,7 +11708,7 @@
                     "function_exists": 161,
                     "get_attached_file": 461,
                     "get_current_blog_id": 940,
-                    "get_option": 3723,
+                    "get_option": 3731,
                     "get_post_mime_type": 3225,
                     "getimagesize": 1924,
                     "has_filter": 1326,
@@ -11734,7 +11734,7 @@
                     "imagesx": 2492,
                     "imagesy": 2493,
                     "imagewebp": 2424,
-                    "implode": 3721,
+                    "implode": 3729,
                     "in_array": 1016,
                     "ini_get": 828,
                     "is_array": 147,
@@ -11771,11 +11771,11 @@
                     "trim": 828,
                     "unlink": 1707,
                     "untrailingslashit": 2959,
-                    "update_option": 3751,
-                    "update_postmeta_cache": 3774,
+                    "update_option": 3759,
+                    "update_postmeta_cache": 3782,
                     "version_compare": 498,
-                    "wp_cache_get_salted": 3916,
-                    "wp_cache_set_salted": 3928,
+                    "wp_cache_get_salted": 3924,
+                    "wp_cache_set_salted": 3936,
                     "wp_convert_hr_to_bytes": 836,
                     "wp_delete_file": 680,
                     "wp_get_attachment_metadata": 2800,
@@ -11787,21 +11787,21 @@
                     "wp_is_client_side_media_processing_enabled": 3153,
                     "wp_normalize_path": 875,
                     "wp_parse_url": 2941,
-                    "wp_set_option_autoload": 4116,
+                    "wp_set_option_autoload": 4124,
                     "wp_upload_dir": 943,
-                    "wp_using_ext_object_cache": 3913
+                    "wp_using_ext_object_cache": 3921
                 },
                 "wordpress_functions": {
-                    "add_action": 4013,
+                    "add_action": 4021,
                     "apply_filters": 706,
                     "get_attached_file": 461,
                     "get_current_blog_id": 940,
-                    "get_option": 3723,
+                    "get_option": 3731,
                     "get_post_mime_type": 3225,
                     "untrailingslashit": 2959,
-                    "update_option": 3751,
-                    "wp_cache_get_salted": 3916,
-                    "wp_cache_set_salted": 3928,
+                    "update_option": 3759,
+                    "wp_cache_get_salted": 3924,
+                    "wp_cache_set_salted": 3936,
                     "wp_convert_hr_to_bytes": 836,
                     "wp_delete_file": 680,
                     "wp_get_attachment_metadata": 2800,
@@ -11813,9 +11813,9 @@
                     "wp_is_client_side_media_processing_enabled": 3153,
                     "wp_normalize_path": 875,
                     "wp_parse_url": 2941,
-                    "wp_set_option_autoload": 4116,
+                    "wp_set_option_autoload": 4124,
                     "wp_upload_dir": 943,
-                    "wp_using_ext_object_cache": 3913
+                    "wp_using_ext_object_cache": 3921
                 },
                 "filesystem_dependencies": {
                     "basename": 294,
@@ -11833,11 +11833,11 @@
                 },
                 "network_dependencies": [],
                 "database_dependencies": {
-                    "$wpdb->get_col": 3732,
-                    "$wpdb->get_var": 4035,
-                    "$wpdb->prepare": 3732,
-                    "$wpdb->query": 4086,
-                    "$wpdb->update": 4120
+                    "$wpdb->get_col": 3740,
+                    "$wpdb->get_var": 4043,
+                    "$wpdb->prepare": 3740,
+                    "$wpdb->query": 4094,
+                    "$wpdb->update": 4128
                 },
                 "dynamic_references": {
                     "static::self": 3152
@@ -11856,7 +11856,7 @@
             "delegating_methods": [],
             "hooks": {
                 "shutdown": [
-                    4013
+                    4021
                 ]
             },
             "metrics": {
@@ -30652,11 +30652,11 @@
                 3243,
                 3337,
                 3474,
-                3492,
-                3498,
-                3916,
-                3928,
-                4125
+                3497,
+                3506,
+                3924,
+                3936,
+                4133
             ],
             "evidence_count": 39,
             "cross_domain": true,
@@ -47164,13 +47164,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Img_Converter",
                 "file": "includes/Images/class-img-converter.php",
-                "score": 32.13,
+                "score": 32.14,
                 "fan_in": 9,
                 "fan_out": 2,
                 "compatibility_in": 3,
                 "cross_domain": 10,
                 "static_state": true,
-                "lines": 4129
+                "lines": 4137
             },
             {
                 "node": "PerformanceOptimise\\Inc\\System_Info",
@@ -51754,11 +51754,11 @@
                     3243,
                     3337,
                     3474,
-                    3492,
-                    3498,
-                    3916,
-                    3928,
-                    4125
+                    3497,
+                    3506,
+                    3924,
+                    3936,
+                    4133
                 ],
                 "evidence_count": 39,
                 "cross_domain": true,
@@ -61539,11 +61539,11 @@
                     3243,
                     3337,
                     3474,
-                    3492,
-                    3498,
-                    3916,
-                    3928,
-                    4125
+                    3497,
+                    3506,
+                    3924,
+                    3936,
+                    4133
                 ],
                 "evidence_count": 39,
                 "cross_domain": true,
@@ -65918,7 +65918,7 @@
                     "node": "PerformanceOptimise\\Inc\\Img_Converter",
                     "file": "includes/Images/class-img-converter.php",
                     "method": "invalidate_img_info_cache",
-                    "line": 4097,
+                    "line": 4105,
                     "lines": 7
                 }
             ]
