@@ -1466,9 +1466,7 @@ const ImageOptimization = ( { options = {} } ) => {
 											value={
 												settings.excludePostTypeImgUrl
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="excludePostTypeImgUrl-desc"
 										/>
 										<p

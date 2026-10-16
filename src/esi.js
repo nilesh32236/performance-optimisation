@@ -50,16 +50,18 @@ import { redactLogSecrets } from './lib/logSecrets';
 const getEsiLogMessage = ( err ) => {
 	let message;
 	if ( err instanceof Error ) {
-		// Truncate before redacting (matches the string/object branches below
-		// and getErrorLogMessage() in src/lib/logSecrets.js).
-		message = ( err.message || 'Unknown error' ).slice( 0, 500 );
+		// Deliberately NOT truncated here: redactLogSecrets() scans a window
+		// far wider than the published cap and slices the redacted result, so
+		// pre-slicing would cut a credential straddling the cap before the
+		// redactor sees it (audit #1831).
+		message = err.message || 'Unknown error';
 	} else if ( typeof err === 'string' ) {
-		message = err.slice( 0, 500 ) || 'Unknown error';
+		message = err || 'Unknown error';
 	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
 	} else {
 		try {
-			message = String( err ).slice( 0, 500 );
+			message = String( err );
 		} catch {
 			return 'Unknown error';
 		}
@@ -109,6 +111,19 @@ const ESI_URL_ATTRS = new Set( [
  * @type {number}
  */
 export const MAX_ESI_NODES = 500;
+
+/**
+ * Maximum fragment byte length accepted before parsing.
+ *
+ * MAX_ESI_NODES is only evaluated after innerHTML has parsed the whole
+ * fragment and querySelectorAll('*') has walked it, so on its own it does not
+ * bound main-thread CPU. Rejecting by byte length first means the parse cost
+ * is bounded by the same policy that bounds node count.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const MAX_ESI_HTML_LENGTH = 100000;
 
 /**
  * Request headers shared by every ESI fragment fetch.
@@ -230,8 +245,15 @@ const isAbortError = ( err ) => !! err && 'AbortError' === err.name;
  * @return {DocumentFragment} Sanitized fragment.
  */
 export const sanitizeEsiFragment = ( html ) => {
+	const raw = String( html ?? '' );
+	// Bound the parse itself. MAX_ESI_NODES only rejects the fragment after
+	// innerHTML has parsed it in full and querySelectorAll('*') has walked it,
+	// so it never bounded main-thread CPU on this hydration path.
+	if ( ! raw || raw.length > MAX_ESI_HTML_LENGTH ) {
+		return document.createDocumentFragment();
+	}
 	const template = document.createElement( 'template' );
-	template.innerHTML = String( html ?? '' );
+	template.innerHTML = raw;
 	const frag = template.content;
 
 	// Remove script-capable elements outright. Forms/inputs are kept —

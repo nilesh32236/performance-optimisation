@@ -20,18 +20,18 @@ import { redactLogSecrets } from './lib/logSecrets';
 const getLogMessage = ( err ) => {
 	let message;
 	if ( err instanceof Error ) {
-		// Truncate before redacting so a large embedded response body is not
-		// scanned in full by the multi-pass redaction chain (matches the
-		// string/object branches below and getErrorLogMessage() in
-		// src/lib/logSecrets.js).
-		message = ( err.message || 'Unknown error' ).slice( 0, 500 );
+		// Deliberately NOT truncated here: redactLogSecrets() scans a window
+		// far wider than the published cap and slices the redacted result, so
+		// pre-slicing would cut a credential straddling the cap before the
+		// redactor sees it (audit #1831).
+		message = err.message || 'Unknown error';
 	} else if ( typeof err === 'string' ) {
-		message = err.slice( 0, 500 ) || 'Unknown error';
+		message = err || 'Unknown error';
 	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
 	} else {
 		try {
-			message = String( err ).slice( 0, 500 );
+			message = String( err );
 		} catch {
 			return 'Unknown error';
 		}
@@ -3180,9 +3180,16 @@ const loadImages = () => {
 							return;
 						}
 						// Natively-deferred images never enter observeElement()
-						// (no data-src), so prepare their placeholders here too
-						// (idempotent — the dedicated native observer agrees).
-						prepareNativePlaceholdersForNode( node );
+						// (no data-src), so prepare their placeholders here too.
+						// Skipped when the dedicated native observer is
+						// installed: it observes the same document.body
+						// childList/subtree and calls the same function, so
+						// doing it here as well ran matches() plus
+						// querySelectorAll() twice over every inserted subtree
+						// on the AJAX/infinite-scroll path.
+						if ( ! nativePlaceholderObserver ) {
+							prepareNativePlaceholdersForNode( node );
+						}
 						if (
 							node.tagName === 'IMG' ||
 							node.tagName === 'IFRAME' ||

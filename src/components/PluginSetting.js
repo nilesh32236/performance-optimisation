@@ -753,9 +753,11 @@ const PluginSetting = ( { options } ) => {
 		// authoritative; this is defense-in-depth for the plaintext file.
 		let safeOptions;
 		try {
-			safeOptions = redactSecrets(
-				JSON.parse( JSON.stringify( options ) )
-			);
+			// redactSecrets() -> walkSensitiveKeys() already returns a fresh
+			// deep clone (and drops prototype-pollution keys), so the explicit
+			// JSON round-trip here only doubled peak memory and CPU on export
+			// for large settings trees.
+			safeOptions = redactSecrets( options );
 		} catch ( exportError ) {
 			console.error(
 				'Failed to export settings:',

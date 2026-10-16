@@ -41,6 +41,14 @@ describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
 		expect( getErrorLogMessage( new Error( 'boom' ) ) ).toBe( 'boom' );
 		expect( getErrorLogMessage( 'x'.repeat( 600 ) ) ).toHaveLength( 500 );
 		expect( getErrorLogMessage( null ) ).toBe( 'Unknown error' );
-		expect( mainSrc ).toContain( 'slice( 0, 500 )' );
+		// Audit #1831: the mirror must hand the whole message to
+		// redactLogSecrets() and cap the *redacted* result. Pre-truncating the
+		// message to 500 first would cut a credential that straddles the cap
+		// before the redactor sees it, so the mirror no longer carries the old
+		// `slice( 0, 500 )` before the redaction call.
+		expect( mainSrc ).toContain( 'redactLogSecrets( message )' );
+		expect( mainSrc ).not.toContain(
+			"error.message || 'Unknown error' ).slice"
+		);
 	} );
 } );

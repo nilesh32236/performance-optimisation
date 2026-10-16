@@ -155,17 +155,18 @@ export const REDACT_SCAN_LIMIT = MAX_LOG_MESSAGE_LENGTH * 8;
 export const getErrorLogMessage = ( error ) => {
 	let message;
 	if ( error instanceof Error ) {
-		message = ( error.message || 'Unknown error' ).slice(
-			0,
-			MAX_LOG_MESSAGE_LENGTH
-		);
+		// Deliberately NOT sliced here: redactLogSecrets() scans a window
+		// (REDACT_SCAN_LIMIT) far wider than the published cap and slices the
+		// redacted result, so pre-truncating would cut a credential that
+		// straddles the cap before the redactor ever sees it.
+		message = error.message || 'Unknown error';
 	} else if ( typeof error === 'string' ) {
-		message = error.slice( 0, MAX_LOG_MESSAGE_LENGTH ) || 'Unknown error';
+		message = error || 'Unknown error';
 	} else if ( error === null || typeof error === 'undefined' ) {
 		return 'Unknown error';
 	} else {
 		try {
-			message = String( error ).slice( 0, MAX_LOG_MESSAGE_LENGTH );
+			message = String( error );
 		} catch {
 			return 'Unknown error';
 		}
