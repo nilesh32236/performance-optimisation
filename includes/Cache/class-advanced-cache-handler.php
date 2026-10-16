@@ -1118,26 +1118,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 						unset( $ignored_sweep );
 					}
 				}
-
-				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
-					return;
-				}
-
-				$content_dir = wp_normalize_path( WP_CONTENT_DIR );
-				if ( ! $wp_filesystem->exists( $content_dir ) ) {
-					return;
-				}
-
-				$listing = $wp_filesystem->dirlist( $content_dir );
-				if ( ! is_array( $listing ) ) {
-					return;
-				}
-
-				foreach ( $listing as $name => $info ) {
-					if ( 0 === strpos( (string) $name, 'advanced-cache.php.tmp.' ) ) {
-						$wp_filesystem->delete( $content_dir . '/' . $name );
-					}
-				}
+				// The manual WP_CONTENT_DIR dirlist()/loop that used to run here
+				// listed the same directory a second time (sweep_atomic_tmp()
+				// above already deletes advanced-cache.php.tmp.* entries) and
+				// was unbounded, defeating that helper's 2000-entry guard.
+				// WP_CONTENT_DIR holds every plugin, theme and upload, so the
+				// duplicate listing was the expensive part.
 			} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort artifact cleanup must never throw.
 			}
 		}

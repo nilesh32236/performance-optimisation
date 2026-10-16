@@ -1970,6 +1970,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				// success; never blocks publish.
 				try {
 					if ( $had_original && method_exists( $wp_filesystem, 'copy' ) ) {
+						// The backup path is predictable and WP_Filesystem_Direct::
+						// copy() uses PHP copy(), which follows a symlink at the
+						// destination — a planted wppo-redis-config.php.wppo-bak
+						// symlink would redirect the Redis password/hosts/TLS
+						// config to an arbitrary path, and the rollback copy
+						// below would read through the same link.
+						if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+							Filesystem::drop_symlinked_path( $wp_filesystem, $this->config_path . '.wppo-bak' );
+						}
 						$wp_filesystem->copy( $this->config_path, $this->config_path . '.wppo-bak', true );
 					}
 				} catch ( \Throwable $e ) {
@@ -2014,6 +2023,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						if ( $had_original && method_exists( $wp_filesystem, 'put_contents' ) ) {
 							$wp_filesystem->put_contents( $this->config_path, $original, $chmod );
 						} elseif ( method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && $wp_filesystem->exists( $this->config_path . '.wppo-bak' ) ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+								// Restoring through a symlinked sibling would
+								// read an attacker-chosen file over the config.
+								Filesystem::drop_symlinked_path( $wp_filesystem, $this->config_path . '.wppo-bak' );
+							}
 							$wp_filesystem->copy( $this->config_path . '.wppo-bak', $this->config_path, true );
 						} elseif ( ! $had_original && method_exists( $wp_filesystem, 'delete' ) ) {
 							$wp_filesystem->delete( $this->config_path );

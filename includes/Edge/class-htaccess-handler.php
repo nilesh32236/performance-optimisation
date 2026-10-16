@@ -860,7 +860,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( $wp_filesystem->exists( $htaccess_file ) ) {
 				$current = $wp_filesystem->get_contents( $htaccess_file );
 				if ( ! is_string( $current ) ) {
-					return null;
+					// A genuine read failure on an already-approved transport.
+					// Returning null here would be read as "atomic unsupported"
+					// and re-enter the non-atomic insert_with_markers() path;
+					// null is reserved for a transport missing the required
+					// methods (checked above).
+					return false;
 				}
 			}
 
@@ -877,6 +882,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( '' !== $current ) {
 				// Best-effort single backup generation; in-memory $current
 				// remains the authoritative restore source if copy fails.
+				//
+				// The backup path is predictable and WP_Filesystem_Direct::
+				// copy() uses PHP copy(), which follows a symlink at the
+				// destination — a planted .htaccess.wppo-bak symlink would
+				// redirect this write (and the restore copy below) to an
+				// arbitrary path. Drop a symlinked sibling first.
+				if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+					Filesystem::drop_symlinked_path( $wp_filesystem, $backup_file );
+				}
 				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
 			}
 
@@ -953,14 +967,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				if ( $wp_filesystem->exists( $tmp_file ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
-				return null;
+				// Genuine staging failure (disk-full, unwritable dir), not an
+				// unsupported transport: false aborts instead of re-entering
+				// the non-atomic insert_with_markers() writer.
+				return false;
 			}
 
 			if ( ! $wp_filesystem->move( $tmp_file, $htaccess_file, true ) ) {
 				if ( $wp_filesystem->exists( $tmp_file ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
-				return null;
+				// Genuine rename failure: same reasoning as above.
+				return false;
 			}
 
 			// The rename carries the tmp inode's 0600 mode onto the live file,
@@ -1012,6 +1030,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// leaving a truncated site-wide .htaccess behind silently.
 			if ( $written !== $new_contents || ! self::verify_htaccess_contents( $written, $expect_block ) ) {
 				$restored = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+					// A symlinked sibling would make the restore read through
+					// the link instead of the backup we wrote.
+					Filesystem::drop_symlinked_path( $wp_filesystem, $backup_file );
+				}
 				if ( $wp_filesystem->exists( $backup_file ) ) {
 					$restored = (bool) $wp_filesystem->copy( $backup_file, $htaccess_file, true );
 				}

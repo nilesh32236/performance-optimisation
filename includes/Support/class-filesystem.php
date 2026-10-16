@@ -1837,9 +1837,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 					$fs->delete( $tmp );
 					return false;
 				}
-				if ( '' !== $original ) {
+				if ( $had_target ) {
 					// Best-effort single backup generation; in-memory
 					// $original remains the authoritative restore source.
+					// Keyed on existence rather than non-empty content: an
+					// existing but empty target must still have a restore
+					// source, and restore_php_backup()'s copy branch is what
+					// restores that case.
 					$fs->copy( $path, $path . '.wppo-bak', true );
 					// The backup holds full wp-config.php secrets beside the
 					// live file in the web root, and its non-.php extension
@@ -1858,19 +1862,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				}
 				$written = $fs->get_contents( $path );
 				if ( ! is_string( $written ) || $written !== $contents ) {
-					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target, $contents );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
-					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target, $contents );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( ! self::verify_php_syntax( $written ) ) {
-					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target, $contents );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
@@ -1888,7 +1892,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				unset( $e );
 				try {
 					if ( isset( $original, $had_target ) && is_string( $original ) ) {
-						self::rollback_php_write( $fs, $path, $original, $chmod, (bool) $had_target );
+						self::rollback_php_write( $fs, $path, $original, $chmod, (bool) $had_target, $contents );
 					}
 				} catch ( \Throwable $ignored_restore ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort restore must never throw.
 				}
@@ -1947,24 +1951,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 		 * Roll the live path back after a post-move verification failure.
 		 *
 		 * A target that existed before the move is never deleted: the in-memory
-		 * original is restored (an empty original is a valid restore) or, when
-		 * that write fails, the `.wppo-bak` sibling is copied back. Only a
-		 * target the move itself created is removed, so a caller that had no
-		 * file ends up with no file instead of a torn one — the mirror of
-		 * `atomic_file_put_contents()`.
+		 * original is written back (an empty original is a valid restore) or,
+		 * when that write fails, the `.wppo-bak` sibling is copied back. A
+		 * target the move itself created is removed only while its live bytes
+		 * are still ours (identical to, or a torn prefix of, `$contents`) —
+		 * bytes belonging to another writer (e.g. a drop-in that appeared
+		 * mid-write) must never be deleted.
 		 *
 		 * @param mixed  $fs Filesystem object.
 		 * @param string $path Final file path.
-		 * @param string $original In-memory original contents ('' when none).
+		 * @param string $original In-memory original contents ('' when the target existed empty).
 		 * @param int    $chmod File mode for a direct-write restore.
 		 * @param bool   $had_target Whether the target existed before the move.
+		 * @param string $contents The bytes this write attempted, for the ownership check.
 		 * @return void
 		 * @since NEXT
 		 */
-		private static function rollback_php_write( $fs, string $path, string $original, int $chmod, bool $had_target ): void {
+		private static function rollback_php_write( $fs, string $path, string $original, int $chmod, bool $had_target, string $contents ): void {
 			try {
 				if ( $had_target ) {
+					// An empty original is a valid restore: the target existed
+					// and its content was ''. A failed snapshot read returns
+					// false before the move, so $original is always the real
+					// pre-move content at this point.
+					if ( $fs->put_contents( $path, $original, $chmod ) ) {
+						self::delete_php_backup( $fs, $path );
+						return;
+					}
 					self::restore_php_backup( $fs, $path, $original, $chmod );
+					return;
+				}
+				$live = method_exists( $fs, 'get_contents' ) ? $fs->get_contents( $path ) : false;
+				if ( is_string( $live ) && ( '' === $live || $live === $contents || 0 === strpos( $contents, $live ) ) ) {
+					$fs->delete( $path );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Remove a predictable sibling path when it is a symlink.
+		 *
+		 * The `.wppo-bak` backup destinations are predictable, and
+		 * WP_Filesystem_Direct::copy() uses PHP copy(), which follows a symlink
+		 * at the destination — a planted symlink there would redirect the
+		 * copied Redis config or .htaccess rules (and the restore copy that
+		 * reads them back) to an arbitrary path.
+		 *
+		 * Local transports only: is_link() inspects this process's filesystem,
+		 * so remote (FTP/SSH) paths are skipped rather than mis-evaluated.
+		 * Best-effort and never throws.
+		 *
+		 * @param mixed  $fs Filesystem object.
+		 * @param string $path Sibling path to check.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function drop_symlinked_path( $fs, string $path ): void {
+			try {
+				if ( '' === $path || ! is_object( $fs ) || ! method_exists( $fs, 'delete' ) ) {
+					return;
+				}
+				if ( ! function_exists( 'is_link' ) || ! is_link( $path ) ) {
 					return;
 				}
 				$fs->delete( $path );
