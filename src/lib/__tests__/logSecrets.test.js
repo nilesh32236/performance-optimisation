@@ -20,12 +20,34 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 	} );
 
+	it( 'keeps non-secret Basic prose intact', () => {
+		// The Basic value class excludes spaces and treats an all-lowercase
+		// token as prose, so "Basic authentication failed" is not mangled.
+		expect( redactLogSecrets( 'Basic authentication failed' ) ).toBe(
+			'Basic authentication failed'
+		);
+	} );
+
 	it( 'redacts Digest quoted params but keeps plain prose', () => {
 		expect(
 			redactLogSecrets( 'Digest username="Mufasa", response="abc123"' )
 		).toBe( 'Digest=[redacted]' );
+		expect(
+			redactLogSecrets( 'Digest: username="Mufasa", response="abc123"' )
+		).toBe( 'Digest=[redacted]' );
 		expect( redactLogSecrets( 'Digest authentication failed' ) ).toBe(
 			'Digest authentication failed'
+		);
+	} );
+
+	it( 'redacts the whole Authorization header value', () => {
+		// Short credentials (below the scheme rules' 8-char floor) and
+		// credentials with unusual characters still never survive.
+		expect( redactLogSecrets( 'Authorization: Basic YTpi' ) ).toBe(
+			'Authorization=[redacted]'
+		);
+		expect( redactLogSecrets( 'Authorization: Bearer abc!def' ) ).toBe(
+			'Authorization=[redacted]'
 		);
 	} );
 

@@ -593,12 +593,26 @@ const VIDEO_PLAYER_LABEL = pickVideoLabel(
 	moduleData.videoPlayerLabel,
 	'Video player'
 );
-// Falls back to the (possibly localized) player label before English, so a
-// locale with only videoPlayerLabel still announces a translated action.
+// The aria-label names the action, never the noun "Video player": falling
+// back to moduleData.videoPlayerLabel would announce a noun for a locale
+// that ships only the player label, reintroducing the mismatch #1831 fixed.
+// English action is the terminal fallback; a dedicated play label always
+// wins (see the video-placeholder tests).
 const VIDEO_PLAY_LABEL = pickVideoLabel(
 	moduleData.videoPlayLabel,
-	pickVideoLabel( moduleData.videoPlayerLabel, 'Play video' )
+	'Play video'
 );
+
+// Test hook: the bundle has no module exports (side-effect script), so Jest
+// reaches the resolved labels through this handle instead of re-implementing
+// readModuleData()/pickVideoLabel() (audit #1831 review). Mirrors the
+// window.__wppoPrioritizeLcp seam below.
+if ( typeof window !== 'undefined' ) {
+	window.__wppoVideoLabels = {
+		videoPlayerLabel: VIDEO_PLAYER_LABEL,
+		videoPlayLabel: VIDEO_PLAY_LABEL,
+	};
+}
 
 /**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).

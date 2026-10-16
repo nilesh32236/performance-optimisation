@@ -29,28 +29,47 @@ export const redactLogSecrets = ( raw ) => {
 				/\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi,
 				'$1=[redacted]'
 			)
+			// The value class excludes spaces so the run stops at the
+			// credential. Real base64 credentials mix case or carry
+			// digits/symbols, so an all-lowercase token is treated as prose
+			// ("Basic authentication failed") and left intact; when it sits
+			// in an Authorization header the next rule still redacts it.
 			.replace(
-				/\b(basic)\s+[A-Za-z0-9\-. _~+/=]{8,}/gi,
-				'$1=[redacted]'
+				/\b(basic)\s+([A-Za-z0-9\-._~+/=]{8,})/gi,
+				( match, scheme, value ) =>
+					/^[a-z]+$/.test( value ) ? match : scheme + '=[redacted]'
 			)
 			// Digest headers carry quoted key=value params
 			// (username="..", response="..") that the single-token Basic shape
 			// cannot cover; the required '=' keeps plain prose such as "Digest
-			// authentication failed" untouched.
+			// authentication failed" untouched. The optional [:=] separator
+			// also accepts the "Digest: username=..." header form, which a
+			// plain \s+ boundary could not cross.
 			.replace(
-				/\b(digest)\s+[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+)(?:\s*,\s*[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+))*/gi,
+				/\b(digest)\s*[:=]?\s+[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+)(?:\s*,\s*[A-Za-z0-9_]+=(?:"[^"]*"|'[^']*'|[^\s,;]+))*/gi,
 				'$1=[redacted]'
 			)
-			.replace( /(authorization)\s*[:=]\s*\S+/gi, '$1=[redacted]' )
+			// Fail-closed: consume the whole header value, not just the first
+			// whitespace token, so a short credential ("Authorization: Basic
+			// YTpi") or one with an unusual character cannot survive. The
+			// (^|[^?&]) guard keeps query params named authorization
+			// (?authorization=/&authorization=) for the query rule below —
+			// without it "[^\r\n]*" would swallow the rest of the line.
+			.replace(
+				/(^|[^?&])(authorization)\s*[:=][^\r\n]*/gi,
+				'$1$2=[redacted]'
+			)
 			// Audit #1831: Cookie/Set-Cookie headers carry session identifiers.
 			// The leading value excludes ';' so the trailing (; pair)* can
 			// consume "a=b; c=d" pairs instead of \S+ swallowing the ';'.
-			// The (?<![?&]) guard keeps query strings (?cookie=/&cookie=)
+			// The (^|[^?&]) guard keeps query strings (?cookie=/&cookie=)
 			// for the query rule below — without it the inserted space
 			// breaks the query value match and "[redacted]" is duplicated.
+			// Expressed as a capture group (not a lookbehind) so engines
+			// without lookbehind support still parse this bundle.
 			.replace(
-				/(?<![?&])((?:\bcookie\b|\bset-cookie\b)\s*[:=])\s*[^;\s'"]+(?:\s*;\s*[^\s;'"]+)*/gi,
-				'$1 [redacted]'
+				/(^|[^?&])((?:\bcookie\b|\bset-cookie\b)\s*[:=])\s*[^;\s'"]+(?:\s*;\s*[^\s;'"]+)*/gi,
+				'$1$2 [redacted]'
 			)
 			.replace(
 				/([?&](?:key|api[_-]?key|token|secret|password|passwd|pwd|authorization|cookie|session|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\s*=)[^&\s]*/gi,

@@ -1118,6 +1118,117 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		} );
 	} );
 
+	describe( 'server-localized video labels (#1831)', () => {
+		beforeEach( () => {
+			delete global.IntersectionObserver;
+		} );
+
+		const injectModuleData = ( data ) => {
+			const existing = document.getElementById(
+				'wp-script-module-data-wppo-lazyload'
+			);
+			if ( existing ) {
+				existing.remove();
+			}
+			const el = document.createElement( 'script' );
+			el.type = 'application/json';
+			el.id = 'wp-script-module-data-wppo-lazyload';
+			el.textContent = JSON.stringify( data );
+			document.head.appendChild( el );
+		};
+
+		const addPlaceholder = () => {
+			const placeholder = document.createElement( 'div' );
+			placeholder.className = 'wppo-video-placeholder';
+			placeholder.setAttribute(
+				'data-wppo-video-src',
+				'https://www.youtube.com/embed/test'
+			);
+			document.body.appendChild( placeholder );
+			return placeholder;
+		};
+
+		afterEach( () => {
+			const el = document.getElementById(
+				'wp-script-module-data-wppo-lazyload'
+			);
+			if ( el ) {
+				el.remove();
+			}
+			delete global.wppoVideoPlayerLabel;
+			delete global.wppoVideoPlayLabel;
+			delete window.__wppoVideoLabels;
+		} );
+
+		it( 'consumes server labels from the script-module data tag', () => {
+			injectModuleData( {
+				videoPlayerLabel: 'Reproductor de video',
+				videoPlayLabel: 'Reproducir video',
+			} );
+			const placeholder = addPlaceholder();
+			bootLazyload();
+
+			expect( window.__wppoVideoLabels ).toEqual( {
+				videoPlayerLabel: 'Reproductor de video',
+				videoPlayLabel: 'Reproducir video',
+			} );
+			expect( placeholder.getAttribute( 'aria-label' ) ).toBe(
+				'Reproducir video'
+			);
+
+			placeholder.click();
+			expect(
+				placeholder.querySelector( 'iframe' ).getAttribute( 'title' )
+			).toBe( 'Reproductor de video' );
+		} );
+
+		it( 'merges the WP < 6.9 window globals as fallback data', () => {
+			global.wppoVideoPlayerLabel = 'Lettore video';
+			global.wppoVideoPlayLabel = 'Riproduci video';
+			const placeholder = addPlaceholder();
+			bootLazyload();
+
+			expect( placeholder.getAttribute( 'aria-label' ) ).toBe(
+				'Riproduci video'
+			);
+
+			placeholder.click();
+			expect(
+				placeholder.querySelector( 'iframe' ).getAttribute( 'title' )
+			).toBe( 'Lettore video' );
+		} );
+
+		it( 'falls back to the English labels when no server data exists', () => {
+			const placeholder = addPlaceholder();
+			bootLazyload();
+
+			expect( placeholder.getAttribute( 'aria-label' ) ).toBe(
+				'Play video'
+			);
+
+			placeholder.click();
+			expect(
+				placeholder.querySelector( 'iframe' ).getAttribute( 'title' )
+			).toBe( 'Video player' );
+		} );
+
+		it( 'never announces the noun when only videoPlayerLabel is localized', () => {
+			// #1831: the aria-label must name the action ("Play video"); a
+			// locale that supplies only the noun must not leak it into the
+			// action label.
+			injectModuleData( { videoPlayerLabel: 'Reproductor de video' } );
+			const placeholder = addPlaceholder();
+			bootLazyload();
+
+			expect( window.__wppoVideoLabels.videoPlayLabel ).toBe(
+				'Play video'
+			);
+			expect( placeholder.getAttribute( 'aria-label' ) ).toBe(
+				'Play video'
+			);
+		} );
+	} );
+
 	describe( 'config resolution (script-module data)', () => {
 		const injectModuleData = ( data ) => {
 			const existing = document.getElementById(
@@ -1396,7 +1507,7 @@ describe( 'Lazy Load (lazyload.js)', () => {
 	} );
 
 	describe( 'teardown releases injected config globals', () => {
-		it( 'deletes wppoNativeLazy and wppoDelayConfig', () => {
+		it( 'deletes wppoNativeLazy, wppoDelayConfig and the video labels', () => {
 			mockIntersectionObserver();
 			bootLazyload();
 			global.wppoNativeLazy = true;
@@ -1404,12 +1515,16 @@ describe( 'Lazy Load (lazyload.js)', () => {
 				idleTimeout: 1,
 				defaultStrategy: 'idle',
 			};
+			global.wppoVideoPlayerLabel = 'Video player';
+			global.wppoVideoPlayLabel = 'Play video';
 
 			expect( typeof window.wppoLazyloadTeardown ).toBe( 'function' );
 			window.wppoLazyloadTeardown();
 
 			expect( 'wppoNativeLazy' in window ).toBe( false );
 			expect( 'wppoDelayConfig' in window ).toBe( false );
+			expect( 'wppoVideoPlayerLabel' in window ).toBe( false );
+			expect( 'wppoVideoPlayLabel' in window ).toBe( false );
 		} );
 	} );
 
