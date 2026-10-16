@@ -123,11 +123,13 @@ export const SENSITIVE_EXPORT_PATHS = [
  * @return {Object} Cloned settings safe for export.
  */
 export const stripSensitiveSettings = ( settings ) => {
-	const clone =
-		settings && typeof settings === 'object'
-			? JSON.parse( JSON.stringify( settings ) )
-			: {};
-	return stripSensitiveKeys( clone );
+	// stripSensitiveKeys() already returns a fresh deep clone (and drops
+	// prototype-pollution keys), so the extra JSON round-trip only added a
+	// second full traversal plus stringify/parse allocation on this export
+	// path. Mirrors PluginSetting.exportSettings().
+	return stripSensitiveKeys(
+		settings && typeof settings === 'object' ? settings : {}
+	);
 };
 
 /**

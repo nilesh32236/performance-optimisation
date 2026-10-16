@@ -112,6 +112,41 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 	} );
 
+	it( 'redacts a quoted credential value that contains spaces', () => {
+		// The generic value atom must accept a quoted run, not just \S+: with
+		// \S+ the match fails on `token="abc def"` and the whole value was
+		// logged verbatim.
+		expect( redactLogSecrets( 'token="abc def"' ) ).toBe(
+			'token=[redacted]'
+		);
+		expect( redactLogSecrets( "password='a b c'" ) ).toBe(
+			'password=[redacted]'
+		);
+		expect( redactLogSecrets( 'api_key: "k 1 2 3" done' ) ).toBe(
+			'api_key=[redacted] done'
+		);
+	} );
+
+	it( 'leaves an already-masked value alone', () => {
+		expect( redactLogSecrets( 'token=[redacted]' ) ).toBe(
+			'token=[redacted]'
+		);
+	} );
+
+	it( 'fails closed past the walk depth instead of returning the subtree', () => {
+		let deep = { client_secret: 'TOP-SECRET' };
+		for ( let i = 0; i < 40; i++ ) {
+			deep = { nested: deep };
+		}
+
+		expect( JSON.stringify( stripSensitiveKeys( deep ) ) ).not.toContain(
+			'TOP-SECRET'
+		);
+		expect( JSON.stringify( redactSecrets( deep ) ) ).not.toContain(
+			'TOP-SECRET'
+		);
+	} );
+
 	it( 'leaves non-secret words alone', () => {
 		expect( redactLogSecrets( 'tokens: none here' ) ).toBe(
 			'tokens: none here'

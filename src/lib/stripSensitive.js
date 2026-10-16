@@ -75,7 +75,11 @@ const walkSensitiveKeys = ( value, mask, depth = 0 ) => {
 	// until the stack overflows. Mirrors MAX_IMPORT_DEPTH in
 	// components/PluginSetting.js.
 	if ( depth > MAX_WALK_DEPTH ) {
-		return value;
+		// Fail CLOSED: returning $value here would hand back the unredacted
+		// subtree, which is exactly the leak this walker exists to prevent.
+		// The cap is far beyond any real settings tree, so it only trips on
+		// pathological input, where a mask/removal is the safe answer.
+		return typeof mask === 'string' ? mask : null;
 	}
 	if ( Array.isArray( value ) ) {
 		return value.map( ( item ) =>
