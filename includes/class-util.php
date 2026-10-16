@@ -29,6 +29,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
+		 * Safely read and sanitize a scalar `$_SERVER` entry (issue #1820(b)).
+		 *
+		 * Central single-source guard for the `isset( ... ) ? sanitize_text_field( wp_unslash( ... ) ) : ''`
+		 * idiom so the isset-type + `is_scalar` + try guards are consistent for the
+		 * ~50 duplicated reads instead of inconsistent copies. Returns a bounded string;
+		 * never fatals on a missing or non-scalar value (PHP 8 guard). Read-only.
+		 *
+		 * @since NEXT
+		 * @param string $key     Server key, e.g. `HTTP_ACCEPT` or `QUERY_STRING`.
+		 * @param string $fallback Default to return when the key is missing or unusable.
+		 * @return string
+		 */
+		public static function get_server_string( string $key, string $fallback = '' ): string {
+			if ( ! isset( $_SERVER[ $key ] ) ) {
+				return $fallback;
+			}
+			$value = wp_unslash( $_SERVER[ $key ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.WP.AlternativeFunctions -- Central guarded sanitizer below handles unslash + text sanitation.
+			if ( ! is_scalar( $value ) ) {
+				return $fallback;
+			}
+			$value = (string) $value;
+			try {
+				if ( function_exists( 'wp_unslash' ) ) {
+					$value = wp_unslash( $value );
+				}
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$value = sanitize_text_field( $value ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Value is unslashed above and sanitized here; dynamic key prevents literal sniff recognition.
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+			if ( strlen( $value ) > 4096 ) {
+				$value = substr( $value, 0, 4096 );
+			}
+			return (string) $value;
+		}
+
+
+		/**
 		 * Top-level settings keys allowlisted for import and update operations.
 		 *
 		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::ALLOWED_SETTINGS_KEYS};
