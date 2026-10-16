@@ -3385,14 +3385,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Images",
-        "lines": 4137,
+        "lines": 4148,
         "methods": 68,
         "public_methods": 47,
         "large_methods": 8,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "convert_image",
-            "line": 1791,
+            "line": 1802,
             "lines": 691
         },
         "method_prefixes": {

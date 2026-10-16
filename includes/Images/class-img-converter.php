@@ -137,17 +137,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `$options`. Centralising the options snapshot means a constructor
 		 * or deferred-commit change is made once instead of five times, so
 		 * image conversion cannot silently diverge between the admin, cron,
-		 * CLI, and REST paths. An explicit non-empty snapshot is honoured.
+		 * CLI, and REST paths.
+		 *
+		 * An explicit array snapshot is honoured as-is — including an empty
+		 * one — so the factory is exactly equivalent to
+		 * `new Img_Converter( $options )` at every call site. Only a
+		 * null/non-array argument resolves the effective settings, because the
+		 * constructor performs no such fallback itself: substituting global
+		 * settings for a snapshot a caller explicitly passed would silently
+		 * change behaviour (e.g. Image_Optimisation::get_img_converter()).
+		 *
+		 * `new static()` (not `new self()`) keeps the seam substitutable, which
+		 * is the point of routing construction through one factory.
 		 *
 		 * @since NEXT
-		 * @param array|null $options Optional options snapshot; null/empty = effective settings.
-		 * @return self
+		 * @param array|null $options Optional options snapshot; null = effective settings.
+		 * @return static
 		 */
 		public static function from_settings( $options = null ): self {
-			if ( ! is_array( $options ) || empty( $options ) ) {
+			if ( ! is_array( $options ) ) {
 				$options = Util::get_settings();
 			}
-			return new self( $options );
+			return new static( $options );
 		}
 
 		/**

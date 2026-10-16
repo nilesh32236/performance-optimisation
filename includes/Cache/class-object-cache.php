@@ -307,10 +307,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * future test double) has one place to hook.
 		 *
 		 * @since NEXT
-		 * @return self
+		 * @return static
 		 */
 		public static function create(): self {
-			return new self();
+			return new static();
 		}
 
 		/**
