@@ -351,10 +351,10 @@ trait WPPO_Test_Bootstrap {
 			// admin-notice fixtures never leak across tests.
 			\PerformanceOptimise\Inc\Admin_Notices::reset_memo_cache_for_tests();
 		}
-		if ( class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) && method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'reset_runtime_state' ) ) {
+		if ( class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) && method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'reset_runtime_state_for_tests' ) ) {
 			// Deferred image-info buffer and shutdown-registration flags are
 			// per process: reset so conversion fixtures never leak.
-			\PerformanceOptimise\Inc\Img_Converter::reset_runtime_state();
+			\PerformanceOptimise\Inc\Img_Converter::reset_runtime_state_for_tests();
 		}
 		if ( class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) && method_exists( 'PerformanceOptimise\Inc\Lcp_Preload', 'clear_lcp_preload_caches' ) ) {
 			// LCP/preload memos are only covered transitively via

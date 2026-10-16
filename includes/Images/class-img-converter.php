@@ -3482,10 +3482,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public function maybe_serve_next_gen_image( $image ) {
-			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
+			if ( empty( $image[0] ) ) {
 				return $image;
 			}
 
+			// Util::server_string() owns the missing/non-string HTTP_ACCEPT
+			// handling (fail-closed to ''), so the raw superglobal guard the
+			// audit set out to consolidate is gone here too.
 			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
 
 			// Check if the browser supports WebP.
@@ -3942,19 +3945,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		 * Reset the per-process image-info memos (test isolation).
+		 * Reset the per-process image-info memos (test isolation only).
 		 *
 		 * PHPUnit runs the whole suite in one process, so the deferred
 		 * image-info buffer, the shutdown-registration flag, the persisted
-		 * flag, and the blog-keyed client-side processing memo all leak
-		 * across test classes unless explicitly cleared. Reset methods for
-		 * the other runtime-state owners are called from the bootstrap
-		 * setUp(); this is the matching entry point for Img_Converter.
+		 * flag, and the client-side processing memo all leak across test
+		 * classes unless explicitly cleared. The bootstrap setUp() calls
+		 * this alongside the Runtime_State owners.
+		 *
+		 * Deliberately NOT registered in Runtime_State::owners(): this state
+		 * needs no blog-switch reset, and resetting it there would be unsafe.
+		 * `$client_side_processing_state` is already keyed per blog id
+		 * (`self::$client_side_processing_state[ $blog_id ]`), so a switch
+		 * cannot read another site's value; the other three are per-request
+		 * (a deferred buffer plus its shutdown/persisted flags). Clearing the
+		 * deferred buffer on switch_to_blog() mid-request would drop pending
+		 * image-info writes, so the reset stays test-scoped. The `_for_tests`
+		 * suffix keeps it from masquerading as a production owner method.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
-		public static function reset_runtime_state(): void {
+		public static function reset_runtime_state_for_tests(): void {
 			self::$deferred_img_info            = null;
 			self::$img_info_shutdown_registered = false;
 			self::$img_info_persisted           = false;

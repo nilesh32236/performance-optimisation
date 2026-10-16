@@ -912,47 +912,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Read a hardened string from $_GET.
-		 *
-		 * Query-string reads power cache-routing decisions only (no state
-		 * change, never output), but the isset/is_string guards matter just
-		 * as much: `?foo[]=1` sends an array that would TypeError under
-		 * `sanitize_text_field()` on PHP 8.
-		 *
-		 * @since NEXT
-		 * @param string $key      $_GET key.
-		 * @param string $fallback Value returned when the key is absent or non-scalar.
-		 * @return string Sanitized value.
-		 */
-		public static function query_param( string $key, string $fallback = '' ): string {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only cache-routing check, no state change or output.
-			if ( ! isset( $_GET[ $key ] ) || ! is_string( $_GET[ $key ] ) ) {
-				return $fallback;
-			}
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only cache-routing check, no state change or output.
-			return sanitize_text_field( wp_unslash( $_GET[ $key ] ) );
-		}
-
-		/**
-		 * Read a hardened string from $_COOKIE.
-		 *
-		 * Cookie values drive cache bypass / role-vary decisions. Guards
-		 * against array-valued cookies (`Cookie: name[]=x` is attacker
-		 * controlled) that would otherwise fatal in `sanitize_text_field()`.
-		 *
-		 * @since NEXT
-		 * @param string $key      $_COOKIE key.
-		 * @param string $fallback Value returned when the key is absent or non-scalar.
-		 * @return string Sanitized value.
-		 */
-		public static function cookie_string( string $key, string $fallback = '' ): string {
-			if ( ! isset( $_COOKIE[ $key ] ) || ! is_string( $_COOKIE[ $key ] ) ) {
-				return $fallback;
-			}
-			return sanitize_text_field( wp_unslash( $_COOKIE[ $key ] ) );
-		}
-
-		/**
 		 * Whether path/query values indicate a WooCommerce AJAX endpoint.
 		 *
 		 * Pure string check (no Woo symbols, no I/O): matches the
