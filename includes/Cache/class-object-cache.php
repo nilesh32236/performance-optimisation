@@ -1883,6 +1883,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				if ( true === $atomic ) {
 					$this->sweep_orphan_config_tmp( $wp_filesystem );
+					// chmod parity on the shared-writer success branch. The
+					// helper derives its mode from target_file_mode(), which
+					// returns 0 for a not-yet-existing target, so a fresh
+					// enable() would otherwise rename the config in at
+					// FS_CHMOD_FILE (0644) and disclose Redis topology (hosts,
+					// ports, TLS mode, DB index) that the audit #1490
+					// owner-only contract exists to protect. Mirrors
+					// publish_dropin_atomic() and the manual fallback below.
+					self::restrict_file_mode( $wp_filesystem, $this->config_path );
 					return true;
 				}
 				if ( false === $atomic ) {

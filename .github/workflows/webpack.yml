@@ -24,6 +24,12 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      # Needed by the workflow-referenced-labels step: repo labels are an
+      # issues-scoped resource, so GET /repos/{owner}/{repo}/labels 403s with
+      # contents: read alone. The check fails closed, so without this the step
+      # would go red on every run for a permissions reason rather than a
+      # missing label -- a spurious red default-branch gate.
+      issues: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -45,6 +51,13 @@ jobs:
       # stay on an immutable commit SHA.
       - name: Pinned reviewer ref regression
         run: bash .github/scripts/tests/reviewer-ref-pinned.sh
+      - name: Workflow-referenced labels
+        # A guard that nothing runs cannot fail. growth-monitor.yml referenced a
+        # `growth-monitor` label that did not exist; the step that needed it only
+        # broke when a material change fired the schedule.
+        run: bash scripts/check-workflow-labels.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   js-build:
     name: JS Lint, Test & Build

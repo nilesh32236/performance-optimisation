@@ -160,25 +160,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 				}
 
 				$taxonomy_names = get_object_taxonomies( $post_type, 'names' );
-				if ( ! empty( $taxonomy_names ) ) {
-					$all_terms = wp_get_object_terms( $page_id, $taxonomy_names );
-					if ( ! empty( $all_terms ) && ! is_wp_error( $all_terms ) ) {
-						$terms_by_taxonomy = array();
-						foreach ( $all_terms as $term ) {
-							$terms_by_taxonomy[ $term->taxonomy ][] = $term;
+				$all_terms      = ! empty( $taxonomy_names ) ? wp_get_object_terms( $page_id, $taxonomy_names ) : array();
+
+				if ( ! empty( $all_terms ) && ! is_wp_error( $all_terms ) ) {
+					$terms_by_taxonomy = array();
+					foreach ( $all_terms as $term ) {
+						$terms_by_taxonomy[ $term->taxonomy ][] = $term;
+					}
+
+					foreach ( $terms_by_taxonomy as $taxonomy_name => $terms ) {
+						$taxonomy_obj = get_taxonomy( $taxonomy_name );
+						if ( ! $taxonomy_obj || empty( $taxonomy_obj->public ) ) {
+							continue;
 						}
-						foreach ( $terms_by_taxonomy as $taxonomy_name => $terms ) {
-							$taxonomy_obj = get_taxonomy( $taxonomy_name );
-							if ( ! $taxonomy_obj || ! $taxonomy_obj->public ) {
+						foreach ( $terms as $term ) {
+							$term_link = get_term_link( $term );
+							if ( empty( $term_link ) || is_wp_error( $term_link ) ) {
 								continue;
 							}
-							foreach ( $terms as $term ) {
-								$term_link = get_term_link( $term );
-								if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
-									$term_path = wp_make_link_relative( $term_link );
-									$urls[]    = $term_path;
-								}
-							}
+							$urls[] = wp_make_link_relative( $term_link );
 						}
 					}
 				}
@@ -418,7 +418,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache_Invalidator' ) ) {
 					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						try {
 							$from_const = \PerformanceOptimise\Inc\Used_CSS::VIEWPORT_VARIANTS;
-							if ( is_array( $from_const ) && ! empty( $from_const ) ) {
+							if ( is_array( $from_const ) ) {
 								$filtered = array_values( array_filter( array_map( 'strval', $from_const ) ) );
 								if ( ! empty( $filtered ) ) {
 									$variant_slugs = $filtered;

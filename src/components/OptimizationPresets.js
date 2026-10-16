@@ -460,7 +460,7 @@ const OptimizationPresets = () => {
 	return (
 		<FeatureCard
 			title={ __( 'Optimization Presets', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faSliders } aria-hidden="true" /> }
+			icon={ <FontAwesomeIcon icon={ faSliders } /> }
 		>
 			{ notice && (
 				<NoticeBanner

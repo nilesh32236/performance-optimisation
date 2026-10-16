@@ -15,6 +15,9 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import NoticeBanner from './common/NoticeBanner';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faServer } from '@fortawesome/free-solid-svg-icons';
+
 import { __ } from '@wordpress/i18n';
 
 /**
@@ -178,7 +181,10 @@ const SystemInfo = () => {
 	};
 
 	return (
-		<FeatureCard title={ __( 'System Info', 'performance-optimisation' ) }>
+		<FeatureCard
+			title={ __( 'System Info', 'performance-optimisation' ) }
+			icon={ <FontAwesomeIcon icon={ faServer } aria-hidden="true" /> }
+		>
 			{ /* Load trigger — shown to initiate fetch or refresh data */ }
 			<div
 				className={ `wppo-sysinfo-trigger ${

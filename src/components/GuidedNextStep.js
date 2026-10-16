@@ -148,7 +148,7 @@ const GuidedNextStep = ( { onNavigate } ) => {
 	return (
 		<FeatureCard
 			title={ __( 'Guided Next Step', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faCompass } aria-hidden="true" /> }
+			icon={ <FontAwesomeIcon icon={ faCompass } /> }
 		>
 			{ notice && (
 				<NoticeBanner

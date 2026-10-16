@@ -545,7 +545,10 @@ const ObjectCache = ( { options = {} } ) => {
 								isLoading={ activeAction === 'flush' }
 								label={
 									<>
-										<FontAwesomeIcon icon={ faBroom } />{ ' ' }
+										<FontAwesomeIcon
+											icon={ faBroom }
+											aria-hidden="true"
+										/>{ ' ' }
 										{ __(
 											'Flush Cache',
 											'performance-optimisation'
@@ -592,7 +595,7 @@ const ObjectCache = ( { options = {} } ) => {
 
 			<div className="wppo-notices-container">
 				<div className="wppo-notice wppo-notice--info">
-					<FontAwesomeIcon icon={ faInfoCircle } />
+					<FontAwesomeIcon icon={ faInfoCircle } aria-hidden="true" />
 					<div>
 						<strong>
 							{ __(
@@ -617,7 +620,10 @@ const ObjectCache = ( { options = {} } ) => {
 				</div>
 				{ cacheStatus.redis_missing && (
 					<div className="wppo-notice wppo-notice--error">
-						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<FontAwesomeIcon
+							icon={ faExclamationCircle }
+							aria-hidden="true"
+						/>
 						<div>
 							<strong>
 								{ __(
@@ -636,7 +642,10 @@ const ObjectCache = ( { options = {} } ) => {
 				) }
 				{ cacheStatus.foreign_dropin && (
 					<div className="wppo-notice wppo-notice--warning">
-						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<FontAwesomeIcon
+							icon={ faExclamationCircle }
+							aria-hidden="true"
+						/>
 						<div>
 							<strong>
 								{ __(
@@ -659,7 +668,10 @@ const ObjectCache = ( { options = {} } ) => {
 						role="alert"
 						aria-live="assertive"
 					>
-						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<FontAwesomeIcon
+							icon={ faExclamationCircle }
+							aria-hidden="true"
+						/>
 						<div>
 							<strong>
 								{ __(
@@ -848,7 +860,9 @@ const ObjectCache = ( { options = {} } ) => {
 						'Connection Settings',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faLink } /> }
+					icon={
+						<FontAwesomeIcon icon={ faLink } aria-hidden="true" />
+					}
 					actions={
 						connectionBadge ? (
 							<span
@@ -1094,7 +1108,12 @@ const ObjectCache = ( { options = {} } ) => {
 						'Enterprise Performance',
 						'performance-optimisation'
 					) }
-					icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
+					icon={
+						<FontAwesomeIcon
+							icon={ faShieldAlt }
+							aria-hidden="true"
+						/>
+					}
 				>
 					<div className="wppo-field-group">
 						<div>
@@ -1239,7 +1258,10 @@ const ObjectCache = ( { options = {} } ) => {
 							isLoading={ activeAction === 'disable' }
 							label={
 								<>
-									<FontAwesomeIcon icon={ faTimes } />{ ' ' }
+									<FontAwesomeIcon
+										icon={ faTimes }
+										aria-hidden="true"
+									/>{ ' ' }
 									{ __(
 										'Disable Object Cache',
 										'performance-optimisation'

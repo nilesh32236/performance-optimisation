@@ -1557,15 +1557,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				// stay in the live path and contradict the "readers can never
 				// observe a torn file" guarantee. Mirrors
 				// atomic_write_php_verified()'s restore-on-mismatch.
-				$original = false;
+				$original   = false;
+				$had_target = false;
 				if ( method_exists( $fs, 'get_contents' ) ) {
 					try {
-						$has_target = method_exists( $fs, 'exists' ) ? (bool) $fs->exists( $path ) : true;
-						if ( $has_target ) {
+						$had_target = method_exists( $fs, 'exists' ) ? (bool) $fs->exists( $path ) : true;
+						if ( $had_target ) {
 							$snapshot = $fs->get_contents( $path );
 							$original = is_string( $snapshot ) ? $snapshot : false;
 						}
 					} catch ( \Throwable $ignored_snapshot ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort snapshot must never fail the write.
+						// $had_target is deliberately kept: a failed snapshot
+						// read must never be mistaken for "there was no file".
 						$original = false;
 					}
 				}
@@ -1586,12 +1589,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 						&& ( null === $expect || (bool) call_user_func( $expect, $written ) );
 					if ( ! $verified ) {
 						// The move consumed $tmp, so deleting it here would be a
-						// no-op. Restore the pre-move snapshot (or remove the
-						// live path when there was nothing to restore) so the
-						// live file never keeps torn or unverified bytes.
+						// no-op. Roll the live path back so it never keeps torn
+						// or unverified bytes: restore a pre-existing target (an
+						// empty original is a valid restore) and only delete a
+						// file this move created. A pre-existing file whose
+						// snapshot read failed is left in place — deleting a
+						// live .htaccess/drop-in is worse than an unverified
+						// write the caller can retry.
 						try {
-							if ( is_string( $original ) && '' !== $original ) {
-								$fs->put_contents( $path, $original, $chmod );
+							if ( $had_target ) {
+								if ( is_string( $original ) ) {
+									$fs->put_contents( $path, $original, $chmod );
+								}
 							} else {
 								$fs->delete( $path );
 							}
@@ -1797,9 +1806,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				$chmod = $target_mode;
 			}
 			try {
-				$original = '';
+				$original   = '';
+				$had_target = false;
 				if ( $fs->exists( $path ) ) {
-					$original = $fs->get_contents( $path );
+					$had_target = true;
+					$original   = $fs->get_contents( $path );
 					if ( ! is_string( $original ) ) {
 						return false;
 					}
@@ -1847,19 +1858,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				}
 				$written = $fs->get_contents( $path );
 				if ( ! is_string( $written ) || $written !== $contents ) {
-					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
-					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( ! self::verify_php_syntax( $written ) ) {
-					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::rollback_php_write( $fs, $path, $original, $chmod, $had_target );
 					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
@@ -1876,8 +1887,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				try {
-					if ( isset( $original ) && is_string( $original ) && '' !== $original ) {
-						self::restore_php_backup( $fs, $path, $original, $chmod );
+					if ( isset( $original, $had_target ) && is_string( $original ) ) {
+						self::rollback_php_write( $fs, $path, $original, $chmod, (bool) $had_target );
 					}
 				} catch ( \Throwable $ignored_restore ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort restore must never throw.
 				}
@@ -1930,6 +1941,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 				unset( $e );
 			}
 			return false;
+		}
+
+		/**
+		 * Roll the live path back after a post-move verification failure.
+		 *
+		 * A target that existed before the move is never deleted: the in-memory
+		 * original is restored (an empty original is a valid restore) or, when
+		 * that write fails, the `.wppo-bak` sibling is copied back. Only a
+		 * target the move itself created is removed, so a caller that had no
+		 * file ends up with no file instead of a torn one — the mirror of
+		 * `atomic_file_put_contents()`.
+		 *
+		 * @param mixed  $fs Filesystem object.
+		 * @param string $path Final file path.
+		 * @param string $original In-memory original contents ('' when none).
+		 * @param int    $chmod File mode for a direct-write restore.
+		 * @param bool   $had_target Whether the target existed before the move.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function rollback_php_write( $fs, string $path, string $original, int $chmod, bool $had_target ): void {
+			try {
+				if ( $had_target ) {
+					self::restore_php_backup( $fs, $path, $original, $chmod );
+					return;
+				}
+				$fs->delete( $path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

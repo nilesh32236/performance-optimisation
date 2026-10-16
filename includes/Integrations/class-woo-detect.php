@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 					return true;
 				}
 				$value = $settings['cache_settings']['wooSafeMode'];
-				if ( ! is_scalar( $value ) && null !== $value ) {
+				if ( ! is_scalar( $value ) ) {
 					return true;
 				}
 				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
@@ -956,7 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Woo_Detect' ) ) {
 					}
 				}
 
-				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks ) && ! empty( $preload_checks ) && ! empty( $cart_checks );
+				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks ) && ! empty( $preload_checks ) && ! empty( $cart_checks ); // @phpstan-ignore-line empty.variable.
 				foreach ( $checks as $check ) {
 					if ( empty( $check['pass'] ) ) {
 						$all_pass = false;
