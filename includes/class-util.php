@@ -919,6 +919,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether a $_SERVER key is present and string-shaped.
+		 *
+		 * `server_string()` cannot distinguish an absent header from a
+		 * set-but-empty one: both return the fallback (''). Callers that need
+		 * the pre-refactor `isset()` semantics — notably the next-gen image
+		 * serve path, which must return early only when there is NO Accept
+		 * header to negotiate with, not when the client sent an empty one —
+		 * use this predicate before reading the sanitized value.
+		 *
+		 * @since NEXT
+		 * @param string $key $_SERVER key.
+		 * @return bool True when the key is set and a string.
+		 */
+		public static function has_server_string( string $key ): bool {
+			return isset( $_SERVER[ $key ] ) && is_string( $_SERVER[ $key ] );
+		}
+
+		/**
 		 * Whether path/query values indicate a WooCommerce AJAX endpoint.
 		 *
 		 * Pure string check (no Woo symbols, no I/O): matches the

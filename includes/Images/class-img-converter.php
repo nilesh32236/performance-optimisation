@@ -3497,18 +3497,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $image;
 			}
 
-			// Util::server_string() owns the isset()/is_string() guard and
-			// fails closed to '', so the raw superglobal guard is gone.
-			// The early return it performed must still happen: an absent (or
-			// array-shaped) Accept header means there is no browser to
-			// negotiate with, and falling through would let the DOING_CRON
-			// branch below serve or re-queue next-gen URLs for headerless
-			// requests. Checking the helper's result keeps the behaviour and
-			// the single sanitisation owner.
-			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
-			if ( '' === $http_accept ) {
+			// Presence, not emptiness. The pre-refactor code returned early
+			// only when the Accept header was ABSENT (isset() guard); a client
+			// that sends an empty Accept header is still a browser to negotiate
+			// with and must fall through. server_string() collapses absent and
+			// empty to '', so test presence separately and keep the single
+			// sanitisation owner for the value.
+			if ( ! Util::has_server_string( 'HTTP_ACCEPT' ) ) {
 				return $image;
 			}
+			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
 
 			// Check if the browser supports WebP.
 			$supports_avif = false !== strpos( $http_accept, 'image/avif' );

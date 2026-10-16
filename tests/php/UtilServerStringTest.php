@@ -105,4 +105,28 @@ class UtilServerStringTest extends \PHPUnit\Framework\TestCase {
 			Util::server_string( 'HTTP_ACCEPT', 'fallback' )
 		);
 	}
+
+	/**
+	 * `has_server_string()` distinguishes an absent header from an empty one.
+	 *
+	 * `server_string()` returns '' for both, so the next-gen image caller must
+	 * use the predicate to preserve the pre-refactor isset() semantics: an
+	 * empty Accept header is present, so the request is not headerless.
+	 *
+	 * @return void
+	 */
+	public function test_has_server_string_distinguishes_absent_from_empty(): void {
+		$this->clear_accept_header();
+		$this->assertFalse( Util::has_server_string( 'HTTP_ACCEPT' ) );
+
+		$_SERVER['HTTP_ACCEPT'] = '';
+		$this->assertTrue( Util::has_server_string( 'HTTP_ACCEPT' ) );
+		$this->assertSame( '', Util::server_string( 'HTTP_ACCEPT' ) );
+
+		$_SERVER['HTTP_ACCEPT'] = array( 'image/webp' );
+		$this->assertFalse( Util::has_server_string( 'HTTP_ACCEPT' ) );
+
+		$_SERVER['HTTP_ACCEPT'] = 42;
+		$this->assertFalse( Util::has_server_string( 'HTTP_ACCEPT' ) );
+	}
 }
