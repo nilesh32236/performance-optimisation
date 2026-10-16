@@ -130,6 +130,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Build an Img_Converter from an explicit snapshot or effective settings.
+		 *
+		 * Single construction seam for the five sites flagged in audit #1820
+		 * (Main, Image_Optimisation, Cron, CLI, REST) that each hand-threaded
+		 * `$options`. Centralising the options snapshot means a constructor
+		 * or deferred-commit change is made once instead of five times, so
+		 * image conversion cannot silently diverge between the admin, cron,
+		 * CLI, and REST paths. An explicit non-empty snapshot is honoured.
+		 *
+		 * @since NEXT
+		 * @param array|null $options Optional options snapshot; null/empty = effective settings.
+		 * @return self
+		 */
+		public static function from_settings( $options = null ): self {
+			if ( ! is_array( $options ) || empty( $options ) ) {
+				$options = Util::get_settings();
+			}
+			return new self( $options );
+		}
+
+		/**
 		 * Check if WordPress core (6.7+) natively handles next-gen format generation (WebP/AVIF).
 		 *
 		 * @since 2.0.0
@@ -3465,7 +3486,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $image;
 			}
 
-			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
 
 			// Check if the browser supports WebP.
 			$supports_avif = false !== strpos( $http_accept, 'image/avif' );
@@ -3921,6 +3942,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Reset the per-process image-info memos (test isolation).
+		 *
+		 * PHPUnit runs the whole suite in one process, so the deferred
+		 * image-info buffer, the shutdown-registration flag, the persisted
+		 * flag, and the blog-keyed client-side processing memo all leak
+		 * across test classes unless explicitly cleared. Reset methods for
+		 * the other runtime-state owners are called from the bootstrap
+		 * setUp(); this is the matching entry point for Img_Converter.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state(): void {
+			self::$deferred_img_info            = null;
+			self::$img_info_shutdown_registered = false;
+			self::$img_info_persisted           = false;
+			self::$client_side_processing_state = null;
+		}
+
+		/**
 		 * Atomically clears completed webp and avif entries from the image info option.
 		 *
 		 * @since 1.4.0
@@ -4069,8 +4110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => 'wppo_img_info' )
 				);
-				wp_cache_delete( 'wppo_img_info', 'options' );
-				wp_cache_delete( 'alloptions', 'options' );
+				Util::invalidate_option_caches( 'wppo_img_info' );
 			}
 		}
 	}

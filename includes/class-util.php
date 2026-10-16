@@ -890,6 +890,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Read a hardened string from $_SERVER.
+		 *
+		 * Single owner for the superglobal-read idiom previously hand-rolled
+		 * ~50 times with inconsistent guards (audit #1820). Enforces
+		 * `isset()` + `is_string()` before `wp_unslash()` +
+		 * `sanitize_text_field()`, so a scalar/array value can never raise a
+		 * PHP 8 TypeError and no unsanitized markup reaches the static-cache
+		 * artefact. Non-scalar values fall back to `$fallback` (fail-closed).
+		 *
+		 * @since NEXT
+		 * @param string $key      $_SERVER key.
+		 * @param string $fallback Value returned when the key is absent or non-scalar.
+		 * @return string Sanitized value.
+		 */
+		public static function server_string( string $key, string $fallback = '' ): string {
+			if ( ! isset( $_SERVER[ $key ] ) || ! is_string( $_SERVER[ $key ] ) ) {
+				return $fallback;
+			}
+			return sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) );
+		}
+
+		/**
+		 * Read a hardened string from $_GET.
+		 *
+		 * Query-string reads power cache-routing decisions only (no state
+		 * change, never output), but the isset/is_string guards matter just
+		 * as much: `?foo[]=1` sends an array that would TypeError under
+		 * `sanitize_text_field()` on PHP 8.
+		 *
+		 * @since NEXT
+		 * @param string $key      $_GET key.
+		 * @param string $fallback Value returned when the key is absent or non-scalar.
+		 * @return string Sanitized value.
+		 */
+		public static function query_param( string $key, string $fallback = '' ): string {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only cache-routing check, no state change or output.
+			if ( ! isset( $_GET[ $key ] ) || ! is_string( $_GET[ $key ] ) ) {
+				return $fallback;
+			}
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only cache-routing check, no state change or output.
+			return sanitize_text_field( wp_unslash( $_GET[ $key ] ) );
+		}
+
+		/**
+		 * Read a hardened string from $_COOKIE.
+		 *
+		 * Cookie values drive cache bypass / role-vary decisions. Guards
+		 * against array-valued cookies (`Cookie: name[]=x` is attacker
+		 * controlled) that would otherwise fatal in `sanitize_text_field()`.
+		 *
+		 * @since NEXT
+		 * @param string $key      $_COOKIE key.
+		 * @param string $fallback Value returned when the key is absent or non-scalar.
+		 * @return string Sanitized value.
+		 */
+		public static function cookie_string( string $key, string $fallback = '' ): string {
+			if ( ! isset( $_COOKIE[ $key ] ) || ! is_string( $_COOKIE[ $key ] ) ) {
+				return $fallback;
+			}
+			return sanitize_text_field( wp_unslash( $_COOKIE[ $key ] ) );
+		}
+
+		/**
 		 * Whether path/query values indicate a WooCommerce AJAX endpoint.
 		 *
 		 * Pure string check (no Woo symbols, no I/O): matches the
@@ -1334,6 +1397,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function clear_settings_cache( $blog_id = null ): void {
 			Settings_Store::clear_settings_cache( $blog_id );
 			Filesystem::clear_purge_fallback_memo( $blog_id );
+		}
+
+		/**
+		 * Invalidate object-cache entries for a plugin option and alloptions.
+		 *
+		 * A direct `$wpdb->update()` of an option row's autoload column
+		 * bypasses `update_option()`, so the stale value survives in a
+		 * persistent object cache unless both the option key and the
+		 * `alloptions` blob are dropped. Single owner for the triplet
+		 * previously duplicated in Img_Converter, RUM, and PageSpeed (audit
+		 * #1820): a salted-cache fix must land here once, not three times.
+		 *
+		 * @since NEXT
+		 * @param string $option Option name to evict from the options group.
+		 * @return void
+		 */
+		public static function invalidate_option_caches( string $option ): void {
+			if ( ! function_exists( 'wp_cache_delete' ) ) {
+				return;
+			}
+			wp_cache_delete( $option, 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
 		}
 
 		/**

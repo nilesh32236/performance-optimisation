@@ -2551,7 +2551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$options       = Util::get_settings();
-			$img_converter = new Img_Converter( $options );
+			$img_converter = Img_Converter::from_settings( $options );
 
 			$source_path = wp_normalize_path( $args['source_path'] );
 			$format      = sanitize_text_field( $args['format'] );

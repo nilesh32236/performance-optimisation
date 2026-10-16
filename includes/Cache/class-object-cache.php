@@ -296,6 +296,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Build an Object_Cache manager instance.
+		 *
+		 * Single construction seam for callers (REST, Cron, CLI, Abilities,
+		 * System_Info, Admin_Notices) that previously wrote `new Object_Cache()`
+		 * inline at 11 sites (audit #1820). The runtime Redis config is still
+		 * resolved lazily inside the connection methods via the
+		 * `wppo_object_cache_config` filter; this factory centralizes
+		 * construction so a config-source or circuit-breaker change (and any
+		 * future test double) has one place to hook.
+		 *
+		 * @since NEXT
+		 * @return self
+		 */
+		public static function create(): self {
+			return new self();
+		}
+
+		/**
 		 * Active drop-in path (containment-validated).
 		 *
 		 * Consumers (e.g. the System Info reporter) must use this
