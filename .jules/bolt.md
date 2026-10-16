@@ -116,3 +116,7 @@
 ## 2024-05-24 - Remove redundant stats fetching in admin dashboard
 **Learning:** `Cache::get_cache_stats()` is highly optimized and natively caches both cache size and cached pages count. Re-implementing redundant object cache and transient reads to extract just the count independently duplicates effort and misses the optimizations built into the canonical function.
 **Action:** When a unified stats object is already fetched in the local scope, reuse its array keys instead of trying to selectively fetch specific properties again from the cache/database.
+
+## 2025-01-29 - Cache Memoized Function Calls in Local Variables
+**Learning:** Although `get_options()` is memoized internally to avoid multiple database calls, repeated execution of the function in contexts like `enqueue_scripts` still introduces unnecessary overhead from function call resolution, conditionals, and array lookups.
+**Action:** When `get_options()` (or similar memoized configuration getters) is called multiple times within the same method, call it once, assign the result to a local variable (e.g., `$options = $this->get_options();`), and use that variable for all subsequent checks within that scope.
