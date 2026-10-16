@@ -1714,14 +1714,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Cache",
-        "lines": 3259,
+        "lines": 3263,
         "methods": 56,
         "public_methods": 30,
         "large_methods": 11,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "trip_circuit_on_outage",
-            "line": 1465,
+            "line": 1469,
             "lines": 174
         },
         "method_prefixes": {

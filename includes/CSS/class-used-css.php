@@ -405,7 +405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param array $options Optional options snapshot; empty = effective settings.
 		 * @return static
 		 */
-		public static function from_settings( array $options = array() ): self {
+		public static function from_settings( array $options = array() ): static {
 			return new static( ! empty( $options ) ? $options : Util::get_settings() );
 		}
 

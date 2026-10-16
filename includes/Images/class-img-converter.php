@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param array|null $options Optional options snapshot; null = effective settings.
 		 * @return static
 		 */
-		public static function from_settings( $options = null ): self {
+		public static function from_settings( $options = null ): static {
 			if ( ! is_array( $options ) ) {
 				$options = Util::get_settings();
 			}
