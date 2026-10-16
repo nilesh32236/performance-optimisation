@@ -121,6 +121,27 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 			'ordinary message'
 		);
 	} );
+
+	it( 'redacts a credential that straddles the published length cap', () => {
+		// The scan window is wider than the 500-char output cap, so a quoted
+		// Cookie value whose closing quote sits past the cap is still matched
+		// whole. Pre-slicing the input at 500 would cut the quote, fail the
+		// quoted-string alternative, and log the value prefix verbatim.
+		const prefix = 'a'.repeat( 470 );
+		const out = redactLogSecrets(
+			`${ prefix }Set-Cookie: session="SECRETVALUE1234"; Path=/`
+		);
+
+		expect( out ).not.toContain( 'SECRETVALUE1234' );
+		expect( out ).not.toContain( 'SECRET' );
+		expect( out ).toContain( 'Set-Cookie: [redacted]' );
+	} );
+
+	it( 'bounds the returned message at the published cap', () => {
+		const out = redactLogSecrets( 'x'.repeat( 5000 ) );
+
+		expect( out ).toHaveLength( 500 );
+	} );
 } );
 
 describe( 'stripSensitive audit #1831 keys', () => {

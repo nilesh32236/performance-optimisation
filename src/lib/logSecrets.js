@@ -15,15 +15,8 @@ export const redactLogSecrets = ( raw ) => {
 		return raw;
 	}
 	return (
-		// Audit #1831 review: cap the input here rather than relying on every
-		// caller pre-truncating. This is a shared export imported by four
-		// independent bundles, so the bound belongs to the function — a future
-		// caller passing an untruncated server response body would otherwise
-		// pay the full ~9-pass scan and re-expose the nested-quantifier Cookie
-		// rule to pathological input. Every current caller already slices to
-		// MAX_LOG_MESSAGE_LENGTH, so the output is unchanged.
 		raw
-			.slice( 0, MAX_LOG_MESSAGE_LENGTH )
+			.slice( 0, REDACT_SCAN_LIMIT )
 			.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
 			.replace(
 				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
@@ -96,9 +89,23 @@ export const redactLogSecrets = ( raw ) => {
 			// keeps this rule from mangling values an earlier rule already
 			// masked ("Cookie: [redacted]").
 			.replace(
+				// Audit #1831 review: bound the input here rather than relying on every
+				// caller pre-truncating — this is a shared export imported by four
+				// independent bundles, so the bound belongs to the function, and a
+				// future caller passing an untruncated server response body would
+				// otherwise pay the full ~9-pass scan and re-expose the
+				// nested-quantifier Cookie rule to pathological input.
+				//
+				// The scan window is REDACT_SCAN_LIMIT (8x the published cap), NOT
+				// MAX_LOG_MESSAGE_LENGTH: scanning only the first 500 chars would let a
+				// credential straddling that boundary be matched partially and logged
+				// with its prefix intact. Scanning a prefix that is far wider than the
+				// output then slicing the result means any credential inside the
+				// published window is matched whole and redacted.
 				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(['"]?)\S+\3/gi,
 				'$1$2=[redacted]'
 			)
+			.slice( 0, MAX_LOG_MESSAGE_LENGTH )
 	);
 };
 
@@ -113,6 +120,20 @@ export const redactLogSecrets = ( raw ) => {
  * @type {number}
  */
 export const MAX_LOG_MESSAGE_LENGTH = 500;
+
+/**
+ * Maximum input length scanned by redactLogSecrets().
+ *
+ * Deliberately wider than MAX_LOG_MESSAGE_LENGTH so the redaction chain sees
+ * a whole credential that straddles the published 500-char boundary — the
+ * result is sliced back to MAX_LOG_MESSAGE_LENGTH after redaction. Bounding
+ * the scan still keeps the ~9-pass chain (and the nested-quantifier Cookie
+ * rule in particular) away from pathological input.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const REDACT_SCAN_LIMIT = MAX_LOG_MESSAGE_LENGTH * 8;
 
 /**
  * Extract a safe log message from an error without leaking response bodies.
