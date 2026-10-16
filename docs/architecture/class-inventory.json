@@ -5307,14 +5307,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Shared",
-        "lines": 4904,
+        "lines": 4911,
         "methods": 160,
         "public_methods": 155,
         "large_methods": 5,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "get_with_stampede_lock",
-            "line": 3447,
+            "line": 3454,
             "lines": 197
         },
         "method_prefixes": {

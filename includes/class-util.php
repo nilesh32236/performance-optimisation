@@ -892,16 +892,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Read a hardened string from $_SERVER.
 		 *
-		 * Single owner for the superglobal-read idiom previously hand-rolled
-		 * ~50 times with inconsistent guards (audit #1820). Enforces
+		 * Single owner for the $_SERVER read idiom (audit #1820). Enforces
 		 * `isset()` + `is_string()` before `wp_unslash()` +
 		 * `sanitize_text_field()`, so a scalar/array value can never raise a
 		 * PHP 8 TypeError and no unsanitized markup reaches the static-cache
-		 * artefact. Non-scalar values fall back to `$fallback` (fail-closed).
+		 * artefact. Non-string values fall back to `$fallback` (fail-closed);
+		 * UtilServerStringTest pins both fail-closed branches.
+		 *
+		 * Scope: this covers the four HTTP_ACCEPT call sites migrated here
+		 * (class-image-optimisation.php, class-img-converter.php,
+		 * class-litespeed-integration.php). The audit's remaining hand-rolled
+		 * `$_GET`/`$_COOKIE` reads are NOT covered — no query_param() or
+		 * cookie_string() helper landed in this change, so that audit item
+		 * stays open.
 		 *
 		 * @since NEXT
 		 * @param string $key      $_SERVER key.
-		 * @param string $fallback Value returned when the key is absent or non-scalar.
+		 * @param string $fallback Value returned when the key is absent or non-string.
 		 * @return string Sanitized value.
 		 */
 		public static function server_string( string $key, string $fallback = '' ): string {
