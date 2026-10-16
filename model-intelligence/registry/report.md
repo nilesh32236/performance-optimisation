@@ -1,13 +1,14 @@
 # Free model registry
 
-Last successful discovery: `2026-10-16T04:27:11.080Z`
-Last attempt: `2026-10-16T04:27:11.080Z`
+Last successful discovery: `2026-10-16T16:35:33.333Z`
+Last attempt: `2026-10-16T16:35:33.333Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
 
 | Model | Context | Output | Reasoning | Image | Availability |
 | --- | ---: | ---: | --- | --- | --- |
+| `opencode/beam-free` | 1048576 | 131072 | yes | no | catalog_visible |
 | `opencode/cat-jam-free` | 1048576 | 131072 | yes | no | catalog_visible |
 | `opencode/deepseek-v4-flash-free` | 200000 | 128000 | yes | no | catalog_visible |
 | `opencode/deepseek-v4.1-flash-free` | 200000 | 32000 | yes | yes | catalog_visible |
@@ -15,6 +16,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/fledge-alpha-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/glm-4.7-free` | 204800 | 131072 | yes | no | catalog_visible |
 | `opencode/glm-5-free` | 204800 | 131072 | yes | no | catalog_visible |
+| `opencode/glm-5.3-flash-free` | 200000 | 32000 | yes | yes | catalog_visible |
 | `opencode/hy3-free` | 190000 | 64000 | yes | no | catalog_visible |
 | `opencode/hy3-preview-free` | 256000 | 64000 | yes | no | catalog_visible |
 | `opencode/kimi-k2.5-free` | 262144 | 262144 | yes | yes | catalog_visible |
@@ -24,6 +26,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/ling-3.0-flash-free` | 262144 | 32768 | yes | no | catalog_visible |
 | `opencode/ling-3.0-tiny-free` | 262144 | 32768 | yes | no | catalog_visible |
 | `opencode/ling-3.1-flash-free` | 262144 | 32768 | yes | no | catalog_visible |
+| `opencode/ll-alpha-free` | 262144 | 65536 | yes | no | catalog_visible |
 | `opencode/longcat-2.0-free` | 1000000 | 131072 | yes | no | catalog_visible |
 | `opencode/longcat-2.5-preview-free` | 1000000 | 131072 | yes | yes | catalog_visible |
 | `opencode/mimo-v2-flash-free` | 262144 | 65536 | yes | no | catalog_visible |

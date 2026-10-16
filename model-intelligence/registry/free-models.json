@@ -7,10 +7,45 @@
     "model_ref": "opencode/muse-spark-1.3-contributor-free"
   },
   "first_seen": "2026-09-25T10:50:44.322Z",
-  "last_successful_discovery": "2026-10-16T04:27:11.080Z",
-  "last_discovery_attempt": "2026-10-16T04:27:11.080Z",
+  "last_successful_discovery": "2026-10-16T16:35:33.333Z",
+  "last_discovery_attempt": "2026-10-16T16:35:33.333Z",
   "last_discovery_error": null,
   "models": [
+    {
+      "provider": "opencode",
+      "model_id": "beam-free",
+      "display_name": "Beam Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 1048576,
+      "maximum_output": 131072,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-10-16T16:35:33.333Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "beam-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "ca7e4a3bcd2c153f6ecd7bee5590bf6b2557100299158a27f24646b84c177c47"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
     {
       "provider": "opencode",
       "model_id": "cat-jam-free",
@@ -27,10 +62,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-13T06:44:47.896Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -41,7 +76,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "988601a319a649559cb79561c3d1fa09b278fe59becbe2dba64998c07a954a7b"
+        "entry_hash": "830b86e9f6ca9c7c62804dfe29af44f8ce63fd730b4b564fde69c8a43cbeb0d6"
       },
       "retired": false,
       "unavailable_since": null
@@ -62,10 +97,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -76,7 +111,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "5d73470a07a4e8d6858eadf838e99692c59e1167b08928c5f65774a7610d2373"
+        "entry_hash": "5b490e051d43bfdbf0519b636ecba964c6b8ddc0c79d896daa6fcfd789f4db43"
       },
       "retired": false,
       "unavailable_since": null
@@ -97,10 +132,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-15T16:57:11.707Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -111,7 +146,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "6e75dffc521988ef19580dde85f04a4c6f3a9a2944517d552c6d1a856425ec1c"
+        "entry_hash": "f09aa77b063c9d2dbc9e0dd664617a973bd9b4819d203620840884dea15b10c2"
       },
       "retired": false,
       "unavailable_since": null
@@ -132,10 +167,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-10T17:19:53.007Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -146,7 +181,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "06ec091a7b3d1a20e0367a5a6421f2041ca1166ea0ba55202a184bcb372977b5"
+        "entry_hash": "7138b8d0793a644e11794b827d3c035dea0c7525a2d17e1fad3d4d1e2e3d6566"
       },
       "retired": false,
       "unavailable_since": null
@@ -167,10 +202,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-10T17:19:53.007Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -181,7 +216,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "62774234971bab449d2a871cbc3b0dbd84dfffb2da68ad9f8c4ff9933ba0a2e7"
+        "entry_hash": "64ff978b37ade3532a7af4ce34b3b7544ffc44ae07bef00b819cedbe1e4d6559"
       },
       "retired": false,
       "unavailable_since": null
@@ -202,10 +237,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -216,7 +251,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "8ddbf90f759f95f1b45817e9ea6c930f0ba21ec29dfff6fd51d5ded0b584b9d5"
+        "entry_hash": "ec585617afe51b45d14c85235df7cc9ece69ab6c1d1393ca049febbe62ffbdc3"
       },
       "retired": false,
       "unavailable_since": null
@@ -237,10 +272,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -251,7 +286,42 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "389fca28b8932eff7875f8a0923a99f1c35fb06a5e21a7db23ed5652a506b602"
+        "entry_hash": "6139bf33ce1610bdfc41aad273c8bcbfb5eeb26e0ebcc086250d8f02671a3009"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "glm-5.3-flash-free",
+      "display_name": "GLM-5.3-Flash Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 200000,
+      "maximum_output": 32000,
+      "reasoning_support": true,
+      "image_support": true,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-10-16T16:35:33.333Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "glm-5.3-flash-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "919857a9962a4fa72e6ab2d961ee2a5075b85c22a89c4ac1baf3af3296ede102"
       },
       "retired": false,
       "unavailable_since": null
@@ -272,10 +342,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -286,7 +356,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "19a8bd04abba421cfb0b1e38b6a5e6826cd5d4921bbfbc23409e4456845c2771"
+        "entry_hash": "1e4121137926b4473de1769b488129f505a3581b34ade7f4453b0742d8cdacd9"
       },
       "retired": false,
       "unavailable_since": null
@@ -307,10 +377,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -321,7 +391,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "ec362efb7870825e427b06d15d068501edf526b6013299e79451e9ae339cf94b"
+        "entry_hash": "f39c022e4eff76bcaea551f663317dcfa26993abb5596797b7918fd100d88298"
       },
       "retired": false,
       "unavailable_since": null
@@ -342,10 +412,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -356,7 +426,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "1a4fdbaed74ba47ade19064e70f163ba43fbfbd334a9dde34ba48c10428ca9ba"
+        "entry_hash": "b10c26225eab3e4bf45883df443e157ea4d6e87c6519fb38743e2700903df68a"
       },
       "retired": false,
       "unavailable_since": null
@@ -377,10 +447,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -391,7 +461,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "ce7a6819aef0dfef9a03b6fc6c50aec191321bf2577aa6f9f79fff9a6ff4496f"
+        "entry_hash": "dc9f3f17c68b83733bea1896b8f45aa122958bf8243dfff2640ca60700bd406b"
       },
       "retired": false,
       "unavailable_since": null
@@ -412,10 +482,10 @@
       "reasoning_support": false,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -426,7 +496,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "def0e9679dfd357849205a3cc760ad8c00d6ac67ed4a6a99014d49bd6d09e27e"
+        "entry_hash": "b3167f2938fa2ebbbf8da60781405485532d3b373ffa4390060372716c80bbd1"
       },
       "retired": false,
       "unavailable_since": null
@@ -447,10 +517,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -461,7 +531,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "fadca7918bcdc86dd2a9a38ed93edacb73a227f97e753903476f999be8e1d87a"
+        "entry_hash": "b1f53f6ca0f507c03e142891e956504b0fbcc35d7f7b88d5673bcc34aa2dd7d5"
       },
       "retired": false,
       "unavailable_since": null
@@ -482,10 +552,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -496,7 +566,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "aa7a535c2aeb361dbf0fe6f5caaaa7c5a13c62dbf65a8e084d0db84066f31f15"
+        "entry_hash": "4dcaa9d614f1a8b61b3e3d361e087ff4ff9f632314d9a120c543bed291cf0175"
       },
       "retired": false,
       "unavailable_since": null
@@ -517,10 +587,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -531,7 +601,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "8ec66616d5b2f12099215da2cad9e9ab518fd32f2bbba62c213baa6ff5aad147"
+        "entry_hash": "0114b8acf1c76cbb1af38aea480816a943f700f4e38113d871045fca2fe50ed2"
       },
       "retired": false,
       "unavailable_since": null
@@ -552,10 +622,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-10T17:19:53.007Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -566,7 +636,42 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "3849edd2b99226381a0cec7d4fe6ac675d1eb642c089db1e4ddeeccc16abde1b"
+        "entry_hash": "bb129479641861a49dd9ca41715e4263505cb5dcaa2775205cd96746cbcf1e2d"
+      },
+      "retired": false,
+      "unavailable_since": null
+    },
+    {
+      "provider": "opencode",
+      "model_id": "ll-alpha-free",
+      "display_name": "LL Alpha Free",
+      "pricing": {
+        "currency": "USD",
+        "input_per_million": 0,
+        "output_per_million": 0,
+        "free_status": "verified_zero_catalog_price",
+        "free_offer_status": "catalog_free_label"
+      },
+      "context_window": 262144,
+      "maximum_output": 65536,
+      "reasoning_support": true,
+      "image_support": false,
+      "tool_compatibility": "@ai-sdk/openai-compatible",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
+      "availability": "catalog_visible",
+      "first_seen": "2026-10-16T16:35:33.333Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
+      "source": {
+        "name": "models.dev",
+        "url": "https://models.dev/api.json",
+        "provider": "opencode"
+      },
+      "evidence": {
+        "catalog_entry": "ll-alpha-free",
+        "input_price": 0,
+        "output_price": 0,
+        "free_label": true,
+        "entry_hash": "e9cc7b64b6122bb1f149be833b8a407662259acce2688e9980c774750a8d27d9"
       },
       "retired": false,
       "unavailable_since": null
@@ -587,10 +692,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -601,7 +706,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "50607a21d1def09e707f1349496f2e81e0db7f4f1d9c020bf3ba42712ea31edd"
+        "entry_hash": "aa34704891e0e9ce0fce4e6b2c76d6f29d66399fc8a67c4b2f53ae342e6fc189"
       },
       "retired": false,
       "unavailable_since": null
@@ -622,10 +727,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-10T17:19:53.007Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -636,7 +741,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "9a81c1fb59fbb2fc828e55697193c8fb99c73d48c3a51d08b289ac7ba63651ff"
+        "entry_hash": "1d572951c18116cb309e903e8430776e02c41bb87cd3236d1abf8645f513c2bc"
       },
       "retired": false,
       "unavailable_since": null
@@ -657,10 +762,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -671,7 +776,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "c5cbd227f06fc9b57907ca2af6ace30e7f7ad98796dea000a06d87660a98239e"
+        "entry_hash": "919fab06f735545c5b76c341c9feee2460a5a3457295f3b2f1fc71feaee17ef2"
       },
       "retired": false,
       "unavailable_since": null
@@ -692,10 +797,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -706,7 +811,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "b195d8eab29169a54b644e161e83aeb89dbd3bd87cc88cdc1d1730405c0fcd36"
+        "entry_hash": "6bbc6dcf046bc841ae3fd188266854f84eebb9cf261531a5ea255a69e5002f24"
       },
       "retired": false,
       "unavailable_since": null
@@ -727,10 +832,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -741,7 +846,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "c8362ce07e11cc7fb8514469e0c256d4e0b6761d76b90beb76bd87dcad135c48"
+        "entry_hash": "c7fac3db3edd3d2c85d9f59b0aed3e5bf5509a3d67123f2998a16cbaf2883ec6"
       },
       "retired": false,
       "unavailable_since": null
@@ -762,10 +867,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -776,7 +881,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "750de1c0b4cd5577f1fc0879a173372cddf98473f75ef72e7824c0ee2d936914"
+        "entry_hash": "a233bf43997c1e7f1556d7570728a916eca59bb67daf732b02d4a414f656d92d"
       },
       "retired": false,
       "unavailable_since": null
@@ -797,10 +902,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -811,7 +916,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "6c4ad1516405a32639ad5a43c573365ebd1cbe5130f1b29acc7af53146beae64"
+        "entry_hash": "b78d57e30a85f7d22cd5360e7671d49551db1a2d129a52a799a1313fde4a6a77"
       },
       "retired": false,
       "unavailable_since": null
@@ -832,10 +937,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -846,7 +951,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "fc8482cc1f91004ad851021cffcb99754190d9dcd7826bcb04bd616bd4481fd0"
+        "entry_hash": "8e22341d7b962bf1ac56e5da0f5f50c5ee38a1452bb79a292e15c4be472b40ee"
       },
       "retired": false,
       "unavailable_since": null
@@ -867,10 +972,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -881,7 +986,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "14cb449ee068a7b70b2c1c54a322564057b331d5a43acda2f645cc00432e249d"
+        "entry_hash": "a1f25a39247479e898fb6c94cc10974123e68c1932969927a3d48ee09688a235"
       },
       "retired": false,
       "unavailable_since": null
@@ -902,10 +1007,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -916,7 +1021,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "8109e71be1357151f8706e489cdb0f65396f5ee06b2e908083a674d4eae67bad"
+        "entry_hash": "7fb1da843173745e841c5c0b2f79590627e0b73308c4a9552305247cf6d93838"
       },
       "retired": false,
       "unavailable_since": null
@@ -937,10 +1042,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -951,7 +1056,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "3ad1701a61d50d81f11f89571ffa784164f5f3b15c08006b728de1381e67fdf9"
+        "entry_hash": "a8f5b18b17417ad4b7edbc44f1843ea2a3100eef84779f00b192df0b9e123d00"
       },
       "retired": false,
       "unavailable_since": null
@@ -972,10 +1077,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -986,7 +1091,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "3181f8103755bc6a048a4f3fbe73b8826df300d1f15409dd932612efec9966b8"
+        "entry_hash": "56f5c9ba2ee33f495f098f2ba230ab7ed6275cb2f404bd21f49f8ef96697ba2c"
       },
       "retired": false,
       "unavailable_since": null
@@ -1007,10 +1112,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1021,7 +1126,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "ce76a64ce68745e82bbef1410803ba9309ce14c6a925b92a60fc7bd2599813fb"
+        "entry_hash": "63b6e443cf23f5e37ce0d9fea2f7f660bb8ee23f7b471bd7822df77876e9cffd"
       },
       "retired": false,
       "unavailable_since": null
@@ -1042,10 +1147,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1056,7 +1161,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "a2e8f1e5e35c9fb4ad93ac537495534af1681278986308a8c332c7073e3db68b"
+        "entry_hash": "b67f726fafc5c3e61e8d8cf9ad966115b2e715152d46b6f67fafa047a048c826"
       },
       "retired": false,
       "unavailable_since": null
@@ -1077,10 +1182,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1091,7 +1196,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "ba805af538f47739400844ff777d888039e3066a34954144064852cd9b9c1f8b"
+        "entry_hash": "ea33cbf85740e00070220845d3e37b40d0ffcb0d72b28aa62ebc29e0a78ee849"
       },
       "retired": false,
       "unavailable_since": null
@@ -1112,10 +1217,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-15T16:57:11.707Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1126,7 +1231,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "e9b80c901543375e5b7ddc9e3c9a271984a8d0ec719297312e8e70527e1b457b"
+        "entry_hash": "9e47f6bdd7cdb3ec405e47ad25e0b39e872db6cb1fdb4ac4d6fdff381d92407d"
       },
       "retired": false,
       "unavailable_since": null
@@ -1147,10 +1252,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1161,7 +1266,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "a2af1968f511c564da5c2d4ec5353ef606de7c257d58fc5a70329e28cb28c618"
+        "entry_hash": "488b70c0d677a3b60126321ef81295bca9dda3fcf94903bace2791756ee98794"
       },
       "retired": false,
       "unavailable_since": null
@@ -1182,10 +1287,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1196,7 +1301,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "12ab7e489aa44bdb7fcf87db96bc37a248840ad374d5f27692547b70c93e7b74"
+        "entry_hash": "73e1a80143363e1c73dfa69827d941f5140f61044b7797f5367ad0283990300b"
       },
       "retired": false,
       "unavailable_since": null
@@ -1217,10 +1322,10 @@
       "reasoning_support": true,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1231,7 +1336,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "0f005321f73c9d8b884e4cb36482388308faf4c9a545cf7f25db9f8776df621e"
+        "entry_hash": "604341e2412b8f70a69ae03b8bc72cf4d2412793cba833e2981217d4d782b8ac"
       },
       "retired": false,
       "unavailable_since": null
@@ -1252,10 +1357,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1266,7 +1371,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "65774ecbe0af4b3b6bf7d7b5c8464d7d5d0dcb000c274f8229977f41be92c71d"
+        "entry_hash": "3d4d1eb840bb3d05e222f34a02791b64530ec6ce6d83674971d007763adb4d94"
       },
       "retired": false,
       "unavailable_since": null
@@ -1287,10 +1392,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-10-10T17:19:53.007Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1301,7 +1406,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "745f0818f22154d5270aba91fb21c9c55edcf5153f12d8252ccaafe0f2af1939"
+        "entry_hash": "28b19c5c70e1029380160105f990a51d1b2aa2dcf059ee5f8be2b5d497ebe604"
       },
       "retired": false,
       "unavailable_since": null
@@ -1322,10 +1427,10 @@
       "reasoning_support": false,
       "image_support": false,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1336,7 +1441,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "4beb48772a4b8a1a2da6c2313656c95eca0d188bc2cc0a40b8f8c23c1e481903"
+        "entry_hash": "897f7517647ec67f15be36c43f2d8006d6056193fd3f3e2c0147f8e09f131976"
       },
       "retired": false,
       "unavailable_since": null
@@ -1357,10 +1462,10 @@
       "reasoning_support": true,
       "image_support": true,
       "tool_compatibility": "@ai-sdk/openai-compatible",
-      "api_protocol": "https://opencode.ai/inference/v1",
+      "api_protocol": "https://opencode.ai/inference/openai/v1",
       "availability": "catalog_visible",
       "first_seen": "2026-09-25T10:50:44.322Z",
-      "last_verified": "2026-10-16T04:27:11.080Z",
+      "last_verified": "2026-10-16T16:35:33.333Z",
       "source": {
         "name": "models.dev",
         "url": "https://models.dev/api.json",
@@ -1371,7 +1476,7 @@
         "input_price": 0,
         "output_price": 0,
         "free_label": true,
-        "entry_hash": "57611e8ed1203e06a41e9aa632a9e3137db136a53afc78fddca1346505130802"
+        "entry_hash": "d45df4aff1de8a301892e68e0aa4f72126691c26830535647cf0ebc6a366a958"
       },
       "retired": false,
       "unavailable_since": null
