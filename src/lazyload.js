@@ -20,7 +20,11 @@ import { redactLogSecrets } from './lib/logSecrets';
 const getLogMessage = ( err ) => {
 	let message;
 	if ( err instanceof Error ) {
-		message = err.message || 'Unknown error';
+		// Truncate before redacting so a large embedded response body is not
+		// scanned in full by the multi-pass redaction chain (matches the
+		// string/object branches below and getErrorLogMessage() in
+		// src/lib/logSecrets.js).
+		message = ( err.message || 'Unknown error' ).slice( 0, 500 );
 	} else if ( typeof err === 'string' ) {
 		message = err.slice( 0, 500 ) || 'Unknown error';
 	} else if ( err === null || typeof err === 'undefined' ) {

@@ -37,7 +37,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const getErrorLogMessage = ( error ) => {
 		let message;
 		if ( error instanceof Error ) {
-			message = error.message || 'Unknown error';
+			// Truncate before redacting (matches the string/object branches
+			// below and getErrorLogMessage() in src/lib/logSecrets.js).
+			message = ( error.message || 'Unknown error' ).slice( 0, 500 );
 		} else if ( 'string' === typeof error ) {
 			message = error.slice( 0, 500 ) || 'Unknown error';
 		} else if ( error === null || 'undefined' === typeof error ) {
