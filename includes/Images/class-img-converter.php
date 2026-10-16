@@ -130,6 +130,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Build an Img_Converter from an explicit snapshot or effective settings.
+		 *
+		 * Single construction seam for the five sites flagged in audit #1820
+		 * (Main, Image_Optimisation, Cron, CLI, REST) that each hand-threaded
+		 * `$options`. Centralising the options snapshot means a constructor
+		 * or deferred-commit change is made once instead of five times, so
+		 * image conversion cannot silently diverge between the admin, cron,
+		 * CLI, and REST paths.
+		 *
+		 * An explicit array snapshot is honoured as-is — including an empty
+		 * one — so the factory is exactly equivalent to
+		 * `new Img_Converter( $options )` at every call site. Only a
+		 * null/non-array argument resolves the effective settings, because the
+		 * constructor performs no such fallback itself: substituting global
+		 * settings for a snapshot a caller explicitly passed would silently
+		 * change behaviour (e.g. Image_Optimisation::get_img_converter()).
+		 *
+		 * `new static()` (not `new self()`) keeps the seam substitutable, which
+		 * is the point of routing construction through one factory.
+		 *
+		 * @since NEXT
+		 * @param array|null $options Optional options snapshot; null = effective settings.
+		 * @return static
+		 */
+		public static function from_settings( $options = null ): static {
+			if ( ! is_array( $options ) ) {
+				$options = Util::get_settings();
+			}
+			return new static( $options );
+		}
+
+		/**
 		 * Check if WordPress core (6.7+) natively handles next-gen format generation (WebP/AVIF).
 		 *
 		 * @since 2.0.0
@@ -3461,11 +3493,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public function maybe_serve_next_gen_image( $image ) {
-			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
+			if ( empty( $image[0] ) ) {
 				return $image;
 			}
 
-			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			// Util::server_string() owns the isset()/is_string() guard and
+			// fails closed to '', so the raw superglobal guard is gone.
+			// The early return it performed must still happen: an absent (or
+			// array-shaped) Accept header means there is no browser to
+			// negotiate with, and falling through would let the DOING_CRON
+			// branch below serve or re-queue next-gen URLs for headerless
+			// requests. Checking the helper's result keeps the behaviour and
+			// the single sanitisation owner.
+			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
+			if ( '' === $http_accept ) {
+				return $image;
+			}
 
 			// Check if the browser supports WebP.
 			$supports_avif = false !== strpos( $http_accept, 'image/avif' );
@@ -3921,6 +3964,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Reset the per-process image-info memos (test isolation only).
+		 *
+		 * PHPUnit runs the whole suite in one process, so the deferred
+		 * image-info buffer, the shutdown-registration flag, the persisted
+		 * flag, and the client-side processing memo all leak across test
+		 * classes unless explicitly cleared. The bootstrap setUp() calls
+		 * this alongside the Runtime_State owners.
+		 *
+		 * Deliberately NOT registered in Runtime_State::owners(): this state
+		 * needs no blog-switch reset, and resetting it there would be unsafe.
+		 * `$client_side_processing_state` is already keyed per blog id
+		 * (`self::$client_side_processing_state[ $blog_id ]`), so a switch
+		 * cannot read another site's value; the other three are per-request
+		 * (a deferred buffer plus its shutdown/persisted flags). Clearing the
+		 * deferred buffer on switch_to_blog() mid-request would drop pending
+		 * image-info writes, so the reset stays test-scoped. The `_for_tests`
+		 * suffix keeps it from masquerading as a production owner method.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_state_for_tests(): void {
+			self::$deferred_img_info            = null;
+			self::$img_info_shutdown_registered = false;
+			self::$img_info_persisted           = false;
+			self::$client_side_processing_state = null;
+		}
+
+		/**
 		 * Atomically clears completed webp and avif entries from the image info option.
 		 *
 		 * @since 1.4.0
@@ -4069,8 +4141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => 'wppo_img_info' )
 				);
-				wp_cache_delete( 'wppo_img_info', 'options' );
-				wp_cache_delete( 'alloptions', 'options' );
+				Util::invalidate_option_caches( 'wppo_img_info' );
 			}
 		}
 	}

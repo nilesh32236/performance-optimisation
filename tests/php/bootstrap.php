@@ -335,6 +335,33 @@ trait WPPO_Test_Bootstrap {
 			// fixtures never leak across tests.
 			\PerformanceOptimise\Inc\Apo_Detect::reset_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+			// Elementor purge set / drift dedupe memos are per process:
+			// reset so builder-purge fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Builder_Purge_Watcher::reset_elementor_purge_memo();
+			\PerformanceOptimise\Inc\Builder_Purge_Watcher::reset_drift_state();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'reset_asset_cache_for_tests' ) ) {
+			// ESI asset/nonce-wildcard lookups memoize per process: reset so
+			// ESI fixtures never leak across tests.
+			\PerformanceOptimise\Inc\LiteSpeed_ESI::reset_asset_cache_for_tests();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) && method_exists( 'PerformanceOptimise\Inc\Admin_Notices', 'reset_memo_cache_for_tests' ) ) {
+			// Circuit/drop-in notice memos are per process: reset so
+			// admin-notice fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Admin_Notices::reset_memo_cache_for_tests();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) && method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'reset_runtime_state_for_tests' ) ) {
+			// Deferred image-info buffer and shutdown-registration flags are
+			// per process: reset so conversion fixtures never leak.
+			\PerformanceOptimise\Inc\Img_Converter::reset_runtime_state_for_tests();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Lcp_Preload' ) && method_exists( 'PerformanceOptimise\Inc\Lcp_Preload', 'clear_lcp_preload_caches' ) ) {
+			// LCP/preload memos are only covered transitively via
+			// Image_Optimisation::clear_runtime_caches(); call the owner
+			// directly so the chain cannot silently break.
+			\PerformanceOptimise\Inc\Lcp_Preload::clear_lcp_preload_caches();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

@@ -191,7 +191,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				$tripped_at = 0;
 				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					try {
-						$circuit    = ( new Object_Cache() )->get_circuit_state();
+						$circuit    = ( Object_Cache::create() )->get_circuit_state();
 						$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -367,7 +367,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
 					$circuit = self::$circuit_state_memo;
 				} else {
-					$circuit                      = ( new Object_Cache() )->get_circuit_state();
+					$circuit                      = ( Object_Cache::create() )->get_circuit_state();
 					self::$circuit_state_memo     = $circuit;
 					self::$circuit_state_memo_set = true;
 				}

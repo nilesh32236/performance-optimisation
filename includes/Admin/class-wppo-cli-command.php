@@ -369,7 +369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			if ( 'convert' === $action ) {
 				$options           = Util::get_settings();
-				$img_converter     = new Img_Converter( $options );
+				$img_converter     = Img_Converter::from_settings( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
 				// Audit #1469: clamp — an unbounded setting would convert
@@ -841,7 +841,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 */
 		public function object_cache( array $args, array $assoc_args ): void {
 			$action  = $args[0] ?? 'status';
-			$manager = new Object_Cache();
+			$manager = Object_Cache::create();
 
 			switch ( $action ) {
 				case 'status':
@@ -1833,7 +1833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			// Object-cache drop-in.
 			try {
-				$oc_manager = new Object_Cache();
+				$oc_manager = Object_Cache::create();
 				$oc_path    = $oc_manager->get_dropin_path();
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1915,7 +1915,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$own_dropin = false;
 			try {
-				$manager    = new Object_Cache();
+				$manager    = Object_Cache::create();
 				$oc_path    = $manager->get_dropin_path();
 				$content    = $this->read_small_file( $oc_path );
 				$own_dropin = is_string( $content ) && Object_Cache::is_own_dropin_content( $content );
@@ -1946,7 +1946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$config = self::build_redis_config_from_settings( $stored );
 			try {
-				$manager = new Object_Cache();
+				$manager = Object_Cache::create();
 				$ping    = $manager->ping( $config );
 			} catch ( \Throwable $e ) {
 				return array(
