@@ -327,6 +327,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 						} catch ( \Throwable $ignored_mode ) {
 							unset( $ignored_mode );
 						}
+						// The persistent .wppo-backup destination is predictable
+						// and WP_Filesystem_Direct::copy() follows a symlink at
+						// the destination, so a planted symlink would redirect
+						// this backup (and the restore copy below) to an
+						// arbitrary path. Same guard the shared writer applies
+						// to the .wppo-bak siblings.
+						if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+							Filesystem::drop_symlinked_path( $wp_filesystem, $backup_path );
+						}
 						$backed_up = $wp_filesystem->copy( $handler_path, $backup_path, true, $backup_chmod );
 						if ( ! $backed_up ) {
 							self::log_dropin_issue( __( 'Could not back up advanced-cache.php before replacing it.', 'performance-optimisation' ) );
@@ -390,6 +399,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 								}
 							} catch ( \Throwable $ignored_restore_mode ) {
 								unset( $ignored_restore_mode );
+							}
+							// A symlinked sibling would make the restore read an
+							// attacker-chosen file over the drop-in.
+							if ( class_exists( 'PerformanceOptimise\Inc\Filesystem' ) && method_exists( 'PerformanceOptimise\Inc\Filesystem', 'drop_symlinked_path' ) ) {
+								Filesystem::drop_symlinked_path( $wp_filesystem, $backup_path );
 							}
 							$wp_filesystem->copy( $backup_path, $handler_path, true, $restore_chmod );
 						}
@@ -525,22 +539,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			}
 		}
 
-		/**
-		 * Creates the advanced-cache.php file.
-		 *
-		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
-		 * The generated drop-in honours the per-page `.wppo-no-cache` marker that the
-		 * Cache class writes for DONOTCACHEPAGE pages. This is a best-effort serve-time
-		 * check: a page that is already cached when a plugin first sets the constant is
-		 * served from the stale file before WordPress boots (so the marker is never
-		 * written) until a cache clear, post invalidation, or the one-time version
-		 * upgrade purge removes it.
-		 *
-		 * @return bool True when the drop-in is left in a correct state (regenerated,
-		 *              already ours, or a foreign drop-in left untouched), false on
-		 *              filesystem failure.
-		 * @since 1.0.0
-		 */
 		/**
 		 * Human-readable degrade reason when create() must refuse, or ''.
 		 *

@@ -2615,12 +2615,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Filesystem' ) ) {
 						// Bounded checksum read: checksums are for
 						// change-detection, so cap the hashed window at
 						// 256KB instead of hashing multi-MB blobs twice.
+						// The cap applies to the READ as well as the hash —
+						// reading the whole multi-MB blob and then truncating
+						// still allocates and holds it (twice, live + staged)
+						// for a checksum that only ever sees the first 256KB.
 						$checksum = '';
 						if ( method_exists( $fs, 'get_contents' ) ) {
 							try {
-								$body = $fs->get_contents( $path );
+								$body = false;
+								// Prefix read only for the local transport: on
+								// FTP/SSH $path is a remote path, so a local
+								// read could hash a different file. Everything
+								// else keeps the (truncating) get_contents()
+								// path below.
+								$is_local_fs = class_exists( 'WP_Filesystem_Direct' ) && $fs instanceof \WP_Filesystem_Direct;
+								if ( $is_local_fs && function_exists( 'file_get_contents' ) ) {
+									// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents,WordPress.PHP.NoSilencedErrors.Discouraged -- Bounded prefix read; $fs->get_contents() has no offset/length form, and failure falls through to it below.
+									$body = @file_get_contents( $path, false, null, 0, 262144 );
+								}
+								if ( ! is_string( $body ) || '' === $body ) {
+									$body = $fs->get_contents( $path );
+									if ( is_string( $body ) && strlen( $body ) > 262144 ) {
+										$body = substr( $body, 0, 262144 );
+									}
+								}
 								if ( is_string( $body ) && '' !== $body ) {
-									$checksum = Util::compute_css_checksum( strlen( $body ) > 262144 ? substr( $body, 0, 262144 ) : $body ); // Util-canonical: checksum body lives in Util.
+									$checksum = Util::compute_css_checksum( $body ); // Util-canonical: checksum body lives in Util.
 								}
 							} catch ( \Throwable $e ) {
 								unset( $e );

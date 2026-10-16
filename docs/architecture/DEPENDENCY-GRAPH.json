@@ -1439,7 +1439,7 @@
             "file": "includes/Cache/class-advanced-cache-handler.php",
             "domain": "Cache",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 1131,
+            "lines": 1129,
             "property_count": 0,
             "static_property_count": 0,
             "public_property_count": 0,
@@ -1452,8 +1452,8 @@
             "largest_methods": [
                 {
                     "name": "create",
-                    "line": 595,
-                    "end_line": 1030,
+                    "line": 593,
+                    "end_line": 1028,
                     "lines": 436,
                     "visibility": "public",
                     "static": true,
@@ -1462,8 +1462,8 @@
                 {
                     "name": "atomic_write_dropin",
                     "line": 284,
-                    "end_line": 526,
-                    "lines": 243,
+                    "end_line": 540,
+                    "lines": 257,
                     "visibility": "private",
                     "static": true,
                     "delegates": false
@@ -1488,8 +1488,8 @@
                 },
                 {
                     "name": "cleanup_dropin_artifacts",
-                    "line": 1098,
-                    "end_line": 1129,
+                    "line": 1096,
+                    "end_line": 1127,
                     "lines": 32,
                     "visibility": "private",
                     "static": true,
@@ -1497,8 +1497,8 @@
                 },
                 {
                     "name": "remove",
-                    "line": 1042,
-                    "end_line": 1072,
+                    "line": 1040,
+                    "end_line": 1070,
                     "lines": 31,
                     "visibility": "public",
                     "static": true,
@@ -1515,8 +1515,8 @@
                 },
                 {
                     "name": "get_dropin_degrade_reason",
-                    "line": 554,
-                    "end_line": 572,
+                    "line": 552,
+                    "end_line": 570,
                     "lines": 19,
                     "visibility": "public",
                     "static": true,
@@ -1544,24 +1544,25 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Apo_Detect::get_degrade_reason": 563,
-                    "PerformanceOptimise\\Inc\\Dropin_Registry::invalidate": 1026,
-                    "PerformanceOptimise\\Inc\\Filesystem::atomic_write_php_verified": 335,
-                    "PerformanceOptimise\\Inc\\Filesystem::sweep_atomic_tmp": 1116,
-                    "PerformanceOptimise\\Inc\\Host_Detect::get_degrade_reason": 557,
+                    "PerformanceOptimise\\Inc\\Apo_Detect::get_degrade_reason": 561,
+                    "PerformanceOptimise\\Inc\\Dropin_Registry::invalidate": 1024,
+                    "PerformanceOptimise\\Inc\\Filesystem::atomic_write_php_verified": 344,
+                    "PerformanceOptimise\\Inc\\Filesystem::drop_symlinked_path": 337,
+                    "PerformanceOptimise\\Inc\\Filesystem::sweep_atomic_tmp": 1114,
+                    "PerformanceOptimise\\Inc\\Host_Detect::get_degrade_reason": 555,
                     "PerformanceOptimise\\Inc\\Log::add": 61,
-                    "PerformanceOptimise\\Inc\\Util::get_canonical_host": 651,
-                    "PerformanceOptimise\\Inc\\Util::get_settings": 663,
+                    "PerformanceOptimise\\Inc\\Util::get_canonical_host": 649,
+                    "PerformanceOptimise\\Inc\\Util::get_settings": 661,
                     "PerformanceOptimise\\Inc\\Util::init_filesystem": 85,
-                    "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 653,
+                    "PerformanceOptimise\\Inc\\Util::normalize_cache_host": 651,
                     "PerformanceOptimise\\Inc\\Util::transient_key": 56,
-                    "PerformanceOptimise\\Inc\\Woo_Detect::get_woo_excluded_paths": 691,
-                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 675,
-                    "self::atomic_write_dropin": 1019,
-                    "self::cleanup_dropin_artifacts": 1052,
-                    "self::foreign_dropin_present": 599,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::get_woo_excluded_paths": 689,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 673,
+                    "self::atomic_write_dropin": 1017,
+                    "self::cleanup_dropin_artifacts": 1050,
+                    "self::foreign_dropin_present": 597,
                     "self::get_dropin_backup_path": 307,
-                    "self::get_dropin_degrade_reason": 607,
+                    "self::get_dropin_degrade_reason": 605,
                     "self::get_dropin_path": 83,
                     "self::is_our_dropin": 151,
                     "self::log_dropin_issue": 86,
@@ -1569,12 +1570,12 @@
                 },
                 "instance_calls": {
                     "$e->getMessage": 106,
-                    "$wp_filesystem->copy": 330,
-                    "$wp_filesystem->delete": 439,
+                    "$wp_filesystem->copy": 339,
+                    "$wp_filesystem->delete": 453,
                     "$wp_filesystem->exists": 96,
                     "$wp_filesystem->get_contents": 100,
-                    "$wp_filesystem->move": 473,
-                    "$wp_filesystem->put_contents": 436
+                    "$wp_filesystem->move": 487,
+                    "$wp_filesystem->put_contents": 450
                 },
                 "new_expressions": [],
                 "class_references": [],
@@ -1583,25 +1584,26 @@
                 },
                 "class_string_references": {
                     "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 17,
-                    "PerformanceOptimise\\Inc\\Apo_Detect": 562,
-                    "PerformanceOptimise\\Inc\\Dropin_Registry": 1025,
+                    "PerformanceOptimise\\Inc\\Apo_Detect": 560,
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 1023,
                     "PerformanceOptimise\\Inc\\Filesystem": 304,
-                    "PerformanceOptimise\\Inc\\Host_Detect": 556,
-                    "PerformanceOptimise\\Inc\\Woo_Detect": 673
+                    "PerformanceOptimise\\Inc\\Host_Detect": 554,
+                    "PerformanceOptimise\\Inc\\Woo_Detect": 671
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 17,
-                    "PerformanceOptimise\\Inc\\Apo_Detect": 562,
-                    "PerformanceOptimise\\Inc\\Dropin_Registry": 1069,
+                    "PerformanceOptimise\\Inc\\Apo_Detect": 560,
+                    "PerformanceOptimise\\Inc\\Dropin_Registry": 1067,
                     "PerformanceOptimise\\Inc\\Filesystem": 304,
-                    "PerformanceOptimise\\Inc\\Host_Detect": 556
+                    "PerformanceOptimise\\Inc\\Host_Detect": 554
                 },
                 "method_exists": {
-                    "PerformanceOptimise\\Inc\\Apo_Detect::get_degrade_reason": 562,
+                    "PerformanceOptimise\\Inc\\Apo_Detect::get_degrade_reason": 560,
                     "PerformanceOptimise\\Inc\\Filesystem::atomic_write_php_verified": 304,
-                    "PerformanceOptimise\\Inc\\Filesystem::sweep_atomic_tmp": 1114,
-                    "PerformanceOptimise\\Inc\\Host_Detect::get_degrade_reason": 556,
-                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 673
+                    "PerformanceOptimise\\Inc\\Filesystem::drop_symlinked_path": 336,
+                    "PerformanceOptimise\\Inc\\Filesystem::sweep_atomic_tmp": 1112,
+                    "PerformanceOptimise\\Inc\\Host_Detect::get_degrade_reason": 554,
+                    "PerformanceOptimise\\Inc\\Woo_Detect::is_woo_safe_mode_enabled": 671
                 },
                 "interface_exists": [],
                 "trait_exists": [],
@@ -1613,32 +1615,32 @@
                 "external_classes": [],
                 "external_functions": {
                     "__": 86,
-                    "absint": 664,
-                    "array_map": 700,
-                    "basename": 1116,
+                    "absint": 662,
+                    "array_map": 698,
+                    "basename": 1114,
                     "class_exists": 17,
                     "defined": 13,
-                    "dirname": 1116,
-                    "do_action": 611,
+                    "dirname": 1114,
+                    "do_action": 609,
                     "explode": 201,
                     "fileperms": 320,
-                    "filter_var": 681,
+                    "filter_var": 679,
                     "function_exists": 206,
                     "get_transient": 57,
-                    "getmypid": 432,
-                    "home_url": 623,
+                    "getmypid": 446,
+                    "home_url": 621,
                     "idn_to_ascii": 208,
-                    "implode": 700,
-                    "in_array": 695,
-                    "is_array": 675,
-                    "is_callable": 1025,
+                    "implode": 698,
+                    "in_array": 693,
+                    "is_array": 673,
+                    "is_callable": 1023,
                     "is_object": 90,
                     "is_string": 112,
                     "ltrim": 292,
-                    "md5": 433,
+                    "md5": 447,
                     "method_exists": 90,
-                    "microtime": 433,
-                    "mt_rand": 425,
+                    "microtime": 447,
+                    "mt_rand": 439,
                     "preg_match": 218,
                     "preg_replace": 217,
                     "sanitize_text_field": 106,
@@ -1650,31 +1652,31 @@
                     "substr": 193,
                     "substr_count": 198,
                     "trim": 184,
-                    "uniqid": 433,
-                    "var_export": 625,
+                    "uniqid": 447,
+                    "var_export": 623,
                     "wp_normalize_path": 40,
-                    "wp_parse_url": 630,
-                    "wp_rand": 428
+                    "wp_parse_url": 628,
+                    "wp_rand": 442
                 },
                 "wordpress_functions": {
-                    "absint": 664,
-                    "do_action": 611,
+                    "absint": 662,
+                    "do_action": 609,
                     "get_transient": 57,
-                    "home_url": 623,
+                    "home_url": 621,
                     "sanitize_text_field": 106,
                     "wp_normalize_path": 40,
-                    "wp_parse_url": 630,
-                    "wp_rand": 428
+                    "wp_parse_url": 628,
+                    "wp_rand": 442
                 },
                 "filesystem_dependencies": {
-                    "$wp_filesystem->copy": 330,
-                    "$wp_filesystem->delete": 439,
+                    "$wp_filesystem->copy": 339,
+                    "$wp_filesystem->delete": 453,
                     "$wp_filesystem->exists": 96,
                     "$wp_filesystem->get_contents": 100,
-                    "$wp_filesystem->move": 473,
-                    "$wp_filesystem->put_contents": 436,
-                    "basename": 1116,
-                    "dirname": 1116
+                    "$wp_filesystem->move": 487,
+                    "$wp_filesystem->put_contents": 450,
+                    "basename": 1114,
+                    "dirname": 1114
                 },
                 "network_dependencies": [],
                 "database_dependencies": [],
@@ -1707,7 +1709,7 @@
                 "fan_in": 6,
                 "fan_out": 7,
                 "incoming_reference_evidence": 20,
-                "outgoing_reference_evidence": 24,
+                "outgoing_reference_evidence": 28,
                 "runtime_fan_in": 6,
                 "runtime_fan_out": 7,
                 "compatibility_fan_in": 4,
@@ -8760,7 +8762,7 @@
             "file": "includes/Support/class-filesystem.php",
             "domain": "Support",
             "namespace": "PerformanceOptimise\\Inc",
-            "lines": 2837,
+            "lines": 2857,
             "property_count": 4,
             "static_property_count": 4,
             "public_property_count": 0,
@@ -8790,6 +8792,15 @@
                     "delegates": false
                 },
                 {
+                    "name": "describe_rollout_slot",
+                    "line": 2572,
+                    "end_line": 2677,
+                    "lines": 106,
+                    "visibility": "public",
+                    "static": true,
+                    "delegates": false
+                },
+                {
                     "name": "atomic_file_put_contents",
                     "line": 1524,
                     "end_line": 1621,
@@ -8803,15 +8814,6 @@
                     "line": 864,
                     "end_line": 958,
                     "lines": 95,
-                    "visibility": "public",
-                    "static": true,
-                    "delegates": false
-                },
-                {
-                    "name": "describe_rollout_slot",
-                    "line": 2572,
-                    "end_line": 2657,
-                    "lines": 86,
                     "visibility": "public",
                     "static": true,
                     "delegates": false
@@ -8865,8 +8867,8 @@
             "imports": [],
             "references": {
                 "static_calls": {
-                    "PerformanceOptimise\\Inc\\Cache_Key::transient_key": 2675,
-                    "PerformanceOptimise\\Inc\\Log::add": 2755,
+                    "PerformanceOptimise\\Inc\\Cache_Key::transient_key": 2695,
+                    "PerformanceOptimise\\Inc\\Log::add": 2775,
                     "PerformanceOptimise\\Inc\\Settings_Store::get_settings": 2077,
                     "PerformanceOptimise\\Inc\\Util::compute_css_checksum": 2610,
                     "\\PhpToken::tokenize": 1653,
@@ -8915,7 +8917,7 @@
                 },
                 "new_expressions": [],
                 "class_references": {
-                    "PerformanceOptimise\\Inc\\Log": 2733,
+                    "PerformanceOptimise\\Inc\\Log": 2753,
                     "self": 2286
                 },
                 "class_constant_references": [],
@@ -8924,8 +8926,9 @@
                 },
                 "class_exists": {
                     "PerformanceOptimise\\Inc\\Filesystem": 41,
-                    "PerformanceOptimise\\Inc\\Log": 2733,
-                    "PhpToken": 1651
+                    "PerformanceOptimise\\Inc\\Log": 2753,
+                    "PhpToken": 1651,
+                    "WP_Filesystem_Direct": 2631
                 },
                 "method_exists": {
                     "self::atomic_file_put_contents": 2286
@@ -8940,11 +8943,12 @@
                 },
                 "external_classes": {
                     "PhpToken": 1651,
+                    "WP_Filesystem_Direct": 2631,
                     "\\PhpToken": 1653
                 },
                 "external_functions": {
                     "WP_Filesystem": 189,
-                    "__": 2752,
+                    "__": 2772,
                     "apply_filters": 333,
                     "array_filter": 330,
                     "array_key_exists": 740,
@@ -8956,7 +8960,7 @@
                     "basename": 1072,
                     "call_user_func": 1550,
                     "class_exists": 41,
-                    "clearstatcache": 2706,
+                    "clearstatcache": 2726,
                     "constant": 1687,
                     "count": 354,
                     "defined": 37,
@@ -8964,22 +8968,23 @@
                     "escapeshellarg": 1699,
                     "exec": 1703,
                     "explode": 142,
+                    "file_get_contents": 2634,
                     "fileperms": 1442,
-                    "filesize": 2708,
+                    "filesize": 2728,
                     "filter_var": 2071,
                     "function_exists": 185,
                     "get_current_blog_id": 291,
-                    "get_transient": 2676,
+                    "get_transient": 2696,
                     "getmypid": 1255,
                     "has_filter": 289,
-                    "hash_equals": 2645,
-                    "home_url": 2788,
+                    "hash_equals": 2665,
+                    "home_url": 2808,
                     "idn_to_ascii": 572,
                     "implode": 995,
                     "in_array": 1693,
                     "ini_get": 1690,
                     "is_array": 318,
-                    "is_file": 2708,
+                    "is_file": 2728,
                     "is_int": 115,
                     "is_link": 2016,
                     "is_object": 1358,
@@ -8998,9 +9003,9 @@
                     "realpath": 438,
                     "register_shutdown_function": 1477,
                     "rtrim": 460,
-                    "sanitize_key": 2738,
-                    "set_transient": 2681,
-                    "sprintf": 2756,
+                    "sanitize_key": 2758,
+                    "set_transient": 2701,
+                    "sprintf": 2776,
                     "str_replace": 303,
                     "str_starts_with": 549,
                     "strcspn": 683,
@@ -9014,7 +9019,7 @@
                     "trailingslashit": 152,
                     "trim": 142,
                     "uniqid": 1256,
-                    "untrailingslashit": 2788,
+                    "untrailingslashit": 2808,
                     "wp_normalize_path": 140,
                     "wp_parse_url": 226,
                     "wp_rand": 1250,
@@ -9024,11 +9029,11 @@
                     "WP_Filesystem": 189,
                     "apply_filters": 333,
                     "get_current_blog_id": 291,
-                    "get_transient": 2676,
-                    "home_url": 2788,
-                    "sanitize_key": 2738,
+                    "get_transient": 2696,
+                    "home_url": 2808,
+                    "sanitize_key": 2758,
                     "trailingslashit": 152,
-                    "untrailingslashit": 2788,
+                    "untrailingslashit": 2808,
                     "wp_normalize_path": 140,
                     "wp_parse_url": 226,
                     "wp_rand": 1250,
@@ -9048,10 +9053,11 @@
                     "$fs->put_contents": 1539,
                     "$fs->size": 2246,
                     "basename": 1072,
-                    "clearstatcache": 2706,
+                    "clearstatcache": 2726,
                     "dirname": 945,
-                    "filesize": 2708,
-                    "is_file": 2708,
+                    "file_get_contents": 2634,
+                    "filesize": 2728,
+                    "is_file": 2728,
                     "is_link": 2016,
                     "is_readable": 1694,
                     "pathinfo": 433,
@@ -9082,7 +9088,7 @@
             "metrics": {
                 "fan_in": 6,
                 "fan_out": 4,
-                "incoming_reference_evidence": 62,
+                "incoming_reference_evidence": 66,
                 "outgoing_reference_evidence": 7,
                 "runtime_fan_in": 5,
                 "runtime_fan_out": 4,
@@ -26362,8 +26368,8 @@
                 "static_call"
             ],
             "lines": [
-                562,
-                563
+                560,
+                561
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -26386,10 +26392,10 @@
                 "static_call"
             ],
             "lines": [
-                1025,
-                1026,
-                1069,
-                1070
+                1023,
+                1024,
+                1067,
+                1068
             ],
             "evidence_count": 4,
             "cross_domain": false,
@@ -26414,11 +26420,15 @@
             ],
             "lines": [
                 304,
-                335,
-                1114,
-                1116
+                336,
+                337,
+                344,
+                405,
+                406,
+                1112,
+                1114
             ],
-            "evidence_count": 4,
+            "evidence_count": 8,
             "cross_domain": true,
             "boundary_violation": ""
         },
@@ -26440,8 +26450,8 @@
                 "static_call"
             ],
             "lines": [
-                556,
-                557
+                554,
+                555
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -26484,11 +26494,11 @@
                 56,
                 85,
                 135,
-                619,
+                617,
+                649,
                 651,
-                653,
-                663,
-                1047
+                661,
+                1045
             ],
             "evidence_count": 8,
             "cross_domain": true,
@@ -26511,9 +26521,9 @@
                 "static_call"
             ],
             "lines": [
+                671,
                 673,
-                675,
-                691
+                689
             ],
             "evidence_count": 3,
             "cross_domain": true,
@@ -29806,8 +29816,8 @@
                 "static_call"
             ],
             "lines": [
-                2675,
-                2743
+                2695,
+                2763
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -29830,8 +29840,8 @@
                 "static_call"
             ],
             "lines": [
-                2733,
-                2755
+                2753,
+                2775
             ],
             "evidence_count": 2,
             "cross_domain": false,
@@ -29872,7 +29882,7 @@
             ],
             "lines": [
                 2610,
-                2623
+                2643
             ],
             "evidence_count": 2,
             "cross_domain": true,
@@ -36886,7 +36896,7 @@
             "PerformanceOptimise\\Inc\\Edge_Cache": 1,
             "PerformanceOptimise\\Inc\\Edge_Purge_Coordinator": 1,
             "PerformanceOptimise\\Inc\\Edge_Purger": 3,
-            "PerformanceOptimise\\Inc\\Filesystem": 62,
+            "PerformanceOptimise\\Inc\\Filesystem": 66,
             "PerformanceOptimise\\Inc\\Google_Fonts": 6,
             "PerformanceOptimise\\Inc\\Header_Emitter": 15,
             "PerformanceOptimise\\Inc\\Hook_Registry": 1,
@@ -36952,7 +36962,7 @@
             "PerformanceOptimise\\Inc\\Activate": 30,
             "PerformanceOptimise\\Inc\\Admin_Auth": 0,
             "PerformanceOptimise\\Inc\\Admin_Notices": 30,
-            "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 24,
+            "PerformanceOptimise\\Inc\\Advanced_Cache_Handler": 28,
             "PerformanceOptimise\\Inc\\Ai_Anomaly": 56,
             "PerformanceOptimise\\Inc\\Apo_Detect": 0,
             "PerformanceOptimise\\Inc\\Asset_Manager": 6,
@@ -47528,7 +47538,7 @@
                 "compatibility_in": 4,
                 "cross_domain": 12,
                 "static_state": false,
-                "lines": 1131
+                "lines": 1129
             },
             {
                 "node": "PerformanceOptimise\\Inc\\System_Info",
@@ -47577,13 +47587,13 @@
             {
                 "node": "PerformanceOptimise\\Inc\\Filesystem",
                 "file": "includes/Support/class-filesystem.php",
-                "score": 29.84,
+                "score": 29.86,
                 "fan_in": 6,
                 "fan_out": 4,
                 "compatibility_in": 4,
                 "cross_domain": 8,
                 "static_state": true,
-                "lines": 2837
+                "lines": 2857
             },
             {
                 "node": "PerformanceOptimise\\Inc\\CDN",
@@ -48508,8 +48518,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    562,
-                    563
+                    560,
+                    561
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -48535,11 +48545,15 @@
                 ],
                 "lines": [
                     304,
-                    335,
-                    1114,
-                    1116
+                    336,
+                    337,
+                    344,
+                    405,
+                    406,
+                    1112,
+                    1114
                 ],
-                "evidence_count": 4,
+                "evidence_count": 8,
                 "cross_domain": true,
                 "boundary_violation": "",
                 "feature_to_feature": false
@@ -48562,8 +48576,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    556,
-                    557
+                    554,
+                    555
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -48608,11 +48622,11 @@
                     56,
                     85,
                     135,
-                    619,
+                    617,
+                    649,
                     651,
-                    653,
-                    663,
-                    1047
+                    661,
+                    1045
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -48636,9 +48650,9 @@
                     "static_call"
                 ],
                 "lines": [
+                    671,
                     673,
-                    675,
-                    691
+                    689
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -51329,8 +51343,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    2675,
-                    2743
+                    2695,
+                    2763
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -51373,7 +51387,7 @@
                 ],
                 "lines": [
                     2610,
-                    2623
+                    2643
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -58725,8 +58739,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    562,
-                    563
+                    560,
+                    561
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -58749,10 +58763,10 @@
                     "static_call"
                 ],
                 "lines": [
-                    1025,
-                    1026,
-                    1069,
-                    1070
+                    1023,
+                    1024,
+                    1067,
+                    1068
                 ],
                 "evidence_count": 4,
                 "cross_domain": false,
@@ -58777,11 +58791,15 @@
                 ],
                 "lines": [
                     304,
-                    335,
-                    1114,
-                    1116
+                    336,
+                    337,
+                    344,
+                    405,
+                    406,
+                    1112,
+                    1114
                 ],
-                "evidence_count": 4,
+                "evidence_count": 8,
                 "cross_domain": true,
                 "boundary_violation": ""
             },
@@ -58803,8 +58821,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    556,
-                    557
+                    554,
+                    555
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
@@ -58827,11 +58845,11 @@
                     56,
                     85,
                     135,
-                    619,
+                    617,
+                    649,
                     651,
-                    653,
-                    663,
-                    1047
+                    661,
+                    1045
                 ],
                 "evidence_count": 8,
                 "cross_domain": true,
@@ -58854,9 +58872,9 @@
                     "static_call"
                 ],
                 "lines": [
+                    671,
                     673,
-                    675,
-                    691
+                    689
                 ],
                 "evidence_count": 3,
                 "cross_domain": true,
@@ -61396,8 +61414,8 @@
                     "static_call"
                 ],
                 "lines": [
-                    2733,
-                    2755
+                    2753,
+                    2775
                 ],
                 "evidence_count": 2,
                 "cross_domain": false,
@@ -61418,7 +61436,7 @@
                 ],
                 "lines": [
                     2610,
-                    2623
+                    2643
                 ],
                 "evidence_count": 2,
                 "cross_domain": true,
