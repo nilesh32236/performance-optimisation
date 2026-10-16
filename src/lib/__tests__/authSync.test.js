@@ -43,12 +43,18 @@ describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
 		expect( getErrorLogMessage( null ) ).toBe( 'Unknown error' );
 		// Audit #1831: the mirror must hand the whole message to
 		// redactLogSecrets() and cap the *redacted* result. Pre-truncating the
-		// message to 500 first would cut a credential that straddles the cap
-		// before the redactor sees it, so the mirror no longer carries the old
-		// `slice( 0, 500 )` before the redaction call.
-		expect( mainSrc ).toContain( 'redactLogSecrets( message )' );
-		expect( mainSrc ).not.toContain(
-			"error.message || 'Unknown error' ).slice"
-		);
+		// message first would cut a credential that straddles the cap before
+		// the redactor sees it. Assert on the mirror's body rather than the
+		// whole file: a bare `toContain( 'redactLogSecrets' )` is satisfied by
+		// the import line and proves nothing.
+		const start = mainSrc.indexOf( 'const getErrorLogMessage' );
+		const end = mainSrc.indexOf( 'const pageController' );
+		expect( start ).toBeGreaterThan( -1 );
+		expect( end ).toBeGreaterThan( start );
+		const body = mainSrc.slice( start, end );
+
+		expect( body ).toContain( 'redactLogSecrets( message )' );
+		// No assignment may slice the message before it reaches the redactor.
+		expect( body ).not.toMatch( /message\s*=\s*[^;]*\.slice\(/ );
 	} );
 } );

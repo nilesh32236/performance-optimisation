@@ -158,6 +158,39 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 	} );
 
+	it( 'redacts camelCase and compound key names', () => {
+		expect( redactLogSecrets( 'accessToken=abc123' ) ).toBe(
+			'accessToken=[redacted]'
+		);
+		expect( redactLogSecrets( 'clientSecret: s3cr3t' ) ).toBe(
+			'clientSecret=[redacted]'
+		);
+		expect( redactLogSecrets( 'privateKey=abc' ) ).toBe(
+			'privateKey=[redacted]'
+		);
+		expect( redactLogSecrets( 'sessionId=abc' ) ).toBe(
+			'sessionId=[redacted]'
+		);
+	} );
+
+	it( 'redacts a quoted JSON key', () => {
+		expect(
+			redactLogSecrets( '{"token": "abc123", "keep": 1}' )
+		).not.toContain( 'abc123' );
+	} );
+
+	it( 'redacts an unquoted value that contains spaces', () => {
+		expect( redactLogSecrets( 'password=my secret phrase' ) ).toBe(
+			'password=[redacted]'
+		);
+	} );
+
+	it( 'keeps the query context after a redacted value', () => {
+		expect( redactLogSecrets( '?token=abc&page=2' ) ).toBe(
+			'?token=[redacted]&page=2'
+		);
+	} );
+
 	it( 'leaves non-secret words alone', () => {
 		expect( redactLogSecrets( 'tokens: none here' ) ).toBe(
 			'tokens: none here'

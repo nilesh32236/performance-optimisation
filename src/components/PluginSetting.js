@@ -47,6 +47,15 @@ const FALLBACK_ALLOWED_KEYS = [
 	'cache_settings',
 	'litespeed_integration',
 	'llms_txt',
+	// Kept in lockstep with Settings_Store::ALLOWED_SETTINGS_KEYS. These five
+	// were missing, so without the localized wppoSettings list (Jest, or
+	// evaluation before wp_localize_script) a valid export carrying them was
+	// rejected. Masked in production because the global is always localized.
+	'od_integration',
+	'bfcache',
+	'perf_translations',
+	'ai_adaptive',
+	'edge_cache',
 ];
 // Audit #1354: resolved lazily at call time — a module-load snapshot
 // goes stale when wppoSettings is localised after import.

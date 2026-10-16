@@ -102,7 +102,7 @@ export const redactLogSecrets = ( raw ) => {
 				// with its prefix intact. Scanning a prefix that is far wider than the
 				// output then slicing the result means any credential inside the
 				// published window is matched whole and redacted.
-				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/gi,
+				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|private[_-]?key|session[_-]?id|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b['"]?\s*[:=\s]\s*(?!\s*\[redacted\])(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\r\n,;&]+)/gi,
 				'$1$2=[redacted]'
 			)
 			.slice( 0, MAX_LOG_MESSAGE_LENGTH )
