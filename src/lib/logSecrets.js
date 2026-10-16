@@ -19,7 +19,7 @@ export const redactLogSecrets = ( raw ) => {
 			.slice( 0, REDACT_SCAN_LIMIT )
 			.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
 			.replace(
-				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*(?:"[^"]*"|'[^']*'|\S+)/gi,
+				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/gi,
 				'$1=[redacted]'
 			)
 			// Audit #1831: scheme rules run before the generic Authorization
@@ -102,7 +102,7 @@ export const redactLogSecrets = ( raw ) => {
 				// with its prefix intact. Scanning a prefix that is far wider than the
 				// output then slicing the result means any credential inside the
 				// published window is matched whole and redacted.
-				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\[redacted\](?=\s*$))(?:"[^"]*"|'[^']*'|\S+)/gi,
+				/(^|[^\w]|_)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|authorization|cookie|session|sessionid|client_secret|access_token|private_key|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(?!\s*\[redacted\])(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/gi,
 				'$1$2=[redacted]'
 			)
 			.slice( 0, MAX_LOG_MESSAGE_LENGTH )

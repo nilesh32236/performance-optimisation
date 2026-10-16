@@ -133,6 +133,17 @@ describe( 'redactLogSecrets audit #1831 shapes', () => {
 		);
 	} );
 
+	it( 'redacts a quoted value containing an escaped quote', () => {
+		// The quoted atom must consume \\" as part of the value, not treat the
+		// escaped quote as the terminator and leave the tail in the log.
+		expect( redactLogSecrets( 'token="a\\"b SECRETTAIL"' ) ).toBe(
+			'token=[redacted]'
+		);
+		expect( redactLogSecrets( "token='a\\'b SECRETTAIL'" ) ).toBe(
+			'token=[redacted]'
+		);
+	} );
+
 	it( 'fails closed past the walk depth instead of returning the subtree', () => {
 		let deep = { client_secret: 'TOP-SECRET' };
 		for ( let i = 0; i < 40; i++ ) {
