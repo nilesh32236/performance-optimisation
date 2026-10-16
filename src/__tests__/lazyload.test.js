@@ -1182,10 +1182,11 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			).toBe( 'Reproductor de video' );
 		} );
 
-		it( 'keeps the localized iframe title over a stored title', () => {
-			// Audit #1831 review: PHP stores the embed's original title in
-			// data-wppo-iframe-attrs, so the restore loop must not clobber the
-			// server-localized label (the common core-YouTube-block case).
+		it( 'prefers a stored descriptive iframe title over the localized fallback', () => {
+			// Audit #1831: the localized label is the fallback for embeds with
+			// no authored title, not an override. PHP stores the embed's
+			// original title in data-wppo-iframe-attrs, and that title is more
+			// descriptive for assistive tech than a generic noun, so it wins.
 			injectModuleData( {
 				videoPlayerLabel: 'Reproductor de video',
 				videoPlayLabel: 'Reproducir video',
@@ -1199,6 +1200,30 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			placeholder.setAttribute(
 				'data-wppo-iframe-attrs',
 				JSON.stringify( { title: 'YouTube video player' } )
+			);
+			document.body.appendChild( placeholder );
+			bootLazyload();
+
+			placeholder.click();
+			expect(
+				placeholder.querySelector( 'iframe' ).getAttribute( 'title' )
+			).toBe( 'YouTube video player' );
+		} );
+
+		it( 'falls back to the localized title when the stored title is blank', () => {
+			injectModuleData( {
+				videoPlayerLabel: 'Reproductor de video',
+				videoPlayLabel: 'Reproducir video',
+			} );
+			const placeholder = document.createElement( 'div' );
+			placeholder.className = 'wppo-video-placeholder';
+			placeholder.setAttribute(
+				'data-wppo-video-src',
+				'https://www.youtube.com/embed/test'
+			);
+			placeholder.setAttribute(
+				'data-wppo-iframe-attrs',
+				JSON.stringify( { title: '   ' } )
 			);
 			document.body.appendChild( placeholder );
 			bootLazyload();

@@ -3575,13 +3575,16 @@ const initVideoPlaceholders = () => {
 						if ( ! IFRAME_ATTR_ALLOWLIST.has( name ) ) {
 							return;
 						}
-						// Audit #1831 review: the payload stores the embed's
-						// original title (e.g. the core YouTube block's
-						// "YouTube video player"), so restoring it here would
-						// clobber the server-localized VIDEO_PLAYER_LABEL set
-						// above and make the a11y fix a no-op. Keep the
-						// localized label.
-						if ( 'title' === name ) {
+						// Audit #1831: VIDEO_PLAYER_LABEL above is the
+						// *fallback*, not an override. When the embed carries
+						// an authored title (the core YouTube block's
+						// "YouTube video player", or a real video title) that
+						// is strictly more descriptive for assistive tech than
+						// a generic localized noun, so the stored title is
+						// restored over it. The localized label still applies
+						// whenever the payload has no title — which is the case
+						// the audit actually flagged.
+						if ( 'title' === name && '' === v.trim() ) {
 							return;
 						}
 						// Capability-bearing attributes are value-checked so a

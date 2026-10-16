@@ -15,7 +15,15 @@ export const redactLogSecrets = ( raw ) => {
 		return raw;
 	}
 	return (
+		// Audit #1831 review: cap the input here rather than relying on every
+		// caller pre-truncating. This is a shared export imported by four
+		// independent bundles, so the bound belongs to the function — a future
+		// caller passing an untruncated server response body would otherwise
+		// pay the full ~9-pass scan and re-expose the nested-quantifier Cookie
+		// rule to pathological input. Every current caller already slices to
+		// MAX_LOG_MESSAGE_LENGTH, so the output is unchanged.
 		raw
+			.slice( 0, MAX_LOG_MESSAGE_LENGTH )
 			.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
 			.replace(
 				/(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi,
