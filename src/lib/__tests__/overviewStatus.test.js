@@ -376,9 +376,14 @@ describe( 'deriveVitalsStatus', () => {
 		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].status ).toBe(
 			STATUS.HEALTHY
 		);
+		// Audit #1839: the model now emits the raw number plus a unit token,
+		// and detailCopy localizes the unit at render time.
 		expect(
 			deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detailArgs.value
-		).toBe( '2500 ms' );
+		).toBe( 2500 );
+		expect(
+			deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detailArgs.unit
+		).toBe( 'ms' );
 		expect( deriveVitalsStatus( { lcp: 2500.1 } )[ 0 ].detailKey ).toBe(
 			DETAIL.vital_good
 		);
@@ -468,8 +473,12 @@ describe( 'deriveVitalsStatus', () => {
 		] );
 		// Judged independently per device, and both values are reported rather
 		// than one average standing in for the other.
-		expect( rows[ 0 ].detailArgs.value ).toBe( '346 ms' );
-		expect( rows[ 2 ].detailArgs.value ).toBe( '1202 ms' );
+		// Audit #1839: value is the raw number; the localized unit lives in
+		// `unit` and is rendered by detailCopy.js.
+		expect( rows[ 0 ].detailArgs.value ).toBe( 346 );
+		expect( rows[ 2 ].detailArgs.value ).toBe( 1202 );
+		expect( rows[ 0 ].detailArgs.unit ).toBe( 'ms' );
+		expect( rows[ 2 ].detailArgs.unit ).toBe( 'ms' );
 		// Every row carries its device, so the copy can name it.
 		expect( rows.every( ( r ) => r.detailArgs.device ) ).toBe( true );
 	} );
@@ -494,8 +503,10 @@ describe( 'deriveVitalsStatus', () => {
 		expect( poor.detailKey ).toBe( DETAIL.vital_poor );
 		expect( attention.detailArgs.device ).toBe( 'desktop' );
 		expect( poor.detailArgs.device ).toBe( 'mobile' );
-		expect( attention.detailArgs.value ).toBe( '3200 ms' );
-		expect( poor.detailArgs.value ).toBe( '6000 ms' );
+		expect( attention.detailArgs.value ).toBe( 3200 );
+		expect( poor.detailArgs.value ).toBe( 6000 );
+		expect( attention.detailArgs.unit ).toBe( 'ms' );
+		expect( poor.detailArgs.unit ).toBe( 'ms' );
 	} );
 
 	// The mutation that survived the review: stripping `device` from the

@@ -2,6 +2,15 @@ import { useEffect, useContext, useMemo } from '@wordpress/element';
 import UnsavedChangesContext from './UnsavedChangesContext';
 
 /**
+ * Stable no-op used when no UnsavedChangesContext provider is mounted.
+ *
+ * Audit #1839: an inline `() => {}` fallback is a fresh identity every render,
+ * so the effects below re-ran on every render in that case. A module-level
+ * reference keeps setIsDirty referentially stable.
+ */
+const noop = () => {};
+
+/**
  * Stable stringify with sorted keys for deterministic dirty comparison.
  *
  * Circular references serialize as "[Circular]". Object keys holding
@@ -89,7 +98,7 @@ const useUnsavedChanges = ( settings, baseline ) => {
 	const setIsDirty =
 		unsavedContext && typeof unsavedContext.setIsDirty === 'function'
 			? unsavedContext.setIsDirty
-			: () => {};
+			: noop;
 
 	const baselineKey = useMemo(
 		() => stableStringify( baseline ),

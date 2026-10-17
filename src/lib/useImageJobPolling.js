@@ -93,13 +93,17 @@ const useImageJobPolling = ( { notify, onImageInfo } ) => {
 					return 'stale';
 				}
 
-				retryRef.current = 0;
+				// Audit #1839: reset the consecutive-failure counter only
+				// AFTER the response validates. Resetting before the
+				// {success:false} throw meant the catch bumped it back to 1
+				// every attempt, so the MAX_POLL_FAILURES stop was dead.
 				if ( ! response.success || ! response.data ) {
 					throw new Error(
 						response.message || 'Status check failed'
 					);
 				}
 
+				retryRef.current = 0;
 				const queuedJobs = Number( response.data.queued_jobs ?? NaN );
 				setBgJobsQueued(
 					Number.isFinite( queuedJobs ) ? queuedJobs : 0

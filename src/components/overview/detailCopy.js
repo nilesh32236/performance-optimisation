@@ -26,6 +26,8 @@
 
 import { __, sprintf } from '@wordpress/i18n';
 
+import { formatMs } from '../../lib/format';
+
 /**
  * Build one translator. The returned function takes the model's arguments and
  * produces the finished sentence.
@@ -305,6 +307,11 @@ const resolveVital = ( args = {} ) => {
 			VITAL_COPY[ args.hintKey ]?.hint ??
 			VITAL_COPY[ args.labelKey ]?.hint ??
 			'',
+		// Audit #1839: the pure model emits a number plus a `unit` token; the
+		// millisecond unit is localized here (formatMs wraps it in __()), so a
+		// translator can localize or reposition it. A pre-formatted `value`
+		// with no `unit` is passed through untouched for backward compatibility.
+		value: args.unit === 'ms' ? formatMs( args.value ) : args.value,
 		// The device and provenance clause, built in one place.
 		source: sourceClause(),
 	};
