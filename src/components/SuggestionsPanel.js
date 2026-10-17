@@ -44,7 +44,17 @@ export const FIX_ACTION_TAB_MAP = {
 	no_action_required: null,
 };
 
-export const FIX_ACTION_LABELS = {
+/**
+ * Build the fix-action label map at call time.
+ *
+ * Audit #1839: `__()` previously ran at module scope, freezing translations at
+ * bundle-import time (the anti-pattern CriticalCssPanel.js documents as fixed
+ * in audit #1354). Literal arguments are required by the WP i18n rule, so the
+ * map is rebuilt lazily per lookup.
+ *
+ * @return {Object.<string, string>} fix_action → translated label.
+ */
+export const getFixActionLabels = () => ( {
 	open_object_cache_tab: __(
 		'Review Redis Object Cache',
 		'performance-optimisation'
@@ -69,10 +79,10 @@ export const FIX_ACTION_LABELS = {
 		'Review Advanced Preloading',
 		'performance-optimisation'
 	),
-};
+} );
 
 export const getFixActionLabel = ( fixAction ) =>
-	FIX_ACTION_LABELS[ fixAction ] ??
+	getFixActionLabels()[ fixAction ] ??
 	__( 'Review related settings', 'performance-optimisation' );
 
 /**

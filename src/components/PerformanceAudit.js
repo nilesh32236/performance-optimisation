@@ -271,13 +271,16 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	};
 
 	const handleScan = async ( e, force = false ) => {
+		// Audit #1839: prevent the native form submission BEFORE the
+		// in-flight guard. A second submit that reached the form while a
+		// scan was running used to skip preventDefault and reload the SPA.
+		if ( e ) {
+			e.preventDefault();
+		}
 		if ( scanning || submittingRef.current ) {
 			return;
 		}
 		submittingRef.current = true;
-		if ( e ) {
-			e.preventDefault();
-		}
 		setScanning( true );
 		dismiss();
 		setResult( null );
@@ -364,6 +367,15 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						'Could not fetch suggestions:',
 						getErrorLogMessage( sugErr )
 					);
+					// Audit #1839: surface the failure instead of silently
+					// leaving the SuggestionsPanel empty.
+					notify( {
+						type: 'warning',
+						message: __(
+							'Could not load performance suggestions.',
+							'performance-optimisation'
+						),
+					} );
 				}
 			}
 		}
