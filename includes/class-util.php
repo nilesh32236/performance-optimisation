@@ -42,27 +42,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return string
 		 */
 		public static function get_server_string( string $key, string $fallback = '' ): string {
-			if ( ! isset( $_SERVER[ $key ] ) ) {
+			if ( ! isset( $_SERVER[ $key ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Key existence check only; value is sanitized below.
 				return $fallback;
 			}
-			$value = wp_unslash( $_SERVER[ $key ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.WP.AlternativeFunctions -- Central guarded sanitizer below handles unslash + text sanitation.
-			if ( ! is_scalar( $value ) ) {
+			$raw = $_SERVER[ $key ]; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Raw value is validated and sanitized below.
+			if ( ! is_scalar( $raw ) ) {
 				return $fallback;
 			}
-			$value = (string) $value;
+			$value = (string) $raw;
+			// Fail closed when the WordPress sanitization primitives are unavailable.
+			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
+				return $fallback;
+			}
+			// Bound the input before sanitizing and avoid splitting a multibyte sequence.
+			if ( strlen( $value ) > 4096 ) {
+				$value = function_exists( 'mb_substr' )
+					? mb_substr( $value, 0, 4096, 'UTF-8' )
+					: substr( $value, 0, 4096 );
+			}
 			try {
-				if ( function_exists( 'wp_unslash' ) ) {
-					$value = wp_unslash( $value );
-				}
-				if ( function_exists( 'sanitize_text_field' ) ) {
-					$value = sanitize_text_field( $value ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Value is unslashed above and sanitized here; dynamic key prevents literal sniff recognition.
-				}
+				$value = sanitize_text_field( wp_unslash( $value ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Value is unslashed above and sanitized here; dynamic key prevents literal sniff recognition.
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $fallback;
-			}
-			if ( strlen( $value ) > 4096 ) {
-				$value = substr( $value, 0, 4096 );
 			}
 			return (string) $value;
 		}
