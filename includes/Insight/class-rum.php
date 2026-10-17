@@ -520,8 +520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => self::OPTION )
 				);
-				wp_cache_delete( self::OPTION, 'options' );
-				wp_cache_delete( 'alloptions', 'options' );
+				Util::invalidate_option_caches( self::OPTION );
 			}
 			self::clear_field_lcp_cache();
 		}

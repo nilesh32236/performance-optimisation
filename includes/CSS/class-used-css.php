@@ -390,6 +390,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Build a Used_CSS instance from an explicit snapshot or effective settings.
+		 *
+		 * Single construction seam for the nine call sites flagged in audit
+		 * #1820. Previously some callers hand-threaded a live options array
+		 * (Cache, buffer coordinator, cron) while others used the no-arg form
+		 * that relied on the constructor's implicit Util::get_settings()
+		 * fallback, so a settings-shape change could behave differently per
+		 * caller and used-CSS regeneration diverged between REST/CLI/cron/
+		 * buffer paths. Passing an explicit non-empty snapshot is still
+		 * honoured for callers that already hold one.
+		 *
+		 * @since NEXT
+		 * @param array $options Optional options snapshot; empty = effective settings.
+		 * @return static
+		 */
+		public static function from_settings( array $options = array() ): static {
+			return new static( ! empty( $options ) ? $options : Util::get_settings() );
+		}
+
+		/**
 		 * Whether the request Host header mismatched the canonical home host.
 		 *
 		 * @return bool True when the request host differs from the canonical host.
