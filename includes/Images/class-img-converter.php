@@ -640,7 +640,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$imagick->setImageCompressionQuality( $quality );
 					}
 
-					return (bool) $imagick->writeImage( $dest_path );
+					return $this->write_image_atomically(
+						$dest_path,
+						static function ( string $target ) use ( $imagick ): bool {
+							return (bool) $imagick->writeImage( $target );
+						}
+					);
 				} finally {
 					if ( isset( $imagick ) && $imagick instanceof \Imagick ) {
 						if ( method_exists( $imagick, 'clear' ) ) {
@@ -960,6 +965,148 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 			return self::is_safe_delete_path( $path );
+		}
+
+		/**
+		 * Whether a file exists and contains at least one byte.
+		 *
+		 * A 0-byte (or unreadable) file is the signature of an aborted or
+		 * truncated encode, so callers treat it as absent rather than as a
+		 * completed output. Fail-closed (returns false) but never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path to check.
+		 * @return bool True when the file exists with a positive size.
+		 */
+		private function is_non_empty_file( string $path ): bool {
+			if ( '' === $path || ! file_exists( $path ) ) {
+				return false;
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; guarded above, silenced for race safety.
+			$size = @filesize( $path );
+			return false !== $size && 0 < (int) $size;
+		}
+
+		/**
+		 * Whether a freshly encoded image is non-empty and decodable.
+		 *
+		 * Size is the primary gate (a truncated encode is commonly 0 bytes);
+		 * when `getimagesize()` is available the header is additionally
+		 * parsed so a partial write that happens to be non-zero is also
+		 * rejected. Fail-closed for the caller's purposes (returns false)
+		 * but never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute path to the encoded candidate.
+		 * @return bool True when the file is non-empty and looks like an image.
+		 */
+		private function is_valid_encoded_file( string $path ): bool {
+			if ( ! $this->is_non_empty_file( $path ) ) {
+				return false;
+			}
+			if ( function_exists( 'getimagesize' ) ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- header parse warns on malformed/truncated files; that is the failure signal we want.
+				$header = @getimagesize( $path );
+				if ( empty( $header ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Delete a file only when it is inside the strict delete allowlist.
+		 *
+		 * Shared cleanup seam for aborted encodes: a passthrough/traversal
+		 * path can never reach `wp_delete_file()`/`unlink()`. Fail-open and
+		 * silent on any failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute path proposed for deletion.
+		 * @return void
+		 */
+		private function delete_allowlisted_file( string $path ): void {
+			if ( '' === $path || ! file_exists( $path ) || ! self::is_safe_delete_path( $path ) ) {
+				return;
+			}
+			if ( function_exists( 'wp_delete_file' ) ) {
+				wp_delete_file( $path );
+			} elseif ( function_exists( 'unlink' ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fallback when wp_delete_file() is unavailable; path is allowlist-contained above.
+				unlink( $path );
+			}
+		}
+
+		/**
+		 * Atomically write an encoded image to its destination.
+		 *
+		 * The encoder writes to a temp sibling in the destination directory
+		 * and the temp file is `rename()`d into place only when the encode
+		 * produced a non-empty, decodable file. A truncated/0-byte encode
+		 * (e.g. an aborted `imagewebp()`/`imageavif()`/Imagick
+		 * `writeImage()`) therefore never reaches `$dest_path`, so a partial
+		 * sibling can never be recorded `completed` or served as a broken
+		 * image. A failed encode is deleted only inside the delete
+		 * allowlist. Fail-open: when the rename/uniqid transport is
+		 * unavailable the legacy direct-write behaviour is kept, and a
+		 * failed encode returns false without leaving a partial target.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string   $dest_path Absolute destination path (must be write-safe).
+		 * @param callable $encoder   Receives the temp path and returns bool; writes the encoded image.
+		 * @return bool True when a valid image was renamed into place.
+		 */
+		public function write_image_atomically( string $dest_path, callable $encoder ): bool {
+			if ( '' === $dest_path || ! self::is_safe_write_path( $dest_path ) ) {
+				return false;
+			}
+
+			// Fail open: without the rename/uniqid transport the legacy
+			// direct-write path is retained so restricted hosts behave
+			// exactly as before.
+			if ( ! function_exists( 'rename' ) || ! function_exists( 'uniqid' ) ) {
+				$result = false;
+				try {
+					$result = (bool) $encoder( $dest_path );
+				} catch ( \Throwable $e ) {
+					$result = false;
+				}
+				if ( $result && $this->is_valid_encoded_file( $dest_path ) ) {
+					return true;
+				}
+				$this->delete_allowlisted_file( $dest_path );
+				return false;
+			}
+
+			$tmp = $dest_path . '.tmp-' . uniqid( '', true );
+			if ( ! self::is_safe_write_path( $tmp ) ) {
+				return false;
+			}
+
+			$result = false;
+			try {
+				$result = (bool) $encoder( $tmp );
+			} catch ( \Throwable $e ) {
+				$result = false;
+			}
+
+			if ( $result && $this->is_valid_encoded_file( $tmp ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic same-directory publish; temp sibling is allowlist-contained and cleaned on failure.
+				if ( rename( $tmp, $dest_path ) ) {
+					return true;
+				}
+			}
+
+			// Failure: remove the temp sibling only inside the delete
+			// allowlist so a passthrough/traversal value can never unlink
+			// outside it.
+			$this->delete_allowlisted_file( $tmp );
+
+			return false;
 		}
 
 		/**
@@ -1717,6 +1864,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return void
 		 */
 		private function record_encoded_sibling( string $source_image, string $sibling_path, string $type, bool &$success ): void {
+			// A missing or 0-byte sibling is a truncated/aborted encode:
+			// never record it `completed` (it would be served as a broken
+			// image). Remove it when inside the delete allowlist so the next
+			// run re-encodes, then record `failed`.
+			if ( ! $this->is_non_empty_file( $sibling_path ) ) {
+				$success = false;
+				$this->delete_allowlisted_file( $sibling_path );
+				$this->update_conversion_status( $source_image, 'failed', $type );
+				return;
+			}
+
 			if ( $this->discard_oversized_sibling( $source_image, $sibling_path ) ) {
 				$success = false;
 				$this->update_conversion_status( $source_image, 'skipped', $type );
@@ -2125,10 +2283,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 										return false;
 									}
 
-									if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+									$webp_avif_quality = (int) ( $avif_quality ?? $quality );
+									if ( function_exists( 'imageavif' ) && $this->write_image_atomically(
+										$avif_path,
+										static function ( string $target ) use ( $image, $webp_avif_quality ): bool {
+											return imageavif( $image, $target, $webp_avif_quality );
+										}
+									) ) {
 										$webp_source_success = true;
 										$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
-									} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
+									} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, $webp_avif_quality, (int) $memory_safe_edge ) ) {
 										// Imagick-only AVIF host: GD decoded the WebP
 										// source but cannot encode AVIF, so encode
 										// from the source file via Imagick instead.
@@ -2374,10 +2538,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$success = false;
 						$this->update_conversion_status( $source_image, 'failed', 'avif' );
 					} elseif ( ! file_exists( $avif_path ) ) {
-						$avif_done = false;
-						if ( $avif_encoder && function_exists( 'imageavif' ) && Util::prepare_cache_dir( dirname( $avif_path ) ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+						$avif_done            = false;
+						$generic_avif_quality = (int) ( $avif_quality ?? $quality );
+						if ( $avif_encoder && function_exists( 'imageavif' ) && Util::prepare_cache_dir( dirname( $avif_path ) ) && $this->write_image_atomically(
+							$avif_path,
+							static function ( string $target ) use ( $image, $generic_avif_quality ): bool {
+								return imageavif( $image, $target, $generic_avif_quality );
+							}
+						) ) {
 							$avif_done = true;
-						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
+						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, $generic_avif_quality, (int) $memory_safe_edge ) ) {
 							// Imagick-only AVIF host: GD has no imageavif(),
 							// so encode from the source file via Imagick.
 							$avif_done = true;
@@ -2400,7 +2570,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$success = false;
 						$this->update_conversion_status( $source_image, 'failed', 'webp' );
 					} elseif ( ! file_exists( $webp_path ) ) {
-						if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! imagewebp( $image, $webp_path, $webp_quality ?? $quality ) ) {
+						$generic_webp_quality = (int) ( $webp_quality ?? $quality );
+						if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! $this->write_image_atomically(
+							$webp_path,
+							static function ( string $target ) use ( $image, $generic_webp_quality ): bool {
+								return imagewebp( $image, $target, $generic_webp_quality );
+							}
+						) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'webp' );
 						} else {
