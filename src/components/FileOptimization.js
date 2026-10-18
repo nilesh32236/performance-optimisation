@@ -818,6 +818,38 @@ const FileOptimization = ( {
 	}, [] );
 
 	const cdnRowId = useCdnRowId();
+	// Feature-level optimizer overlap (issue #1843). The PHP side localises
+	// the read-only map on wppoSettings; when it is absent (older config) the
+	// warning simply never renders. Memoized on mount: detection is static
+	// per page load and does not depend on local form state.
+	const overlappingOptimizerLabels = useMemo( () => {
+		const overlaps = getWppoSettings( 'overlappingOptimizers', {} );
+		if ( ! overlaps || typeof overlaps !== 'object' ) {
+			return '';
+		}
+		return Object.values( overlaps )
+			.map( ( entry ) =>
+				entry && typeof entry === 'object' && entry.label
+					? entry.label
+					: ''
+			)
+			.filter( Boolean )
+			.join( ', ' );
+	}, [] );
+	const optimizerOverlapNotice = overlappingOptimizerLabels ? (
+		<NoticeBanner
+			type="warning"
+			className="wppo-mt-12"
+			message={ sprintf(
+				// translators: %s: comma-separated list of conflicting plugin names.
+				__(
+					'Another optimisation plugin is active: %s. Two plugins that own the same CSS/JS or media features can double-minify or double-defer and break layouts — consider disabling the overlap.',
+					'performance-optimisation'
+				),
+				overlappingOptimizerLabels
+			) }
+		/>
+	) : null;
 	// Memoized on the incoming options object identity so local keystroke
 	// renders reuse the derived defaults instead of re-spreading ~70 keys
 	// and re-joining every textarea list on each render.
@@ -3791,6 +3823,7 @@ const FileOptimization = ( {
 													}
 												/>
 											) }
+										{ optimizerOverlapNotice }
 										<NoticeBanner
 											type="info"
 											className="wppo-mt-12"
@@ -4466,6 +4499,7 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								{ optimizerOverlapNotice }
 								<div className="wppo-field wppo-safe-mode-detector">
 									<p className="wppo-field-label">
 										{ __(
