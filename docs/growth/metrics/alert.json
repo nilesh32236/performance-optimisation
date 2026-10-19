@@ -1,9 +1,6 @@
 {
-  "captured_at": "2026-10-12T15:52:58+00:00",
+  "captured_at": "2026-10-19T13:10:12+00:00",
   "reasons": [
-    "GitHub open issues rose by 10 or more",
-    "WordPress.org listing version changed",
-    "WordPress.org last-updated timestamp changed",
     "GitHub 14-day views changed by 25% or more"
   ]
 }

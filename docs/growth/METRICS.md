@@ -1,6 +1,6 @@
 # Phase G — Measurement & Growth Monitoring
 
-Captured: `2026-10-12T15:52:58+00:00`
+Captured: `2026-10-19T13:10:12+00:00`
 
 This report uses public WordPress.org and GitHub repository metadata. It does not collect WordPress visitors, site-owner settings, cookies, or private application traffic.
 
@@ -13,16 +13,16 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 | WordPress.org rating score | 100 | 100 | +0 |
 | WordPress.org rating count | 4 | 4 | +0 |
 | WordPress.org support threads | 0 | 0 | +0 |
-| WordPress.org version | 2.4.1 | 2.4.0 | N/A |
-| WordPress.org last updated | 2026-10-03 9:56am GMT | 2026-09-24 1:10am GMT | N/A |
+| WordPress.org version | 2.4.1 | 2.4.1 | N/A |
+| WordPress.org last updated | 2026-10-03 9:56am GMT | 2026-10-03 9:56am GMT | N/A |
 | GitHub stars | 4 | 4 | +0 |
 | GitHub forks | 0 | 0 | +0 |
-| GitHub open issues | 5 | 18 | -13 |
-| GitHub open PRs | 1 | 9 | -8 |
-| GitHub 14-day views | 167 | 731 | -564 |
-| GitHub 14-day view uniques | 3 | 7 | -4 |
-| GitHub 14-day clones | 11211 | 16616 | -5405 |
-| GitHub 14-day clone uniques | 816 | 1169 | -353 |
+| GitHub open issues | 13 | 5 | +8 |
+| GitHub open PRs | 10 | 1 | +9 |
+| GitHub 14-day views | 29 | 167 | -138 |
+| GitHub 14-day view uniques | 2 | 3 | -1 |
+| GitHub 14-day clones | 6084 | 11211 | -5127 |
+| GitHub 14-day clone uniques | 671 | 816 | -145 |
 
 ## Operational metrics
 
@@ -92,9 +92,6 @@ The scheduled workflow creates an issue only for sustained listing changes, rati
 
 Current material reasons:
 
-- GitHub open issues rose by 10 or more
-- WordPress.org listing version changed
-- WordPress.org last-updated timestamp changed
 - GitHub 14-day views changed by 25% or more
 
 ## Privacy boundary
