@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-10-19T04:35:40.851Z`
-Last attempt: `2026-10-19T04:35:40.851Z`
+Last successful discovery: `2026-10-19T18:42:48.750Z`
+Last attempt: `2026-10-19T18:42:48.750Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -37,6 +37,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/minimax-m2.1-free` | 204800 | 131072 | yes | no | catalog_visible |
 | `opencode/minimax-m2.5-free` | 204800 | 131072 | yes | no | catalog_visible |
 | `opencode/minimax-m3-free` | 200000 | 32000 | yes | yes | catalog_visible |
+| `opencode/minimax-m3.1-flash-free` | 1000000 | 512000 | yes | yes | catalog_visible |
 | `opencode/muse-spark-1.2-contributor-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/muse-spark-1.3-contributor-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/nemotron-3-super-free` | 204800 | 128000 | yes | no | catalog_visible |
