@@ -3347,7 +3347,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $this->should_optimise_for_logged_in() ) {
-				// Cache options locally to avoid multiple redundant function calls per page load.
+				// Snapshot options once; get_options() is memoized per blog, so this
+				// only removes repeated facade calls inside this method.
 				$options                  = $this->get_options();
 				$lazy_load_images         = ! empty( $options['image_optimisation']['lazyLoadImages'] );
 				$lazy_load_backgrounds    = ! empty( $options['image_optimisation']['lazyLoadBackgroundImages'] );
@@ -3376,6 +3377,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
 
 					if ( $delay_js ) {
+						// Re-snapshot options below the translation call since it runs gettext filters.
+						$options = $this->get_options();
 						$idle_timeout = ! empty( $options['file_optimisation']['delayJSIdleTimeout'] )
 						? absint( $options['file_optimisation']['delayJSIdleTimeout'] )
 						: 3000;
