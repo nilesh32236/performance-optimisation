@@ -3378,7 +3378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					if ( $delay_js ) {
 						// Re-snapshot options below the translation call since it runs gettext filters.
-						$options = $this->get_options();
+						$options      = $this->get_options();
 						$idle_timeout = ! empty( $options['file_optimisation']['delayJSIdleTimeout'] )
 						? absint( $options['file_optimisation']['delayJSIdleTimeout'] )
 						: 3000;
