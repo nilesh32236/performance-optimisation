@@ -3347,8 +3347,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $this->should_optimise_for_logged_in() ) {
-				// Snapshot options once; get_options() is memoized per blog, so this
-				// only removes repeated facade calls inside this method.
+				// Snapshot options for the flag reads; get_options() is memoized per blog,
+				// so this only removes repeated facade calls inside this method.
+				// The delay block below re-snapshots after the gettext-filtered __() call.
 				$options                  = $this->get_options();
 				$lazy_load_images         = ! empty( $options['image_optimisation']['lazyLoadImages'] );
 				$lazy_load_backgrounds    = ! empty( $options['image_optimisation']['lazyLoadBackgroundImages'] );

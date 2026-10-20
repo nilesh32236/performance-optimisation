@@ -118,5 +118,5 @@
 **Action:** When a unified stats object is already fetched in the local scope, reuse its array keys instead of trying to selectively fetch specific properties again from the cache/database.
 
 ## 2026-10-20 - Avoid repeated get_options() resolution
-**Learning:** The `Main::get_options()` method, although memoized per-blog, still incurs function call resolution, array lookups, and blog ID conditional checks on every invocation.
-**Action:** When a method needs to access multiple option keys (like in `enqueue_scripts`), assign the result of `get_options()` to a local variable (e.g., `$options = $this->get_options();`) and use it for subsequent lookups to reduce overhead.
+**Learning:** `Main::get_options()` is memoized per blog, so reusing one snapshot is a readability win, not a measurable speedup; only a settings write triggered inside a hook invalidates it.
+**Action:** Assign `$options = $this->get_options();` for the flag reads, but take a fresh snapshot after any hook (e.g. `__()`) that could invalidate the memo.
