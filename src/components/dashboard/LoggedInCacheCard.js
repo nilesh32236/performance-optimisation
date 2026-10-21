@@ -37,7 +37,7 @@ const LoggedInCacheCard = ( {
 } ) => (
 	<FeatureCard
 		title={ __( 'Cache for Logged-in Users', 'performance-optimisation' ) }
-		icon={ <FontAwesomeIcon icon={ faUserCheck } /> }
+		icon={ <FontAwesomeIcon icon={ faUserCheck } aria-hidden="true" /> }
 	>
 		<SwitchField
 			label={ __( 'Enable', 'performance-optimisation' ) }

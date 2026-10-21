@@ -74,3 +74,7 @@
 ## 2026-10-14 - Missing FeatureCard Icons
 **Learning:** FeatureCards without an `icon` prop look visually inconsistent and lack the visual affordance other cards have. They should all have an accompanying FontAwesomeIcon with `aria-hidden='true'`.
 **Action:** Ensure all `FeatureCard` components are given a suitable FontAwesomeIcon via the `icon` prop for consistency and aesthetic polish.
+
+## 2026-10-21 - Add aria-hidden to decorative FeatureCard icons
+**Learning:** When using decorative icons (like `FontAwesomeIcon`) alongside visible text labels in React components like `FeatureCard`, always add `aria-hidden="true"` to the icon to prevent redundant or confusing screen reader announcements.
+**Action:** Always add `aria-hidden="true"` to decorative `FontAwesomeIcon` usages.
