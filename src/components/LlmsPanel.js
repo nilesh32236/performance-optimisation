@@ -73,7 +73,7 @@ const LlmsPanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'LLMs.txt', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faRobot } aria-hidden="true" /> }
+			icon={ <FontAwesomeIcon icon={ faRobot } /> } // Audit #1420: decorative.
 		>
 			{ notice && (
 				<NoticeBanner

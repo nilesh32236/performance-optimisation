@@ -26,7 +26,13 @@ describe( 'FeatureCard', () => {
 			container.querySelector( '.wppo-feature-card__header' )
 		).toBeInTheDocument();
 		expect( screen.getByText( /Minify/ ) ).toBeInTheDocument();
-		expect( screen.getByText( /★/ ) ).toBeInTheDocument();
+
+		const iconEl = screen.getByText( /★/ );
+		expect( iconEl ).toBeInTheDocument();
+		expect( iconEl.closest( 'span' ) ).toHaveAttribute(
+			'aria-hidden',
+			'true'
+		);
 	} );
 
 	it( 'renders header actions and footer', () => {

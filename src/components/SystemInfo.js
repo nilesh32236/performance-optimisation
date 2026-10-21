@@ -183,7 +183,7 @@ const SystemInfo = () => {
 	return (
 		<FeatureCard
 			title={ __( 'System Info', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faServer } aria-hidden="true" /> }
+			icon={ <FontAwesomeIcon icon={ faServer } /> }
 		>
 			{ /* Load trigger — shown to initiate fetch or refresh data */ }
 			<div
