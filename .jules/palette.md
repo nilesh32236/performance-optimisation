@@ -74,7 +74,3 @@
 ## 2026-10-14 - Missing FeatureCard Icons
 **Learning:** FeatureCards without an `icon` prop look visually inconsistent and lack the visual affordance other cards have. They should all have an accompanying FontAwesomeIcon with `aria-hidden='true'`.
 **Action:** Ensure all `FeatureCard` components are given a suitable FontAwesomeIcon via the `icon` prop for consistency and aesthetic polish.
-
-## 2026-10-21 - FeatureCard Icons Are Automatically Hidden
-**Learning:** The `FeatureCard` component already wraps its `icon` prop in an `aria-hidden="true"` wrapper (and `@fortawesome/fontawesome-svg-core` auto-adds it to unlabeled icons). Adding `aria-hidden="true"` directly to the `FontAwesomeIcon` passed to the `icon` prop is redundant and pollutes the call sites.
-**Action:** Rely on the `FeatureCard` wrapper to hide its icon. Only add `aria-hidden="true"` when rendering a decorative icon *outside* of such wrappers.
