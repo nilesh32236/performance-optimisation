@@ -1477,7 +1477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Fallback: synchronous processing (Action Scheduler not available).
 			$options       = Util::get_settings();
-			$img_converter = new Img_Converter( $options );
+			$img_converter = Img_Converter::from_settings( $options );
 
 			foreach ( $webp_images as $webp_image ) {
 				$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
@@ -1893,7 +1893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 
-			$manager = new Object_Cache();
+			$manager = Object_Cache::create();
 
 			if ( 'status' === $action ) {
 				$status                          = $manager->get_status();
@@ -2711,7 +2711,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			}
 
-			$used_css = new Used_CSS();
+			$used_css = Used_CSS::from_settings();
 			// Forced: an explicit operator request bypasses the cooldown,
 			// while per-post freshness still skips up-to-date posts (issue #1107).
 			$queued = $used_css->regenerate_all( true );
@@ -2756,7 +2756,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					return $this->send_response( null, false, 500, __( 'Used CSS is not available.', 'performance-optimisation' ) );
 				}
-				$used_css = new Used_CSS();
+				$used_css = Used_CSS::from_settings();
 				if ( 'dry_run' === $action ) {
 					$preview         = $used_css->generate_preview_for_post( $post_id );
 					$preview['mode'] = 'preview';
@@ -3306,7 +3306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( isset( $params['post_id'] ) && is_numeric( $params['post_id'] ) && (int) $params['post_id'] > 0 && function_exists( 'get_permalink' ) && class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$permalink = get_permalink( (int) $params['post_id'] );
 					if ( is_string( $permalink ) && '' !== $permalink ) {
-						$used_css          = new Used_CSS();
+						$used_css          = Used_CSS::from_settings();
 						$slot              = $used_css->get_used_css_rollout_status( $permalink );
 						$slot['health']    = (int) $slot['live_bytes'] > 0 ? 'healthy' : ( (bool) $slot['fallback'] ? 'restorable' : 'degraded' );
 						$slot['post_id']   = (int) $params['post_id'];
