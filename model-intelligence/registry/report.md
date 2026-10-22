@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-10-21T17:08:32.937Z`
-Last attempt: `2026-10-21T17:08:32.937Z`
+Last successful discovery: `2026-10-22T04:39:02.294Z`
+Last attempt: `2026-10-22T04:39:02.294Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -14,6 +14,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/deepseek-v4.1-flash-free` | 200000 | 32000 | yes | yes | catalog_visible |
 | `opencode/exo-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/fledge-alpha-free` | 1048576 | 131072 | yes | yes | catalog_visible |
+| `opencode/flint-40b-free` | 262144 | 65536 | yes | no | catalog_visible |
 | `opencode/glm-4.7-free` | 204800 | 131072 | yes | no | catalog_visible |
 | `opencode/glm-5-free` | 204800 | 131072 | yes | no | catalog_visible |
 | `opencode/glm-5.3-flash-free` | 200000 | 32000 | yes | yes | catalog_visible |
