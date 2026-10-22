@@ -6570,13 +6570,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the request Accept header allows image/avif.
 		 */
 		public function client_accepts_avif(): bool {
-			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) ) {
+			$http_accept = Util::get_server_string( 'HTTP_ACCEPT' );
+			if ( '' === $http_accept ) {
 				return false;
 			}
-			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
-				return false;
-			}
-			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 			return false !== strpos( $http_accept, 'image/avif' );
 		}
 
