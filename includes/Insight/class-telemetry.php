@@ -1081,117 +1081,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * DELETE /telemetry can call delete_transient() on each key individually,
 		 * ensuring compatibility with persistent object caches (Redis, Memcached).
 		 *
-		 * Concurrency (audit #888 finding 10): the options API has no
-		 * compare-and-swap, so a plain read-modify-write can lose keys added by
-		 * a concurrent scan between the read and the write. The write is preceded
-		 * by an immediate re-read whose keys are merged into the payload,
-		 * shrinking the lost-update window from read→modify→write to
-		 * re-read→merge→write (microseconds), and the whole step retries a
-		 * couple of times. Key expiry values are absolute timestamps, so the
-		 * merge is order-independent for our own key (re-asserted last).
+		 * Delegates to {@see Util::register_transient_index_key()}, which owns
+		 * the shared expiry prune, 200-entry cap, and re-read-before-write
+		 * merge (audit #888 finding 10) so every index writer is concurrency-
+		 * safe. The telemetry TTL is one hour.
 		 *
 		 * @since  1.5.0
 		 * @since 2.0.0 Added re-read-before-write merge with bounded retry.
 		 * @since 2.0.0 Skip the verify re-read on the first attempt when the
 		 *             merge observed no concurrent changes (2 reads instead of 3
 		 *             on the common no-contention path).
+		 * @since NEXT Delegates to the shared Util writer (expiry prune + cap).
 		 * @param  string $key The transient key to register.
 		 * @return void
 		 */
 		public static function register_transient_key( string $key ): void {
-			$retries = 2;
-
-			for ( $attempt = 0; $attempt <= $retries; $attempt++ ) {
-				// Refresh timestamps per attempt so pruning and the final
-				// verification use a current clock even after retries.
-				$now    = time();
-				$expiry = $now + HOUR_IN_SECONDS;
-
-				$index = self::read_transient_index();
-
-				// Add/update this key with its absolute expiry timestamp.
-				$index[ $key ] = $expiry;
-				$index         = self::prune_transient_index( $index, $now );
-
-				// Re-read immediately before writing and union in keys another
-				// process registered in the meantime so concurrent scans cannot
-				// overwrite each other's index entries. When a key exists in
-				// both maps the fresher (larger) expiry wins.
-				$fresh         = self::read_transient_index();
-				$no_contention = true;
-				foreach ( $fresh as $stored_key => $stored_expiry ) {
-					if ( ! array_key_exists( $stored_key, $index ) || $stored_expiry > $index[ $stored_key ] ) {
-						$index[ $stored_key ] = $stored_expiry;
-						$no_contention        = false;
-					}
-				}
-				$index = self::prune_transient_index( $index, $now );
-
-				// Re-assert our own key (a stale concurrent entry must not win).
-				$index[ $key ] = $expiry;
-
-				update_option( 'wppo_transient_index', $index, false );
-
-				// Fast path: when the merge re-read found no concurrent
-				// changes on the first attempt, skip the verify re-read and
-				// its option deserialization — no contention was observed, so
-				// a torn write is unlikely. Any later attempt (a previous
-				// verify failed) or an attempt that merged concurrent keys
-				// still verifies below.
-				if ( 0 === $attempt && $no_contention ) {
-					return;
-				}
-
-				// Verify our key survived the write — a concurrent writer that
-				// raced between the merge-read and the write could have
-				// overwritten the option. Checks presence with a non-expired
-				// value rather than exact equality so a concurrent writer that
-				// refreshed our key seconds later is not treated as a torn
-				// write. Retrying converges because every writer merges before
-				// writing.
-				$verify = self::read_transient_index();
-				if ( isset( $verify[ $key ] ) && is_int( $verify[ $key ] ) && $verify[ $key ] >= $now ) {
-					return;
-				}
-			}
-		}
-
-		/**
-		 * Read and normalize the transient index option.
-		 *
-		 * @since 2.0.0
-		 * @return array<string, int>
-		 */
-		private static function read_transient_index(): array {
-			$index = get_option( 'wppo_transient_index', array() );
-			return is_array( $index ) ? $index : array();
-		}
-
-		/**
-		 * Prune expired entries and cap the transient index size.
-		 *
-		 * @since 2.0.0
-		 * @param array<string, int> $index Raw index map.
-		 * @param int                $now  Current timestamp.
-		 * @return array<string, int> Pruned, capped index.
-		 */
-		private static function prune_transient_index( array $index, int $now ): array {
-			// Prune only when the index exceeds the soft cap to avoid unnecessary overhead.
-			if ( count( $index ) > 200 ) {
-				foreach ( $index as $stored_key => $expiry ) {
-					if ( $expiry < $now ) {
-						unset( $index[ $stored_key ] );
-					}
-				}
-
-				// If still over cap after pruning expired, trim the oldest entries.
-				if ( count( $index ) > 200 ) {
-					asort( $index ); // Sort by expiry ascending (oldest first).
-					$index = array_slice( $index, -200, 200, true );
-				}
-			}
-
-			return $index;
+			Util::register_transient_index_key( $key, HOUR_IN_SECONDS );
 		}
 	}
 }

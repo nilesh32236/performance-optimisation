@@ -180,6 +180,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				return;
 			}
 
+			// Capture exists only to populate the admin Asset Manager metabox.
+			// Visitor requests (anonymous or logged-in non-editors) must not pay
+			// the transient read plus per-asset file_exists()/filesize() stats.
+			$capture = function_exists( 'current_user_can' ) && current_user_can( 'edit_post', $post_id );
+
+			/**
+			 * Filter whether page-asset capture runs for the current request.
+			 *
+			 * The default is true only when the current user can edit the
+			 * singular post. Returning true opts unprivileged/preview requests
+			 * back in (they pay the filesystem-stat cost).
+			 *
+			 * @since NEXT
+			 * @param bool $capture Whether to capture assets for this request.
+			 * @param int  $post_id Current singular post ID.
+			 */
+			if ( function_exists( 'apply_filters' ) ) {
+				$capture = (bool) apply_filters( 'wppo_capture_page_assets', $capture, $post_id );
+			}
+
+			if ( ! $capture ) {
+				return;
+			}
+
 			global $wp_scripts, $wp_styles;
 
 			$scripts = array();
