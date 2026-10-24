@@ -1474,7 +1474,7 @@ const Dashboard = ( {
 			{ /* Page cache master toggle */ }
 			<FeatureCard
 				title={ __( 'Page Cache', 'performance-optimisation' ) }
-				icon={ <FontAwesomeIcon icon={ faBolt } /> }
+				icon={ <FontAwesomeIcon icon={ faBolt } aria-hidden="true" /> }
 			>
 				<SwitchField
 					label={ __(
@@ -1805,7 +1805,7 @@ const Dashboard = ( {
 			{ /* CDN cache purge (Cloudflare / Varnish) */ }
 			<FeatureCard
 				title={ __( 'CDN Cache Purge', 'performance-optimisation' ) }
-				icon={ <FontAwesomeIcon icon={ faGlobe } /> }
+				icon={ <FontAwesomeIcon icon={ faGlobe } aria-hidden="true" /> }
 			>
 				<div className="wppo-field">
 					<label

@@ -125,7 +125,7 @@ const EdgeCachePanel = () => {
 			title={ __( 'Edge HTML Cache', 'performance-optimisation' ) }
 			// Audit #1354: real icon component (hidden by FeatureCard wrapper) instead of
 			// a global-CSS <i> tag with no accessible hiding.
-			icon={ <FontAwesomeIcon icon={ faGlobe } /> }
+			icon={ <FontAwesomeIcon icon={ faGlobe } aria-hidden="true" /> }
 		>
 			{ notice && (
 				<NoticeBanner

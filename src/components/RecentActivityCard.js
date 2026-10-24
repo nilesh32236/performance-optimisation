@@ -31,7 +31,7 @@ const RecentActivityCard = ( {
 				'Recent Optimisation Activity',
 				'performance-optimisation'
 			) }
-			icon={ <FontAwesomeIcon icon={ faHistory } /> }
+			icon={ <FontAwesomeIcon icon={ faHistory } aria-hidden="true" /> }
 			footer={
 				<button
 					type="button"
