@@ -619,7 +619,7 @@ describe( 'Dashboard', () => {
 		);
 		expect( screen.getByTestId( 'confirm-dialog' ) ).toBeInTheDocument();
 
-		fireEvent.click( screen.getByRole( 'button', { name: /Confirm/i } ) );
+		fireEvent.click( screen.getByRole( 'button', { name: /^Confirm$/i } ) );
 
 		await waitFor( () =>
 			expect( apiCall ).toHaveBeenCalledWith(

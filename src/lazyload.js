@@ -1822,26 +1822,64 @@ if ( idleScripts.length > 0 ) {
 // Observe viewport scripts.
 observeViewportScripts();
 
+/**
+ * Interaction trigger event names for delayed-script flushing.
+ *
+ * Hoisted to module scope (audit #1839) so teardownLazyload() can detach the
+ * document-level listeners even before any interaction has fired. Declared at
+ * module scope rather than inside the registration block because the old
+ * block-scoped bindings were unreachable from teardown — on the script-removal
+ * path the handlers stayed live, retaining the whole module scope as a leak and
+ * re-invoking loadScripts() after teardown.
+ *
+ * Audit #1354: mouseover subsumes mouseenter at document level — drop the
+ * overlapping listener.
+ *
+ * @type {string[]}
+ */
+const interactionTriggerEvents = [
+	'mousedown',
+	'mouseover',
+	'touchstart',
+	'scroll',
+	'keydown',
+];
+
+/**
+ * Document-level interaction load handler; null when not registered.
+ * @type {Function|null}
+ */
+let interactionLoadHandler = null;
+
+/**
+ * Remove the document-level interaction listeners owned by this module copy.
+ *
+ * Idempotent and safe to call before registration (no-op). Kept at module
+ * scope so both the handler and teardownLazyload() can release the exact same
+ * references.
+ */
+const removeInteractionListeners = () => {
+	if ( ! interactionLoadHandler ) {
+		return;
+	}
+	const handler = interactionLoadHandler;
+	interactionLoadHandler = null;
+	interactionTriggerEvents.forEach( ( event ) =>
+		document.removeEventListener( event, handler )
+	);
+};
+
 // Only register interaction event listeners if there are scripts using interaction strategy.
 if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
-	// Audit #1354: mouseover subsumes mouseenter at document level —
-	// drop the overlapping listener.
-	const triggerEvents = [
-		'mousedown',
-		'mouseover',
-		'touchstart',
-		'scroll',
-		'keydown',
-	];
-	const loadHandler = () => {
-		triggerEvents.forEach( ( event ) =>
-			document.removeEventListener( event, loadHandler )
-		);
+	interactionLoadHandler = () => {
+		removeInteractionListeners();
 		loadScripts();
 	};
 
-	triggerEvents.forEach( ( event ) =>
-		document.addEventListener( event, loadHandler, { once: true } )
+	interactionTriggerEvents.forEach( ( event ) =>
+		document.addEventListener( event, interactionLoadHandler, {
+			once: true,
+		} )
 	);
 } else if ( document.querySelector( 'script[data-wppo-delay-strategy]' ) ) {
 	// No interaction scripts — but some scripts have explicit non-interaction strategies.
@@ -1945,6 +1983,11 @@ const clearSafetyScan = () => {
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
 	cancelIdleScripts();
+	// Audit #1839: detach the document-level interaction listeners regardless
+	// of whether they ever fired, so a dynamically removed bundle does not
+	// retain the module scope or re-invoke loadScripts() after teardown.
+	removeInteractionListeners();
+	removeVideoPlaceholderListeners();
 	if ( loadImagesTimer !== null ) {
 		clearTimeout( loadImagesTimer );
 		loadImagesTimer = null;
@@ -3397,11 +3440,65 @@ const loadImages = () => {
 };
 
 /**
- * Whether the global video-placeholder image error handler has been registered.
- * Prevents duplicate listeners when initVideoPlaceholders runs multiple times.
- * @type {boolean}
+ * The global video-placeholder image error handler, or null when unregistered.
+ *
+ * Held in a named module-scoped reference (audit #1839) so teardownLazyload()
+ * can detach it — the previous anonymous listener was never removable and kept
+ * processing image error events after teardown.
+ *
+ * @type {Function|null}
  */
-let videoPlaceholderErrorHandlerAdded = false;
+let videoPlaceholderErrorHandler = null;
+
+/**
+ * Tracked per-placeholder click/keydown listeners so teardown can release them.
+ * @type {Map<Element, {click: Function, keydown: Function}>}
+ */
+const videoPlaceholderListeners = new Map();
+
+/**
+ * Handle an image error by applying the `data-wppo-fallback` source.
+ * @param {Event} e The capture-phase error event.
+ */
+const handleVideoPlaceholderError = ( e ) => {
+	if (
+		e.target.tagName === 'IMG' &&
+		e.target.hasAttribute( 'data-wppo-fallback' )
+	) {
+		const fallback = e.target.getAttribute( 'data-wppo-fallback' );
+		if ( isSafeSubresourceUrl( fallback ) ) {
+			e.target.src = fallback;
+		} else {
+			console.warn(
+				'WPPO: blocked image fallback src (scheme/origin not allowed):',
+				fallback
+			);
+		}
+		e.target.removeAttribute( 'data-wppo-fallback' );
+	}
+};
+
+/**
+ * Remove the global error handler and every tracked placeholder listener.
+ *
+ * Idempotent. Called by teardownLazyload() so a dynamically removed bundle
+ * stops observing image errors and placeholder activation.
+ */
+const removeVideoPlaceholderListeners = () => {
+	if ( videoPlaceholderErrorHandler ) {
+		document.removeEventListener(
+			'error',
+			videoPlaceholderErrorHandler,
+			true
+		);
+		videoPlaceholderErrorHandler = null;
+	}
+	videoPlaceholderListeners.forEach( ( handlers, el ) => {
+		el.removeEventListener( 'click', handlers.click );
+		el.removeEventListener( 'keydown', handlers.keydown );
+	} );
+	videoPlaceholderListeners.clear();
+};
 
 /**
  * Initialise video placeholder click-to-load handlers.
@@ -3413,30 +3510,13 @@ let videoPlaceholderErrorHandlerAdded = false;
  * @since 2.5.0
  */
 const initVideoPlaceholders = () => {
-	if ( ! videoPlaceholderErrorHandlerAdded ) {
+	if ( ! videoPlaceholderErrorHandler ) {
+		videoPlaceholderErrorHandler = handleVideoPlaceholderError;
 		document.addEventListener(
 			'error',
-			( e ) => {
-				if (
-					e.target.tagName === 'IMG' &&
-					e.target.hasAttribute( 'data-wppo-fallback' )
-				) {
-					const fallback =
-						e.target.getAttribute( 'data-wppo-fallback' );
-					if ( isSafeSubresourceUrl( fallback ) ) {
-						e.target.src = fallback;
-					} else {
-						console.warn(
-							'WPPO: blocked image fallback src (scheme/origin not allowed):',
-							fallback
-						);
-					}
-					e.target.removeAttribute( 'data-wppo-fallback' );
-				}
-			},
+			videoPlaceholderErrorHandler,
 			true
 		);
-		videoPlaceholderErrorHandlerAdded = true;
 	}
 
 	document.querySelectorAll( '.wppo-video-placeholder' ).forEach( ( el ) => {
@@ -3620,13 +3700,20 @@ const initVideoPlaceholders = () => {
 					: 'Play video'
 			);
 		}
-		el.addEventListener( 'click', loadVideo );
-		el.addEventListener( 'keydown', ( event ) => {
+		const onKeydown = ( event ) => {
 			if ( event.key !== 'Enter' && event.key !== ' ' ) {
 				return;
 			}
 			event.preventDefault();
 			loadVideo();
+		};
+		el.addEventListener( 'click', loadVideo );
+		el.addEventListener( 'keydown', onKeydown );
+		// Audit #1839: track the listeners so teardownLazyload() can release
+		// them (previously they were unreachable per-placeholder closures).
+		videoPlaceholderListeners.set( el, {
+			click: loadVideo,
+			keydown: onKeydown,
 		} );
 	} );
 };

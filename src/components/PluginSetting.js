@@ -548,7 +548,9 @@ const PluginSetting = ( { options } ) => {
 		const validUrls = urls.filter( isValidScanUrl );
 		const invalidUrls = urls.filter( ( url ) => ! isValidScanUrl( url ) );
 		if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
-			setSavingMonitoring( true );
+			// Audit #1839: no request is in flight here, so toggling the
+			// saving state (set true then immediately false) was dead code
+			// that implied feedback which never rendered.
 			notifyApiKey( {
 				type: 'error',
 				message: sprintf(
@@ -560,7 +562,6 @@ const PluginSetting = ( { options } ) => {
 					invalidUrls.join( ', ' )
 				),
 			} );
-			setSavingMonitoring( false );
 			return;
 		}
 		const savedHighValueUrls = validUrls.join( '\n' );
@@ -668,7 +669,14 @@ const PluginSetting = ( { options } ) => {
 				logLabel: 'Save API key error:',
 				onSuccess: () => {
 					setNewApiKey( '' );
-					setApiKeyConfigured( true );
+					// Audit #1839: only mark the key configured when a
+					// non-empty key was actually submitted. Submitting the
+					// blank field built an empty patch, so claiming success
+					// enabled the dependent auto-rescan select on a site with
+					// no key configured.
+					if ( trimmedKey ) {
+						setApiKeyConfigured( true );
+					}
 					setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
 				},
 			}
@@ -1376,11 +1384,14 @@ const PluginSetting = ( { options } ) => {
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
 					icon={
-						<i
-							className="fas fa-tachometer-alt"
+						// Audit #1839: no Font Awesome CSS is bundled, so a raw
+						// <i className="fas …"> rendered empty. Use the SVG icon
+						// component like every other card.
+						<FontAwesomeIcon
+							icon={ faTachometerAlt }
 							aria-hidden="true"
-						></i>
-					} // Audit #1420: decorative.
+						/>
+					}
 				>
 					<CheckboxOption
 						checked={ serverTimingEnabled }
