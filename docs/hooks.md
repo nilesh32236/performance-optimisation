@@ -707,6 +707,30 @@ add_filter( 'wppo_cache_page_html', function( $html, $url ) {
 
 ---
 
+### `wppo_cache_gzip_level`
+Filters the gzip compression level used for the `.gz` static-cache variant. Defaults to `6` (a lower CPU cost on the render path with a marginal HTML size difference versus the previously hardcoded `9`). Values are clamped to `0`-`9`. @since NEXT.
+
+**Parameters:**
+- `$level` *(int)* — Gzip compression level.
+
+**Example:**
+```php
+add_filter( 'wppo_cache_gzip_level', function () {
+    return 9;
+} );
+```
+
+---
+
+### `wppo_capture_page_assets`
+Filters whether the Asset Manager captures the current singular request's printed scripts/styles. The default is true only when the current user can `edit_post` the singular post, so visitor requests skip the transient read and per-asset `file_exists()`/`filesize()` stats. Return true to opt previews or unprivileged requests back in. @since NEXT.
+
+**Parameters:**
+- `$capture` *(bool)* — Whether to capture assets for this request.
+- `$post_id` *(int)* — Current singular post ID.
+
+---
+
 ### `wppo_cache_query_allowlist`
 Filters the list of cache-neutral (tracking/marketing) query params used by the query-poisoning guard (issue #1141). Guarded by `has_filter()` — the filter only runs when a listener is present. A request whose query params are all in this list (or carry the `utm_` prefix) may still be served from the clean-URL cache entry, but its response is never stored over the clean file; any other param (including the legacy `s`, `ver`, `v`, which always force dynamic even if added here) forces a dynamic uncached response. @since 2.1.0.
 

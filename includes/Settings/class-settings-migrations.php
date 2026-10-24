@@ -19,14 +19,13 @@
  *
  * Every routine is an idempotent key-presence backfill: guard
  * key-presence → default → persist. Steady-state requests perform zero
- * migration writes. Only `migrate_rum_sample_rate()` (besides the
- * pre-existing `migrate_object_cache_outage_flag()` / `migrate_ai_*()`
- * guards) short-circuits on the already-loaded effective options. The
- * options reader is intentionally a narrow callable contract: migrations
- * read the current effective snapshot, then issue the explicit invalidation
- * command after a successful or concurrently-completed write. All reads use
- * per-site `get_option( 'wppo_settings' )`
- * so multisite sites migrate independently with no cross-site leakage, and
+ * migration writes. The effective-options reader is intentionally a narrow
+ * callable contract for memo-synced guards, while all raw row checks share
+ * one per-request `read_stored_options()` memo instead of issuing ~17
+ * duplicate `get_option( 'wppo_settings' )` reads/unserializes on every
+ * admin request. Writes refresh that memo through `invalidate_options()`,
+ * and write-verification paths force a fresh read. Reads stay per-site so
+ * multisite sites migrate independently with no cross-site leakage, and
  * fresh installs with no stored option are skipped (constructor defaults
  * already match).
  *
@@ -70,6 +69,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		private $options_invalidator;
 
 		/**
+		 * Per-request memo of the raw stored `wppo_settings` row.
+		 *
+		 * `null` means "not read yet"; `false` is a cached "no stored row".
+		 * All migration routines share this one raw read so steady-state
+		 * admin requests no longer pay ~17 duplicate option reads and
+		 * unserializes for no-op key-presence checks.
+		 *
+		 * @var array|false|null
+		 * @since NEXT
+		 */
+		private $stored_options_memo = null;
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 2.4.0
@@ -94,13 +106,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		}
 
 		/**
+		 * Read the raw stored settings row through the per-request memo.
+		 *
+		 * Migrations must distinguish "no stored row" (`false`) from a stored
+		 * array, which the effective-options snapshot normalizes to `array()`.
+		 * That is why this cannot reuse {@see read_options()}. The raw row is
+		 * read at most once per request; successful writes refresh the memo via
+		 * {@see invalidate_options()}, and write-verification paths pass
+		 * `$fresh = true` to observe a concurrent backfill.
+		 *
+		 * @since NEXT
+		 * @param bool $fresh Force a fresh option read (bypass the memo).
+		 * @return array|false Raw stored settings array, or false when absent.
+		 */
+		private function read_stored_options( bool $fresh = false ) {
+			if ( ! $fresh && null !== $this->stored_options_memo ) {
+				return $this->stored_options_memo;
+			}
+
+			// allowlist(settings-read-guard): the single deliberate raw read —
+			// must distinguish "no stored row" (false) from "stored array",
+			// which the effective-options snapshot normalizes to array().
+			$stored = get_option( 'wppo_settings' );
+
+			$this->stored_options_memo = is_array( $stored ) ? $stored : false;
+
+			return $this->stored_options_memo;
+		}
+
+		/**
 		 * Invalidate the owner snapshot after a persisted settings change.
+		 *
+		 * Also refreshes the raw-row memo so later migrations in the same
+		 * `admin_init` pass observe the just-persisted keys instead of the
+		 * pre-migration row.
 		 *
 		 * @since NEXT
 		 * @param array $settings Persisted migrated options to adopt.
 		 * @return void
 		 */
 		private function invalidate_options( array $settings ): void {
+			$this->stored_options_memo = $settings;
 			call_user_func( $this->options_invalidator, $settings );
 		}
 
@@ -132,10 +178,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				return;
 			}
 
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				// Fresh install (or no stored settings): constructor defaults already match
 				// WP 6.9+ behavior, so there is nothing to migrate and nothing to record.
@@ -174,10 +220,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_ccss_max_size(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -217,10 +263,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_ccss_safelist(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -265,10 +311,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_css_queue_defaults(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -326,10 +372,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_speculation_top_urls(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -373,10 +419,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -424,10 +470,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 			if ( isset( $memo['performance_audit'] ) && is_array( $memo['performance_audit'] ) && array_key_exists( 'rum_sample_rate', $memo['performance_audit'] ) ) {
 				return;
 			}
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -472,10 +518,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_image_alt_edge_defaults(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -526,10 +572,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_safe_mode(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -561,9 +607,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_elementor_safe_mode(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// Raw stored row through the per-request memo — must distinguish
 			// "no stored row" (false) from "stored array".
-			$stored = get_option( 'wppo_settings' );
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -597,10 +643,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 		 */
 		public function migrate_preload_auto_defaults(): void {
 			$memo = $this->read_options();
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
+			// Raw stored row through the per-request memo — must distinguish
+			// "no stored row" (false) from "stored array", which the
+			// effective-options snapshot normalizes to array().
+			$stored = $this->read_stored_options();
 			if ( ! is_array( $stored ) ) {
 				return;
 			}
@@ -661,10 +707,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				if ( isset( $memo['object_cache'] ) && is_array( $memo['object_cache'] ) && array_key_exists( 'outage_bypassed', $memo['object_cache'] ) ) {
 					return;
 				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -721,10 +767,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					&& array_key_exists( 'speculation_max_urls', $memo['ai_adaptive'] ) ) {
 					return;
 				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -795,10 +841,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					&& array_key_exists( 'css_refresh_require_no_recent_deploy', $memo['ai_adaptive'] ) ) {
 					return;
 				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -876,10 +922,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				// dead code. The stored option is the only marker. A memo
 				// guard would also skip the first-migration cache purges
 				// below, leaving poisoned edge copies in place.
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-				$stored = get_option( 'wppo_settings' );
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -951,12 +997,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
 				// Gate on the persisted row (not the in-memory backfill) so the
 				// migration branch stays reachable and single-key rows heal.
-				$stored = get_option( 'wppo_settings' );
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -991,10 +1037,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					// still sync the in-request memos so this request does not
 					// observe stale pre-migration values. On a genuine failure
 					// the row still lacks the keys and the memos stay untouched.
-					// allowlist(settings-read-guard): verification re-read
-					// distinguishing a concurrent backfill (keys present) from a
-					// write failure (keys absent).
-					$refreshed = get_option( 'wppo_settings' );
+					// Forced fresh read: distinguish a concurrent backfill
+					// (keys present) from a write failure (keys absent).
+					$refreshed = $this->read_stored_options( true );
 					$re_file   = is_array( $refreshed ) && isset( $refreshed['file_optimisation'] ) && is_array( $refreshed['file_optimisation'] ) ? $refreshed['file_optimisation'] : array();
 					if ( is_array( $refreshed ) && array_key_exists( 'builderPurgeWatcher', $re_file ) && array_key_exists( 'builderPurgeDriftLog', $re_file ) ) {
 						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
@@ -1041,12 +1086,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				// allowlist(settings-read-guard): deliberate direct read — must distinguish
-				// "no stored row" (false) from "stored array", which Util::get_settings()
-				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				// Raw stored row through the per-request memo — must distinguish
+				// "no stored row" (false) from "stored array", which the
+				// effective-options snapshot normalizes to array().
 				// Gate on the persisted row (not the in-memory backfill) so the
 				// migration branch stays reachable and single-key rows heal.
-				$stored = get_option( 'wppo_settings' );
+				$stored = $this->read_stored_options();
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
@@ -1077,10 +1122,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Migrations' ) ) {
 					// does not observe stale pre-migration values. On a
 					// genuine failure the row still lacks valid values and the
 					// memos stay untouched.
-					// allowlist(settings-read-guard): verification re-read
-					// distinguishing a concurrent backfill (values present)
-					// from a write failure (values absent).
-					$refreshed = get_option( 'wppo_settings' );
+					// Forced fresh read: distinguish a concurrent backfill
+					// (values present) from a write failure (values absent).
+					$refreshed = $this->read_stored_options( true );
 					$re_file   = is_array( $refreshed ) && isset( $refreshed['file_optimisation'] ) && is_array( $refreshed['file_optimisation'] ) ? $refreshed['file_optimisation'] : array();
 					$re_auto   = is_array( $re_file ) && isset( $re_file['delayJSThirdPartyAuto'] ) && is_bool( $re_file['delayJSThirdPartyAuto'] );
 					$re_preset = is_array( $re_file ) && isset( $re_file['delayJSPreset'] ) && is_string( $re_file['delayJSPreset'] ) && in_array( strtolower( trim( $re_file['delayJSPreset'] ) ), array( 'safe', 'balanced', 'aggressive' ), true );
