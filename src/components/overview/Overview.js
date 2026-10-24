@@ -397,30 +397,48 @@ export default function Overview( { onNavigate, activities = [] } ) {
 				}
 			};
 
-			requests.systemInfo
-				.then( ( value ) =>
-					settle( 'systemInfo', value, value ? 'ok' : 'unavailable' )
-				)
-				.catch( () => settle( 'systemInfo', null, 'error' ) );
-
 			// A throttled endpoint answers 429 with a *resolved* response rather than
 			// rejecting, so treating "resolved" as success would leave the row wrong
 			// with no way to retry. Reproduced live: `object_cache` allows five calls
 			// a minute and this page remounts on every sub-item change. Each source
 			// therefore reports explicitly whether it produced data.
-			requests.objectCache
-				.then( ( value ) =>
-					settle( 'objectCache', value, value ? 'ok' : 'unavailable' )
-				)
-				.catch( () => settle( 'objectCache', null, 'error' ) );
-
 			// Vitals are optional: a site with no stored measurements is a normal
 			// state, so their absence is never a failure and never blocks the page.
-			requests.vitals
-				.then( ( value ) =>
-					settle( 'vitals', value, value ? 'ok' : 'unmeasured' )
-				)
-				.catch( () => settle( 'vitals', null, 'unmeasured' ) );
+			Promise.allSettled( [
+				requests.systemInfo,
+				requests.objectCache,
+				requests.vitals,
+			] ).then( ( [ sysInfoResult, cacheResult, vitalsResult ] ) => {
+				if ( sysInfoResult.status === 'fulfilled' ) {
+					settle(
+						'systemInfo',
+						sysInfoResult.value,
+						sysInfoResult.value ? 'ok' : 'unavailable'
+					);
+				} else {
+					settle( 'systemInfo', null, 'error' );
+				}
+
+				if ( cacheResult.status === 'fulfilled' ) {
+					settle(
+						'objectCache',
+						cacheResult.value,
+						cacheResult.value ? 'ok' : 'unavailable'
+					);
+				} else {
+					settle( 'objectCache', null, 'error' );
+				}
+
+				if ( vitalsResult.status === 'fulfilled' ) {
+					settle(
+						'vitals',
+						vitalsResult.value,
+						vitalsResult.value ? 'ok' : 'unmeasured'
+					);
+				} else {
+					settle( 'vitals', null, 'unmeasured' );
+				}
+			} );
 
 			// Backstop: a request that never settles must not hold the page in
 			// its loading state for ever. `setLoading( false )` used to live only in
