@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "captured_at": "2026-10-19T13:10:12+00:00",
+  "captured_at": "2026-10-26T12:58:28+00:00",
   "privacy": "Public WordPress.org and GitHub repository data only; no WordPress visitor or site-owner data collected.",
   "wordpress_org": {
     "version": "2.4.1",
@@ -18,18 +18,18 @@
   "github": {
     "stars": 4,
     "forks": 0,
-    "open_issues_search": 13,
-    "open_prs_search": 10,
-    "updated_at": "2026-10-19T04:35:45Z",
-    "pushed_at": "2026-10-19T05:39:07Z",
+    "open_issues_search": 15,
+    "open_prs_search": 14,
+    "updated_at": "2026-10-26T04:41:34Z",
+    "pushed_at": "2026-10-26T04:41:31Z",
     "latest_release": "v2.4.1",
     "latest_release_at": "2026-10-03T09:54:09Z",
     "release_count_recent": 10,
     "release_gap_days_median": 5.91,
-    "traffic_views_14d": 29,
-    "traffic_view_uniques_14d": 2,
-    "traffic_clones_14d": 6084,
-    "traffic_clone_uniques_14d": 671
+    "traffic_views_14d": 36,
+    "traffic_view_uniques_14d": 33,
+    "traffic_clones_14d": 2148,
+    "traffic_clone_uniques_14d": 362
   },
   "coverage": {
     "features": {
