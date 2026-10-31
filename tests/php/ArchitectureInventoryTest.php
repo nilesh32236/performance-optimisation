@@ -142,9 +142,15 @@ final class ArchitectureInventoryTest extends TestCase {
 		// three nodes and their runtime/compatibility edges. The compatibility
 		// edge count is +10 not +9 because rebasing onto current master brings in
 		// one further compatibility edge from master's own history.
+		// Audit #1820: regenerated after the factory/helper changes. Observed
+		// deltas versus the previous baseline: runtime edges 404→402 and
+		// compatibility edges 216→219, with the total unchanged. These are the
+		// generator's output for the new call graph — not a claim about how it
+		// classifies the thin factories, which it does not treat as delegating
+		// methods.
 		$this->assertSame( 405, $graph['summary']['edges'] );
-		$this->assertSame( 404, $graph['summary']['runtime_edges'] );
-		$this->assertSame( 216, $graph['summary']['compatibility_edges'] );
+		$this->assertSame( 402, $graph['summary']['runtime_edges'] );
+		$this->assertSame( 219, $graph['summary']['compatibility_edges'] );
 		$this->assertSame( 3, $graph['summary']['loader_edges'] );
 		$this->assertNotEmpty( $graph['nodes'] );
 		$this->assertNotEmpty( $graph['edges'] );
@@ -298,10 +304,13 @@ final class ArchitectureInventoryTest extends TestCase {
 		$this->assertSame( 1, $graph['summary']['compatibility_cyclic_components'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['runtime'] );
 		$this->assertCount( 68, $graph['metrics']['cycles_by_classification']['runtime'][0]['members'] );
-		$this->assertCount( 341, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
+		// Audit #1820: two runtime edges reclassified to compatibility, so the
+		// runtime cycle loses 2 edges and the compatibility cycle gains 1 (the
+		// Abilities→Object_Cache edge joins the compatibility cycle).
+		$this->assertCount( 339, $graph['metrics']['cycles_by_classification']['runtime'][0]['edges'] );
 		$this->assertCount( 1, $graph['metrics']['cycles_by_classification']['compatibility'] );
 		$this->assertCount( 22, $graph['metrics']['cycles_by_classification']['compatibility'][0]['members'] );
-		$this->assertCount( 72, $graph['metrics']['cycles_by_classification']['compatibility'][0]['edges'] );
+		$this->assertCount( 73, $graph['metrics']['cycles_by_classification']['compatibility'][0]['edges'] );
 
 		$candidates = $graph['duplicate_candidates'];
 		$this->assertCount( 18, $candidates );

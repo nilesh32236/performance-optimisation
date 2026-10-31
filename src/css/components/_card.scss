@@ -165,7 +165,10 @@
 	opacity: 0.78;
 }
 
-@media (max-width: 480px) {
+// Audit #1831: consolidated onto the sm token (640px; was a bespoke
+// 480px). Full-width preset buttons now kick in with the rest of the
+// small-screen stacking instead of at an invisible off-scale width.
+@include respond-to('sm') {
 	.wppo-presets__buttons .wppo-button {
 		flex: 1 1 100%;
 		width: 100%;
@@ -228,7 +231,9 @@
 	white-space: nowrap;
 }
 
-@media (max-width: 640px) {
+// Audit #1831: consumes the sm token (identical 640px output) so a token
+// change can no longer desync this rule.
+@include respond-to('sm') {
 	.wppo-feature-task-list {
 		grid-template-columns: 1fr;
 	}
