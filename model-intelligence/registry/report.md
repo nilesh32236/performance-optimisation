@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-10-31T05:35:21.341Z`
-Last attempt: `2026-10-31T05:35:21.341Z`
+Last successful discovery: `2026-10-31T17:14:17.521Z`
+Last attempt: `2026-10-31T17:14:17.521Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
