@@ -240,6 +240,34 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		};
 	}, [] );
 
+	// Audit #1839: mounted guard + abort controllers for the settings, cleanup
+	// and export requests. Previously these handlers ran to completion after
+	// unmount and set state / published notices through the global notice bus.
+	const isMountedRef = useRef( true );
+	const actionControllersRef = useRef( new Set() );
+	const exportRevokeTimerRef = useRef( null );
+	useEffect( () => {
+		isMountedRef.current = true;
+		const controllers = actionControllersRef.current;
+		return () => {
+			isMountedRef.current = false;
+			controllers.forEach( ( controller ) => controller.abort() );
+			controllers.clear();
+			if ( exportRevokeTimerRef.current ) {
+				clearTimeout( exportRevokeTimerRef.current );
+				exportRevokeTimerRef.current = null;
+			}
+		};
+	}, [] );
+	const trackAction = () => {
+		const controller = new AbortController();
+		actionControllersRef.current.add( controller );
+		return controller;
+	};
+	const releaseAction = ( controller ) => {
+		actionControllersRef.current.delete( controller );
+	};
+
 	const onSubmitSettings = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -250,11 +278,20 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		}
 		setIsSaving( true );
 		dismiss();
+		const controller = trackAction();
 		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'database_cleanup',
-				settings,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'database_cleanup',
+					settings,
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			// Audit #1420: strict check — missing success must not read as success.
 			if ( res && res.success ) {
 				setBaseline( { ...settings } );
@@ -280,6 +317,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( err ) {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			console.error(
 				'Error saving settings:',
 				getErrorLogMessage( err )
@@ -294,14 +334,26 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsSaving( false );
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setIsSaving( false );
+			}
 		}
 	};
 
 	const handleCleanup = async ( type ) => {
 		setLoading( ( prev ) => ( { ...prev, [ type ]: true } ) );
+		const controller = trackAction();
 		try {
-			const response = await apiCall( 'database_cleanup', { type } );
+			const response = await apiCall(
+				'database_cleanup',
+				{ type },
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( response.success ) {
 				// When the Action Scheduler cleaner had nothing available to
 				// purge (AS absent or opted out), the REST response carries an
@@ -387,6 +439,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 			}
 		} catch ( error ) {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			console.error(
 				'Database cleanup error:',
 				getErrorLogMessage( error )
@@ -400,7 +455,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
+			}
 		}
 	};
 
@@ -420,6 +478,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 
 	const handleExportTransients = async () => {
 		setExporting( true );
+		const controller = trackAction();
 		try {
 			const EXPORT_LIMIT = 500;
 
@@ -434,14 +493,22 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				link.click();
 				link.remove();
 				// Audit #1420: deferred revoke — immediate revoke can win the
-				// race against download start.
-				setTimeout( () => URL.revokeObjectURL( url ), 1000 );
+				// race against download start. Audit #1839: tracked so unmount
+				// clears the timer instead of firing it on a dead tree.
+				exportRevokeTimerRef.current = setTimeout( () => {
+					exportRevokeTimerRef.current = null;
+					URL.revokeObjectURL( url );
+				}, 1000 );
 			};
 			const response = await apiCall(
 				`expired_transients_export?limit=${ EXPORT_LIMIT }`,
 				{},
-				'GET'
+				'GET',
+				controller.signal
 			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( response.success && response.data ) {
 				const count = response.data?.count ?? 0;
 				const truncated =
@@ -501,6 +568,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			console.error(
 				'Error exporting expired transients:',
 				getErrorLogMessage( error )
@@ -514,7 +584,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setExporting( false );
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setExporting( false );
+			}
 		}
 	};
 

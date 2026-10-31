@@ -545,7 +545,16 @@ export default function Overview( { onNavigate, activities = [] } ) {
 							{ activities
 								.slice( 0, 8 )
 								.map( ( entry, index ) => (
-									<li key={ entry?.id ?? index }>
+									<li
+										key={
+											entry?.id ??
+											`${ entry?.created_at ?? '' }-${
+												entry?.activity ??
+												entry?.message ??
+												index
+											}`
+										}
+									>
 										<span className="wppo-overview__activity-text">
 											{ entry?.activity ??
 												entry?.message ??

@@ -127,7 +127,9 @@ describe( 'DatabaseCleanup Component', () => {
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(
 				'update_settings',
-				expect.any( Object )
+				expect.any( Object ),
+				'POST',
+				expect.anything()
 			);
 			expect(
 				screen.getByText( 'Settings saved successfully.' )
@@ -445,9 +447,14 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( confirmButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'database_cleanup', {
-				type: 'revisions',
-			} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'database_cleanup',
+				{
+					type: 'revisions',
+				},
+				'POST',
+				expect.anything()
+			);
 			expect(
 				screen.getByText( 'Cleanup successful: 10 items removed.' )
 			).toBeInTheDocument();
@@ -533,7 +540,9 @@ describe( 'DatabaseCleanup Component', () => {
 					settings: expect.objectContaining( {
 						dbOptimize: false,
 					} ),
-				} )
+				} ),
+				'POST',
+				expect.anything()
 			);
 		} );
 	} );
@@ -610,7 +619,8 @@ describe( 'DatabaseCleanup Component', () => {
 			expect( apiCall ).toHaveBeenCalledWith(
 				'expired_transients_export?limit=500',
 				{},
-				'GET'
+				'GET',
+				expect.anything()
 			);
 			expect(
 				screen.getByText( 'Exported 2 expired transients.' )

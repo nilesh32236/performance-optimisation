@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faSliders,
@@ -40,37 +40,57 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 /**
  * Preset metadata in display order.
  *
- * @type {Array.<{name:string,label:string,audience:string,description:string}>}
+ * Audit #1839: label/audience/description are functions so `__()` runs at
+ * render time with literal arguments (the WP i18n rule forbids variable
+ * arguments, and module-scope `__()` would freeze translations at
+ * bundle-import time — the anti-pattern CriticalCssPanel.js documents as
+ * fixed in audit #1354). Mirrors PerformanceAudit.js METRIC_INFO.
+ *
+ * @type {Array.<{name:string,getLabel:Function,getAudience:Function,getDescription:Function}>}
  */
 export const PRESET_ORDER = [
 	{
 		name: 'safe',
-		label: __( 'Safe', 'performance-optimisation' ),
-		audience: __( 'Beginner', 'performance-optimisation' ),
-		description: __(
-			'Low-risk optimizations: page cache and lazy-loaded images. Aggressive options stay off — the fresh-install baseline.',
-			'performance-optimisation'
-		),
+		getLabel: () => __( 'Safe', 'performance-optimisation' ),
+		getAudience: () => __( 'Beginner', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'Low-risk optimizations: page cache and lazy-loaded images. Aggressive options stay off — the fresh-install baseline.',
+				'performance-optimisation'
+			),
 	},
 	{
 		name: 'balanced',
-		label: __( 'Balanced', 'performance-optimisation' ),
-		audience: __( 'Recommended', 'performance-optimisation' ),
-		description: __(
-			'More performance with compatibility considerations: cache, low-risk HTML/CSS/JS wins, preload and RUM.',
-			'performance-optimisation'
-		),
+		getLabel: () => __( 'Balanced', 'performance-optimisation' ),
+		getAudience: () => __( 'Recommended', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'More performance with compatibility considerations: cache, low-risk HTML/CSS/JS wins, preload and RUM.',
+				'performance-optimisation'
+			),
 	},
 	{
 		name: 'aggressive',
-		label: __( 'Aggressive', 'performance-optimisation' ),
-		audience: __( 'Advanced', 'performance-optimisation' ),
-		description: __(
-			'Advanced optimizations that may require testing: JS minify, delay, combine and critical CSS. Safety guards stay forced on.',
-			'performance-optimisation'
-		),
+		getLabel: () => __( 'Aggressive', 'performance-optimisation' ),
+		getAudience: () => __( 'Advanced', 'performance-optimisation' ),
+		getDescription: () =>
+			__(
+				'Advanced optimizations that may require testing: JS minify, delay, combine and critical CSS. Safety guards stay forced on.',
+				'performance-optimisation'
+			),
 	},
 ];
+
+/**
+ * Resolve a preset's translated label from its `name`.
+ *
+ * @param {string} name Preset slug.
+ * @return {string} Translated label, or the raw slug when unknown.
+ */
+export const getPresetLabel = ( name ) => {
+	const preset = PRESET_ORDER.find( ( item ) => item.name === name );
+	return preset ? preset.getLabel() : name;
+};
 
 /**
  * Format a diff value for display.
@@ -226,7 +246,10 @@ const OptimizationPresets = () => {
 				'GET',
 				signal
 			);
-			if ( signal?.aborted ) {
+			// Audit #1839: also gate on the mounted ref. Preview calls this
+			// without a signal (from applyPreset), where `signal?.aborted` is
+			// a no-op; without the guard setSnapshot could run after unmount.
+			if ( signal?.aborted || ! presetsMountedRef.current ) {
 				return;
 			}
 			if ( response?.success && response?.data ) {
@@ -497,10 +520,10 @@ const OptimizationPresets = () => {
 						onClick={ () => previewPreset( preset.name ) }
 					>
 						<span className="wppo-presets__preset-label">
-							{ preset.label }
+							{ preset.getLabel() }
 						</span>
 						<span className="wppo-presets__preset-audience">
-							{ preset.audience }
+							{ preset.getAudience() }
 						</span>
 					</button>
 				) ) }
@@ -515,7 +538,7 @@ const OptimizationPresets = () => {
 					}
 					id={ `wppo-preset-${ preset.name }-description` }
 				>
-					{ preset.description }
+					{ preset.getDescription() }
 				</p>
 			) ) }
 			{ loadingDiff && (
@@ -542,8 +565,10 @@ const OptimizationPresets = () => {
 							<p>
 								{ sprintf(
 									// translators: %d: number of settings that would change.
-									__(
-										'%d setting(s) would change:',
+									_n(
+										'%d setting would change:',
+										'%d settings would change:',
+										diff.length,
 										'performance-optimisation'
 									),
 									diff.length
@@ -577,9 +602,7 @@ const OptimizationPresets = () => {
 					label={ sprintf(
 						// translators: %s: preset label.
 						__( 'Apply %s', 'performance-optimisation' ),
-						PRESET_ORDER.find(
-							( preset ) => preset.name === selected
-						)?.label ?? selected
+						getPresetLabel( selected )
 					) }
 					loadingLabel={ __(
 						'Applying…',
