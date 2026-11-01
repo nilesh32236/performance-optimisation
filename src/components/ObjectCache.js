@@ -1041,6 +1041,9 @@ const ObjectCache = ( { options = {} } ) => {
 									id="password"
 									type="password"
 									name="password"
+									autoComplete="new-password"
+									spellCheck={ false }
+									autoCapitalize="none"
 									placeholder={ __(
 										'Optional',
 										'performance-optimisation'

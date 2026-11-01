@@ -17,6 +17,9 @@ describe( 'API Request library', () => {
 			nonce: 'testnonce',
 			nonce_refresh: 'testnonce_refresh',
 			settings: {},
+			// isValidScanUrl fails closed without a home URL, so every test
+			// that exercises a scan endpoint needs the localised origin.
+			performance_audit: { homeUrl: 'https://example.com' },
 		};
 		global.fetch = jest.fn();
 		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
@@ -897,6 +900,16 @@ describe( 'API Request library', () => {
 			} finally {
 				delete global.wppoSettings.performance_audit;
 			}
+		} );
+
+		it( 'fails closed when no home URL is localised', async () => {
+			delete global.wppoSettings.performance_audit;
+			delete global.wppoSettings.homeUrl;
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			await expect(
+				getPagespeedResults( 'https://example.com/', 'mobile' )
+			).rejects.toThrow( 'Invalid scan URL' );
+			expect( global.fetch ).not.toHaveBeenCalled();
 		} );
 
 		it( 'fetchSuggestions rejects non-http(s) URLs without fetching', async () => {
