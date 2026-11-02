@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "captured_at": "2026-10-26T12:58:28+00:00",
+  "captured_at": "2026-11-02T15:46:17+00:00",
   "privacy": "Public WordPress.org and GitHub repository data only; no WordPress visitor or site-owner data collected.",
   "wordpress_org": {
     "version": "2.4.1",
     "requires_wordpress": "6.2",
-    "tested_wordpress": "7.1.3",
+    "tested_wordpress": "7.1.4",
     "requires_php": "8.2",
     "rating_score": 100,
     "rating_count": 4,
@@ -18,18 +18,18 @@
   "github": {
     "stars": 4,
     "forks": 0,
-    "open_issues_search": 15,
-    "open_prs_search": 14,
-    "updated_at": "2026-10-26T04:41:34Z",
-    "pushed_at": "2026-10-26T04:41:31Z",
+    "open_issues_search": 16,
+    "open_prs_search": 15,
+    "updated_at": "2026-11-02T05:57:23Z",
+    "pushed_at": "2026-11-02T05:57:19Z",
     "latest_release": "v2.4.1",
     "latest_release_at": "2026-10-03T09:54:09Z",
     "release_count_recent": 10,
     "release_gap_days_median": 5.91,
-    "traffic_views_14d": 36,
-    "traffic_view_uniques_14d": 33,
-    "traffic_clones_14d": 2148,
-    "traffic_clone_uniques_14d": 362
+    "traffic_views_14d": 65,
+    "traffic_view_uniques_14d": 58,
+    "traffic_clones_14d": 684,
+    "traffic_clone_uniques_14d": 199
   },
   "coverage": {
     "features": {
