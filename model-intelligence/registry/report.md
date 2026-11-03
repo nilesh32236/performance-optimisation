@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-11-02T21:41:30.276Z`
-Last attempt: `2026-11-02T21:41:30.276Z`
+Last successful discovery: `2026-11-03T06:43:22.398Z`
+Last attempt: `2026-11-03T06:43:22.398Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -46,6 +46,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/nemotron-3.5-lightning-free` | 262144 | 262144 | yes | no | catalog_visible |
 | `opencode/nemotron-3.5-super-vl-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/north-mini-code-free` | 256000 | 64000 | yes | no | catalog_visible |
+| `opencode/pulse-alpha-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/qwen3.6-plus-free` | 262144 | 65536 | yes | yes | catalog_visible |
 | `opencode/ring-2.6-1t-free` | 262000 | 66000 | yes | no | catalog_visible |
 | `opencode/space-bunny-free` | 1048576 | 524288 | yes | yes | catalog_visible |
