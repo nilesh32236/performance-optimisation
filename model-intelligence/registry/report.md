@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-11-06T19:20:58.378Z`
-Last attempt: `2026-11-06T19:20:58.378Z`
+Last successful discovery: `2026-11-07T05:54:12.130Z`
+Last attempt: `2026-11-07T05:54:12.130Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -21,6 +21,8 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/glm-5.3-flash-free` | 200000 | 32000 | yes | yes | catalog_visible |
 | `opencode/hy3-free` | 190000 | 64000 | yes | no | catalog_visible |
 | `opencode/hy3-preview-free` | 256000 | 64000 | yes | no | catalog_visible |
+| `opencode/iceman-free` | 262144 | 131072 | yes | no | catalog_visible |
+| `opencode/inkling-2-small-free` | 1048576 | 131072 | yes | yes | catalog_visible |
 | `opencode/kimi-k2.5-free` | 262144 | 262144 | yes | yes | catalog_visible |
 | `opencode/laguna-s-2.1-free` | 256000 | 32000 | yes | no | catalog_visible |
 | `opencode/ling-2.6-flash-free` | 262100 | 32800 | no | no | catalog_visible |
