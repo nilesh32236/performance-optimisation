@@ -2551,7 +2551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$options       = Util::get_settings();
-			$img_converter = new Img_Converter( $options );
+			$img_converter = Img_Converter::from_settings( $options );
 
 			$source_path = wp_normalize_path( $args['source_path'] );
 			$format      = sanitize_text_field( $args['format'] );
@@ -3371,7 +3371,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					// Audit #1354: translated video iframe title for the lazyload
 					// bundle (English fallback client-side and on the WP < 6.9 path).
-					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
+					// Audit #1831: distinct play-button label so assistive tech
+					// announces an action ("Play video") rather than a noun.
+					// Gated on the video feature so image-only/background/delay-JS
+					// pages do not carry unused localized strings.
+					if ( $lazy_load_videos || $enable_video_placeholder ) {
+						$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
+						$lazy_config['videoPlayLabel']   = __( 'Play video', 'performance-optimisation' );
+					}
 
 					if ( $delay_js ) {
 						$idle_timeout = ! empty( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
@@ -3534,6 +3541,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 						if ( $use_native_lazy ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+						}
+
+						// WP < 6.9 fallback: no script-module data tag exists, so
+						// expose the server-localized video labels as window
+						// globals merged by readModuleData() (audit #1831). Gated
+						// on the same video feature as the config keys so pages
+						// without video placeholders emit no unused inline JS.
+						if ( $lazy_load_videos || $enable_video_placeholder ) {
+							wp_add_inline_script(
+								'wppo-lazyload',
+								'window.wppoVideoPlayerLabel=' . wp_json_encode( $lazy_config['videoPlayerLabel'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP ) . ';' .
+								'window.wppoVideoPlayLabel=' . wp_json_encode( $lazy_config['videoPlayLabel'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP ) . ';',
+								'before'
+							);
 						}
 
 						if ( $delay_js ) {

@@ -37,14 +37,18 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const getErrorLogMessage = ( error ) => {
 		let message;
 		if ( error instanceof Error ) {
+			// Deliberately NOT truncated here: redactLogSecrets() scans a
+			// window far wider than the published cap and slices the redacted
+			// result, so pre-slicing would cut a credential straddling the cap
+			// before the redactor sees it (audit #1831).
 			message = error.message || 'Unknown error';
 		} else if ( 'string' === typeof error ) {
-			message = error.slice( 0, 500 ) || 'Unknown error';
+			message = error || 'Unknown error';
 		} else if ( error === null || 'undefined' === typeof error ) {
 			return 'Unknown error';
 		} else {
 			try {
-				message = String( error ).slice( 0, 500 );
+				message = String( error );
 			} catch {
 				return 'Unknown error';
 			}

@@ -7,6 +7,8 @@
  * than as an overlay floating on top of it.
  */
 
+@use '../abstracts/mixins' as *;
+
 .wppo-message-region {
 	position: fixed;
 	bottom: 24px;
@@ -84,7 +86,10 @@
 	background: var(--wppo-info, #0284c7);
 }
 
-@media (max-width: 600px) {
+// Audit #1831: consolidated onto the sm token (640px; was a bespoke
+// 600px). The 40px delta is immaterial here — the region is already
+// fluid (max-width: min(360px, 100vw - 48px)) well above either width.
+@include respond-to('sm') {
 	.wppo-message-region {
 		left: 12px;
 		right: 12px;

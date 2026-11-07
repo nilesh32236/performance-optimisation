@@ -638,7 +638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			try {
-				$manager = new Object_Cache();
+				$manager = Object_Cache::create();
 				$state   = $manager->get_circuit_state();
 				return ! empty( $state['open'] );
 			} catch ( \Throwable $e ) {
@@ -670,7 +670,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					return;
 				}
 
-				$manager = new Object_Cache();
+				$manager = Object_Cache::create();
 				$manager->probe_recovery();
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ) );
@@ -1327,7 +1327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					return;
 				}
 
-				$used_css = new Used_CSS( $options );
+				$used_css = Used_CSS::from_settings( $options );
 				$used_css->regenerate_all();
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
@@ -1760,7 +1760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 5 * MINUTE_IN_SECONDS );
 
 			try {
-				$img_converter = new Img_Converter( $options );
+				$img_converter = Img_Converter::from_settings( $options );
 
 				$img_info = Img_Converter::get_img_info();
 

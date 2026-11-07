@@ -650,8 +650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					array( 'autoload' => 'no' ),
 					array( 'option_name' => self::TREND_OPTION )
 				);
-				wp_cache_delete( self::TREND_OPTION, 'options' );
-				wp_cache_delete( 'alloptions', 'options' );
+				Util::invalidate_option_caches( self::TREND_OPTION );
 			}
 		}
 

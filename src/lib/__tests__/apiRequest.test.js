@@ -1088,9 +1088,12 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'redacts bearer tokens in space-separated form', () => {
+			// Audit #1831: the scheme rule runs first, then the generic
+			// Authorization rule folds the remainder — the scheme name is
+			// redacted along with the credential.
 			expect(
 				getErrorLogMessage( 'Authorization: Bearer abc123XYZ-_~' )
-			).toBe( 'Authorization: Bearer=[redacted]' );
+			).toBe( 'Authorization=[redacted]' );
 		} );
 
 		it( 'redacts bare key/token query params', () => {

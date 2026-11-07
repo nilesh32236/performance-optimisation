@@ -11,6 +11,20 @@
  */
 
 /**
+ * Maximum nesting depth walked during redaction.
+ *
+ * Settings and presets are plain acyclic JSON far shallower than this, so the
+ * cap only ever trips on a caller handing over a pathologically deep or
+ * self-referential object — where unbounded recursion would blow the stack
+ * instead of failing in a bounded way. Mirrors MAX_IMPORT_DEPTH in
+ * components/PluginSetting.js.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const MAX_WALK_DEPTH = 32;
+
+/**
  * Key names that must never be copied during redaction. Assigning to
  * `__proto__` on a plain object mutates its prototype (prototype
  * pollution); `constructor`/`prototype` keys are the companion gadget path.
@@ -37,7 +51,7 @@ export const isSensitivePollutionKey = ( key ) =>
  * @since 2.3.0
  */
 export const SECRET_KEY_PATTERN =
-	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+	/(?:[_-]keys?|api[_-]?keys?|(?:private|secret|public|client|consumer)keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce|authorization|cookie|session|sessionid)$/i;
 
 /**
  * Shared walker for secret-key redaction.
@@ -51,11 +65,26 @@ export const SECRET_KEY_PATTERN =
  * @since 2.4.0
  * @param {*}           value Value to walk.
  * @param {string|null} mask  Mask string or null for delete mode.
+ * @param {number}      depth Current recursion depth (internal).
  * @return {*} Walked clone.
  */
-const walkSensitiveKeys = ( value, mask ) => {
+const walkSensitiveKeys = ( value, mask, depth = 0 ) => {
+	// Bounded recursion: settings/presets are plain acyclic JSON, so a depth
+	// cap only trips on a caller handing over something it should not —
+	// including a self-referential object, which would otherwise recurse
+	// until the stack overflows. Mirrors MAX_IMPORT_DEPTH in
+	// components/PluginSetting.js.
+	if ( depth > MAX_WALK_DEPTH ) {
+		// Fail CLOSED: returning $value here would hand back the unredacted
+		// subtree, which is exactly the leak this walker exists to prevent.
+		// The cap is far beyond any real settings tree, so it only trips on
+		// pathological input, where a mask/removal is the safe answer.
+		return typeof mask === 'string' ? mask : null;
+	}
 	if ( Array.isArray( value ) ) {
-		return value.map( ( item ) => walkSensitiveKeys( item, mask ) );
+		return value.map( ( item ) =>
+			walkSensitiveKeys( item, mask, depth + 1 )
+		);
 	}
 	if ( value && typeof value === 'object' ) {
 		const out = {};
@@ -74,7 +103,7 @@ const walkSensitiveKeys = ( value, mask ) => {
 				}
 				return;
 			}
-			out[ key ] = walkSensitiveKeys( val, mask );
+			out[ key ] = walkSensitiveKeys( val, mask, depth + 1 );
 		} );
 		return out;
 	}
