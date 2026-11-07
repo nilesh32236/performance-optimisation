@@ -35,6 +35,29 @@ const AiPanel = () => {
 	const [ cssRefreshOnLcpRegression, setCssRefreshOnLcpRegression ] =
 		useState( !! initial.css_refresh_on_lcp_regression );
 	const suggestRunRef = useRef( null );
+	// Audit #1839: action handlers previously fired apiCall with no signal and
+	// no mounted guard, so navigating away mid-request still ran setModel/
+	// setSuggestions/notify after unmount (notify also hits the app-level
+	// notice bus). Track every in-flight action controller and abort on unmount.
+	const actionControllersRef = useRef( new Set() );
+	const isMountedRef = useRef( true );
+	useEffect( () => {
+		isMountedRef.current = true;
+		const controllers = actionControllersRef.current;
+		return () => {
+			isMountedRef.current = false;
+			controllers.forEach( ( c ) => c.abort() );
+			controllers.clear();
+		};
+	}, [] );
+	const trackAction = () => {
+		const controller = new AbortController();
+		actionControllersRef.current.add( controller );
+		return controller;
+	};
+	const releaseAction = ( controller ) => {
+		actionControllersRef.current.delete( controller );
+	};
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
@@ -160,8 +183,17 @@ const AiPanel = () => {
 	const handleLearn = async () => {
 		setLearning( true );
 		dismiss();
+		const controller = trackAction();
 		try {
-			const res = await apiCall( 'ai_learn', {}, 'POST' );
+			const res = await apiCall(
+				'ai_learn',
+				{},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				setModel( res.data );
 				notify( {
@@ -182,13 +214,19 @@ const AiPanel = () => {
 				} );
 			}
 		} catch ( learnError ) {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			console.error( 'Learn failed:', getErrorLogMessage( learnError ) );
 			notify( {
 				type: 'error',
 				message: __( 'Failed to learn.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setLearning( false );
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setLearning( false );
+			}
 		}
 	};
 
@@ -212,16 +250,25 @@ const AiPanel = () => {
 			return;
 		}
 		setApplyingMetrics( ( prev ) => [ ...prev, applyKey ] );
+		const controller = trackAction();
 		try {
 			const currentTabSettings = getWppoSettings(
 				`settings.${ payload.tab }`,
 				{}
 			);
 			const merged = { ...currentTabSettings, ...payload.settings };
-			const res = await apiCall( 'update_settings', {
-				tab: payload.tab,
-				settings: merged,
-			} );
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: payload.tab,
+					settings: merged,
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				// P3-019: commit the server payload first (already
 				// committed by the apiCall gate for live transports);
@@ -250,6 +297,9 @@ const AiPanel = () => {
 				} );
 			}
 		} catch {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -258,9 +308,12 @@ const AiPanel = () => {
 				),
 			} );
 		} finally {
-			setApplyingMetrics( ( prev ) =>
-				prev.filter( ( metric ) => metric !== applyKey )
-			);
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setApplyingMetrics( ( prev ) =>
+					prev.filter( ( metric ) => metric !== applyKey )
+				);
+			}
 		}
 	};
 
@@ -281,16 +334,26 @@ const AiPanel = () => {
 		setSuggestions( ( prev ) =>
 			prev.filter( ( s ) => s.metric !== metric )
 		);
+		const controller = trackAction();
 		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'ai_adaptive',
-				settings: {
-					enabled,
-					use_wp_ai_client: useWpAiClient,
-					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
-					dismissed_suggestions: current,
+			const res = await apiCall(
+				'update_settings',
+				{
+					tab: 'ai_adaptive',
+					settings: {
+						enabled,
+						use_wp_ai_client: useWpAiClient,
+						css_refresh_on_lcp_regression:
+							cssRefreshOnLcpRegression,
+						dismissed_suggestions: current,
+					},
 				},
-			} );
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			if ( res.success ) {
 				// P3-019: server payload wins; request-echo patch is the
 				// fallback for responses without a committable map.
@@ -324,6 +387,9 @@ const AiPanel = () => {
 				fetchSuggestions();
 			}
 		} catch {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -332,6 +398,8 @@ const AiPanel = () => {
 				),
 			} );
 			fetchSuggestions();
+		} finally {
+			releaseAction( controller );
 		}
 	};
 
@@ -347,10 +415,19 @@ const AiPanel = () => {
 			return;
 		}
 		setRegeneratingMetrics( ( prev ) => [ ...prev, key ] );
+		const controller = trackAction();
 		try {
-			const res = await apiCall( 'used_css_regenerate', {
-				post_id: postId,
-			} );
+			const res = await apiCall(
+				'used_css_regenerate',
+				{
+					post_id: postId,
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: res.success ? 'success' : 'error',
 				message:
@@ -367,6 +444,9 @@ const AiPanel = () => {
 				durationMs: 3000,
 			} );
 		} catch ( err ) {
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			console.error(
 				'Failed to regenerate used CSS.',
 				getErrorLogMessage( err )
@@ -379,9 +459,12 @@ const AiPanel = () => {
 				),
 			} );
 		} finally {
-			setRegeneratingMetrics( ( prev ) =>
-				prev.filter( ( metric ) => metric !== key )
-			);
+			releaseAction( controller );
+			if ( isMountedRef.current ) {
+				setRegeneratingMetrics( ( prev ) =>
+					prev.filter( ( metric ) => metric !== key )
+				);
+			}
 		}
 	};
 
@@ -471,129 +554,135 @@ const AiPanel = () => {
 				</p>
 			) }
 			{ suggestions.length > 0 && (
-				<div className="wppo-stacked-cards wppo-mt-16" role="list">
-					<h4>
+				<>
+					{ /* Audit #1839: role="list" must own only listitem/group
+					    children, so the heading lives outside the list. */ }
+					<h4 className="wppo-mt-16">
 						{ __( 'AI Suggestions', 'performance-optimisation' ) }
 					</h4>
-					{ suggestions.map( ( s, index ) => (
-						<div
-							key={ suggestionKey( s, `ai-${ index }` ) }
-							className="wppo-suggestion-card wppo-suggestion-card--needs_improvement"
-							role="listitem"
-						>
-							<div className="wppo-suggestion-card__header">
-								<span className="wppo-suggestion-card__description">
-									{ s.description }
-								</span>
-								{ /* Audit #1354: translated badge instead of raw status. */ }
-								<StatusBadge status={ s.status } />
-							</div>
-							<div className="wppo-suggestion-card__body">
-								<span className="wppo-suggestion-card__value">
-									{ formatValue( s.value, s.unit ) }
-								</span>
-								{ s.metric === 'ai_lcp_regression' &&
-									s.ai_payload?.css_refresh && (
-										<span className="wppo-text-muted wppo-text-small">
-											{ sprintf(
-												// translators: %1$s is the before LCP in ms, %2$s is the current LCP in ms.
+					<div className="wppo-stacked-cards" role="list">
+						{ suggestions.map( ( s, index ) => (
+							<div
+								key={ suggestionKey( s, `ai-${ index }` ) }
+								className="wppo-suggestion-card wppo-suggestion-card--needs_improvement"
+								role="listitem"
+							>
+								<div className="wppo-suggestion-card__header">
+									<span className="wppo-suggestion-card__description">
+										{ s.description }
+									</span>
+									{ /* Audit #1354: translated badge instead of raw status. */ }
+									<StatusBadge status={ s.status } />
+								</div>
+								<div className="wppo-suggestion-card__body">
+									<span className="wppo-suggestion-card__value">
+										{ formatValue( s.value, s.unit ) }
+									</span>
+									{ s.metric === 'ai_lcp_regression' &&
+										s.ai_payload?.css_refresh && (
+											<span className="wppo-text-muted wppo-text-small">
+												{ sprintf(
+													// translators: %1$s is the before LCP in ms, %2$s is the current LCP in ms.
+													__(
+														'LCP before: %1$s ms, after: %2$s ms',
+														'performance-optimisation'
+													),
+													Math.round(
+														s.ai_payload.css_refresh
+															.before_lcp ?? 0
+													),
+													Math.round(
+														s.ai_payload.css_refresh
+															.current_lcp ?? 0
+													)
+												) }
+												{ s.ai_payload.css_refresh
+													.queued &&
+													' ' +
+														__(
+															'(refresh queued)',
+															'performance-optimisation'
+														) }
+											</span>
+										) }
+									{ s.metric === 'ai_lcp_regression' &&
+										s.ai_payload?.css_refresh?.post_id >
+											0 && (
+											<button
+												type="button"
+												className="wppo-button wppo-button--sm wppo-button--secondary wppo-ml-8"
+												onClick={ () =>
+													handleRegenerateCss( s )
+												}
+												disabled={ regeneratingMetrics.includes(
+													regenerateKey( s )
+												) }
+												aria-label={ __(
+													'Regenerate used CSS for the regressed URL',
+													'performance-optimisation'
+												) }
+											>
+												{ regeneratingMetrics.includes(
+													regenerateKey( s )
+												)
+													? __(
+															'Regenerating…',
+															'performance-optimisation'
+													  )
+													: __(
+															'Regenerate CSS',
+															'performance-optimisation'
+													  ) }
+											</button>
+										) }
+									{ s.ai_payload && (
+										<button
+											type="button"
+											className="wppo-button wppo-button--sm wppo-button--primary"
+											onClick={ () => handleApply( s ) }
+											disabled={ applyingMetrics.includes(
+												suggestionActionKey( s )
+											) }
+											aria-label={ sprintf(
+												// translators: %s is the suggestion description.
 												__(
-													'LCP before: %1$s ms, after: %2$s ms',
+													'Apply: %s',
 													'performance-optimisation'
 												),
-												Math.round(
-													s.ai_payload.css_refresh
-														.before_lcp ?? 0
-												),
-												Math.round(
-													s.ai_payload.css_refresh
-														.current_lcp ?? 0
-												)
+												s.description
 											) }
-											{ s.ai_payload.css_refresh.queued &&
-												' ' +
-													__(
-														'(refresh queued)',
-														'performance-optimisation'
-													) }
-										</span>
+										>
+											{ __(
+												'Apply',
+												'performance-optimisation'
+											) }
+										</button>
 									) }
-								{ s.metric === 'ai_lcp_regression' &&
-									s.ai_payload?.css_refresh?.post_id > 0 && (
+									{ s.metric && (
 										<button
 											type="button"
 											className="wppo-button wppo-button--sm wppo-button--secondary wppo-ml-8"
-											onClick={ () =>
-												handleRegenerateCss( s )
-											}
-											disabled={ regeneratingMetrics.includes(
-												regenerateKey( s )
-											) }
-											aria-label={ __(
-												'Regenerate used CSS for the regressed URL',
-												'performance-optimisation'
+											onClick={ () => handleDismiss( s ) }
+											aria-label={ sprintf(
+												// translators: %s is the suggestion description.
+												__(
+													'Dismiss: %s',
+													'performance-optimisation'
+												),
+												s.description
 											) }
 										>
-											{ regeneratingMetrics.includes(
-												regenerateKey( s )
-											)
-												? __(
-														'Regenerating…',
-														'performance-optimisation'
-												  )
-												: __(
-														'Regenerate CSS',
-														'performance-optimisation'
-												  ) }
+											{ __(
+												'Dismiss',
+												'performance-optimisation'
+											) }
 										</button>
 									) }
-								{ s.ai_payload && (
-									<button
-										type="button"
-										className="wppo-button wppo-button--sm wppo-button--primary"
-										onClick={ () => handleApply( s ) }
-										disabled={ applyingMetrics.includes(
-											suggestionActionKey( s )
-										) }
-										aria-label={ sprintf(
-											// translators: %s is the suggestion description.
-											__(
-												'Apply: %s',
-												'performance-optimisation'
-											),
-											s.description
-										) }
-									>
-										{ __(
-											'Apply',
-											'performance-optimisation'
-										) }
-									</button>
-								) }
-								{ s.metric && (
-									<button
-										type="button"
-										className="wppo-button wppo-button--sm wppo-button--secondary wppo-ml-8"
-										onClick={ () => handleDismiss( s ) }
-										aria-label={ sprintf(
-											// translators: %s is the suggestion description.
-											__(
-												'Dismiss: %s',
-												'performance-optimisation'
-											),
-											s.description
-										) }
-									>
-										{ __(
-											'Dismiss',
-											'performance-optimisation'
-										) }
-									</button>
-								) }
+								</div>
 							</div>
-						</div>
-					) ) }
-				</div>
+						) ) }
+					</div>
+				</>
 			) }
 		</FeatureCard>
 	);

@@ -182,6 +182,26 @@ const App = () => {
 	} );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
+	// Audit #1839: below the lg breakpoint the sidebar is moved off-canvas
+	// with CSS only, so its controls stayed in the tab order while hidden.
+	// Track the mobile layout so the closed drawer can be made inert while
+	// the desktop sidebar stays fully interactive.
+	const [ isMobileSidebarViewport, setIsMobileSidebarViewport ] =
+		useState( false );
+	useEffect( () => {
+		if ( typeof window === 'undefined' || ! window.matchMedia ) {
+			return undefined;
+		}
+		const query = window.matchMedia( '(max-width: 992px)' );
+		const update = () => setIsMobileSidebarViewport( query.matches );
+		update();
+		if ( typeof query.addEventListener === 'function' ) {
+			query.addEventListener( 'change', update );
+			return () => query.removeEventListener( 'change', update );
+		}
+		query.addListener( update );
+		return () => query.removeListener( update );
+	}, [] );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ activitiesError, setActivitiesError ] = useState( false );
 	const [ ccssStatus, setCcssStatus ] = useState( {} );
@@ -195,7 +215,14 @@ const App = () => {
 	// Keep the popstate guard's view of the world current without making
 	// `onBeforePop` change identity (a changing identity would re-bind the
 	// listener on every render for no benefit).
-	popGuard.current = { isDirty, area: activeSection, view: activeView };
+	//
+	// Audit #1839: write the ref in a commit-phase effect, not in the render
+	// body. Under concurrent rendering a render that never commits could
+	// otherwise leave the ref holding values from a discarded render, so the
+	// dirty-guard compared against stale area/view.
+	useEffect( () => {
+		popGuard.current = { isDirty, area: activeSection, view: activeView };
+	}, [ isDirty, activeSection, activeView ] );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
@@ -689,6 +716,16 @@ const App = () => {
 					className={ `wppo-sidebar ${
 						mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
 					}` }
+					inert={
+						isMobileSidebarViewport && ! mobileMenuOpen
+							? ''
+							: undefined
+					}
+					aria-hidden={
+						isMobileSidebarViewport && ! mobileMenuOpen
+							? 'true'
+							: undefined
+					}
 				>
 					<div className="wppo-sidebar-header">
 						<div className="wppo-sidebar-logo">
