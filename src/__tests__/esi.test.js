@@ -402,6 +402,45 @@ describe( 'sanitizeEsiFragment (defense-in-depth DOM sanitizer)', () => {
 		);
 	} );
 
+	it( 'validates every candidate in multi-URL attributes', () => {
+		const frag = sanitizeEsiFragment(
+			'<img srcset="https://example.com/a.png 1x, javascript:alert(1) 2x">' +
+				'<a href="https://example.com/ok" ping="https://example.com/p javascript:alert(2)">x</a>' +
+				'<img srcset="https://example.com/b.png 1x, https://example.com/c.png 2x">'
+		);
+		const wrap = document.createElement( 'div' );
+		wrap.appendChild( frag );
+		const imgs = wrap.querySelectorAll( 'img' );
+		expect( imgs[ 0 ].hasAttribute( 'srcset' ) ).toBe( false );
+		expect( imgs[ 1 ].getAttribute( 'srcset' ) ).toBe(
+			'https://example.com/b.png 1x, https://example.com/c.png 2x'
+		);
+		expect( wrap.querySelector( 'a' ).hasAttribute( 'ping' ) ).toBe(
+			false
+		);
+		expect( wrap.querySelector( 'a' ).getAttribute( 'href' ) ).toBe(
+			'https://example.com/ok'
+		);
+	} );
+
+	it( 'removes SVG SMIL elements that can rewrite sanitized URLs', () => {
+		const frag = sanitizeEsiFragment(
+			'<svg><animate attributeName="href" values="javascript:alert(1)"></animate>' +
+				'<set attributeName="href" to="javascript:alert(2)"></set>' +
+				'<animateTransform attributeName="transform"></animateTransform>' +
+				'<discard></discard></svg><a href="https://example.com/ok">x</a>'
+		);
+		const wrap = document.createElement( 'div' );
+		wrap.appendChild( frag );
+		expect( wrap.querySelector( 'animate' ) ).toBeNull();
+		expect( wrap.querySelector( 'set' ) ).toBeNull();
+		expect( wrap.querySelector( 'animateTransform' ) ).toBeNull();
+		expect( wrap.querySelector( 'discard' ) ).toBeNull();
+		expect( wrap.querySelector( 'a' ).getAttribute( 'href' ) ).toBe(
+			'https://example.com/ok'
+		);
+	} );
+
 	it( 'handles empty and non-string input', () => {
 		expect( sanitizeEsiFragment( '' ).childNodes.length ).toBe( 0 );
 		expect( sanitizeEsiFragment( null ).childNodes.length ).toBe( 0 );

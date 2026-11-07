@@ -51,6 +51,7 @@ describe( 'FileOptimization Component', () => {
 			nonce: 'test-nonce',
 			settings: {},
 			translations: {},
+			performance_audit: { homeUrl: 'http://example.com' },
 		};
 		jest.clearAllMocks();
 	} );

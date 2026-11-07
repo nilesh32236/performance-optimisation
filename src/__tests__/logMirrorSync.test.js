@@ -10,6 +10,7 @@ import { getErrorLogMessage } from '../lib/apiRequest';
 import {
 	getErrorLogMessage as getErrorLogMessageDirect,
 	MAX_LOG_MESSAGE_LENGTH,
+	redactLogSecrets,
 } from '../lib/logSecrets';
 
 describe( 'log mirror contract', () => {
@@ -52,6 +53,24 @@ describe( 'log mirror contract', () => {
 		expect( spaSrc ).toMatch( /MAX_LOG_MESSAGE_LENGTH/ );
 		expect( getErrorLogMessageDirect( 'x'.repeat( 600 ) ) ).toHaveLength(
 			MAX_LOG_MESSAGE_LENGTH
+		);
+	} );
+
+	it( 'redacts quoted JSON-shaped credentials', () => {
+		expect( redactLogSecrets( '{"password":"hunter2"}' ) ).not.toContain(
+			'hunter2'
+		);
+		expect( redactLogSecrets( '{"token": "abc123"}' ) ).not.toContain(
+			'abc123'
+		);
+		expect(
+			redactLogSecrets( '{"api_key":"AIzaSecretValue"}' )
+		).not.toContain( 'AIzaSecretValue' );
+		// Single-quoted object-literal shape is covered too.
+		expect( redactLogSecrets( "{'secret':'shh'}" ) ).not.toContain( 'shh' );
+		// Non-secret JSON is left untouched.
+		expect( redactLogSecrets( '{"safe":"value"}' ) ).toContain(
+			'"safe":"value"'
 		);
 	} );
 

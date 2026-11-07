@@ -641,9 +641,8 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
 /**
  * Validate a scan URL client-side before it reaches the resource-intensive
  * performance_scan / pagespeed_scan endpoints. Requires an absolute http(s)
- * URL and, when the localised site home URL is available, same-origin with
- * the site. Server-side host allowlisting + per-user/IP rate limiting remains
- * authoritative.
+ * URL and same-origin with the localised site home URL. Server-side host
+ * allowlisting + per-user/IP rate limiting remains authoritative.
  *
  * The home URL is emitted **nested** as `performance_audit.homeUrl` by the
  * single `wp_localize_script( 'performance-optimisation-script', 'wppoSettings',
@@ -654,12 +653,11 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
  * reading the URL directly should use `getWppoSettings(
  * 'performance_audit.homeUrl' )` (see Dashboard.js), not the top-level key.
  *
- * When no home URL is present at all (e.g. a test harness or a direct mount
- * before localisation), the origin check is skipped and any absolute http(s)
- * URL is accepted: failing closed here would brick legitimate scans, and the
- * server gate remains authoritative. Callers needing a strict gate should
- * assert home-URL presence themselves. A home URL that is present but
- * unparseable does fail closed.
+ * When no home URL is present at all (e.g. a direct mount before
+ * localisation), the guard fails closed: without a known origin it cannot
+ * prove the scan target is same-origin, and forwarding an arbitrary absolute
+ * URL would let the server perform an outbound fetch against any host. A home
+ * URL that is present but unparseable also fails closed.
  *
  * @since 2.0.0
  * @since NEXT Reads the nested `performance_audit.homeUrl` emitted by PHP.
@@ -685,7 +683,7 @@ export const isValidScanUrl = ( url ) => {
 		getWppoSettings( 'performance_audit.homeUrl', '' ) ||
 		getWppoSettings( 'homeUrl', '' );
 	if ( ! home ) {
-		return true;
+		return false;
 	}
 	try {
 		return parsed.origin === new URL( home ).origin;
