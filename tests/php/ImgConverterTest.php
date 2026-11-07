@@ -1586,6 +1586,141 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Atomic writes never publish a 0-byte (truncated) encode: the encoder
+	 * writes to a temp sibling, the temp is discarded, and the destination
+	 * is never created (#1846).
+	 *
+	 * @since NEXT
+	 */
+	public function test_write_image_atomically_rejects_zero_byte_encode(): void {
+		$this->prepare_wppo_output_dir();
+		Functions\when( 'wp_delete_file' )->alias( 'unlink' );
+
+		$converter = $this->make_converter();
+		$dest      = rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/atomic-zero.webp';
+
+		$called_with = null;
+		$result      = $converter->write_image_atomically(
+			$dest,
+			static function ( string $target ) use ( &$called_with ): bool {
+				$called_with = $target;
+				// Simulate an aborted encode that leaves a 0-byte temp file.
+				file_put_contents( $target, '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+				return true;
+			}
+		);
+
+		$this->assertFalse( $result );
+		$this->assertFileDoesNotExist( $dest, 'A 0-byte encode must never be published' );
+		$this->assertNotNull( $called_with );
+		$this->assertNotSame( $dest, $called_with, 'The encoder must write to a temp sibling, not the destination' );
+		$this->assertFileDoesNotExist( $called_with, 'The temp sibling must be cleaned up on failure' );
+	}
+
+	/**
+	 * Atomic writes publish a valid encode by renaming the temp sibling into
+	 * place (#1846).
+	 *
+	 * @since NEXT
+	 */
+	public function test_write_image_atomically_publishes_valid_image(): void {
+		if ( ! function_exists( 'imagepng' ) ) {
+			$this->markTestSkipped( 'GD support is required.' );
+		}
+
+		$this->prepare_wppo_output_dir();
+		$converter = $this->make_converter();
+		$dest      = rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/atomic-ok.png';
+
+		$result = $converter->write_image_atomically(
+			$dest,
+			static function ( string $target ): bool {
+				$image = imagecreatetruecolor( 2, 2 );
+				if ( false === $image ) {
+					return false;
+				}
+				$ok = imagepng( $image, $target );
+				Util::destroy_gd_image( $image );
+				return (bool) $ok;
+			}
+		);
+
+		clearstatcache();
+		$this->assertTrue( $result );
+		$this->assertFileExists( $dest );
+		$this->assertGreaterThan( 0, filesize( $dest ) );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+		unlink( $dest );
+	}
+
+	/**
+	 * An out-of-allowlist destination refuses the write and never runs the
+	 * encoder, so a passthrough/traversal value cannot create files (#1846).
+	 *
+	 * @since NEXT
+	 */
+	public function test_write_image_atomically_refuses_outside_allowlist(): void {
+		$converter = $this->make_converter();
+		$outside   = tempnam( sys_get_temp_dir(), 'wppo-atomic-outside-' );
+		$this->assertNotFalse( $outside );
+
+		$invoked = false;
+		$result  = $converter->write_image_atomically(
+			$outside,
+			static function ( string $target ) use ( &$invoked ): bool {
+				$invoked = true;
+				file_put_contents( $target, 'data' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+				return true;
+			}
+		);
+
+		$this->assertFalse( $result );
+		$this->assertFalse( $invoked, 'The encoder must never run for an out-of-allowlist destination' );
+		$this->assertFileExists( $outside, 'An out-of-allowlist file must be left intact' );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture outside the plugin allowlist.
+		unlink( $outside );
+	}
+
+	/**
+	 * A 0-byte existing sibling is never recorded `completed`: it is removed
+	 * (inside the delete allowlist) and re-encoded on the next run (#1846).
+	 *
+	 * @since NEXT
+	 */
+	public function test_record_encoded_sibling_never_completes_zero_byte_sibling(): void {
+		Functions\when( 'wp_delete_file' )->alias( 'unlink' );
+
+		$converter = $this->make_converter();
+		$source    = $this->uploads_dir . '/record-zero-src.jpg';
+		$sibling   = $this->uploads_dir . '/record-zero.webp';
+		file_put_contents( $source, str_repeat( 'x', 100 ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $sibling, '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture: truncated previous encode.
+		clearstatcache();
+
+		$success = true;
+		$record  = \Closure::bind(
+			function ( string $source_image, string $sibling_path, string $type, bool &$flag ): void {
+				$this->record_encoded_sibling( $source_image, $sibling_path, $type, $flag );
+			},
+			$converter,
+			Img_Converter::class
+		);
+		$record( $source, $sibling, 'webp', $success );
+
+		$this->assertFalse( $success );
+		$this->assertFileDoesNotExist( $sibling, 'The truncated sibling must be removed for re-encode' );
+
+		$rel  = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source ) );
+		$info = Img_Converter::get_img_info();
+		$this->assertNotContains( $rel, $info['completed']['webp'] ?? array() );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+		unlink( $source );
+	}
+
+	/**
 	 * Over-budget sources without an Imagick low-memory route keep the
 	 * legacy skip instead of attempting a full-size GD decode that would
 	 * risk an allowed-memory fatal (#1236).
