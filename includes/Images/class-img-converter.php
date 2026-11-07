@@ -3461,11 +3461,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public function maybe_serve_next_gen_image( $image ) {
-			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
+			if ( empty( $image[0] ) ) {
 				return $image;
 			}
 
-			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			$http_accept = Util::get_server_string( 'HTTP_ACCEPT' );
+			if ( '' === $http_accept ) {
+				return $image;
+			}
 
 			// Check if the browser supports WebP.
 			$supports_avif = false !== strpos( $http_accept, 'image/avif' );
