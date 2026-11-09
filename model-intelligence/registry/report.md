@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-11-09T06:18:46.776Z`
-Last attempt: `2026-11-09T06:18:46.776Z`
+Last successful discovery: `2026-11-09T22:17:04.396Z`
+Last attempt: `2026-11-09T22:17:04.396Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -32,6 +32,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/ling-3.1-flash-free` | 262144 | 32768 | yes | no | catalog_visible |
 | `opencode/ll-alpha-free` | 262144 | 65536 | yes | no | catalog_visible |
 | `opencode/longcat-2.0-free` | 1000000 | 131072 | yes | no | catalog_visible |
+| `opencode/longcat-2.5-free` | 1000000 | 262144 | yes | yes | catalog_visible |
 | `opencode/longcat-2.5-preview-free` | 1000000 | 131072 | yes | yes | catalog_visible |
 | `opencode/mimo-v2-flash-free` | 262144 | 65536 | yes | no | catalog_visible |
 | `opencode/mimo-v2-omni-free` | 262144 | 64000 | yes | yes | catalog_visible |
