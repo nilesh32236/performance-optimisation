@@ -1,6 +1,6 @@
 # Phase G — Measurement & Growth Monitoring
 
-Captured: `2026-11-02T15:46:17+00:00`
+Captured: `2026-11-09T16:13:31+00:00`
 
 This report uses public WordPress.org and GitHub repository metadata. It does not collect WordPress visitors, site-owner settings, cookies, or private application traffic.
 
@@ -17,12 +17,12 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 | WordPress.org last updated | 2026-10-03 9:56am GMT | 2026-10-03 9:56am GMT | N/A |
 | GitHub stars | 4 | 4 | +0 |
 | GitHub forks | 0 | 0 | +0 |
-| GitHub open issues | 16 | 15 | +1 |
-| GitHub open PRs | 15 | 14 | +1 |
-| GitHub 14-day views | 65 | 36 | +29 |
-| GitHub 14-day view uniques | 58 | 33 | +25 |
-| GitHub 14-day clones | 684 | 2148 | -1464 |
-| GitHub 14-day clone uniques | 199 | 362 | -163 |
+| GitHub open issues | 16 | 16 | +0 |
+| GitHub open PRs | 15 | 15 | +0 |
+| GitHub 14-day views | 37 | 65 | -28 |
+| GitHub 14-day view uniques | 29 | 58 | -29 |
+| GitHub 14-day clones | 491 | 684 | -193 |
+| GitHub 14-day clone uniques | 246 | 199 | +47 |
 
 ## Operational metrics
 
@@ -90,7 +90,9 @@ The following changes are tracked for later comparison. Movement after a change 
 
 The scheduled workflow creates an issue only for sustained listing changes, rating/support regressions, GitHub issue growth, release changes, or a 25% traffic movement on a meaningful baseline. It does not create alerts for daily noise.
 
-Current run: no material change from the previous snapshot.
+Current material reasons:
+
+- GitHub 14-day views changed by 25% or more
 
 ## Privacy boundary
 
