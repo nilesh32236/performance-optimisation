@@ -218,13 +218,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Settings_Store' ) ) {
 			if ( '' !== $cdn_attr ) {
 				$data['cdn_attr'] = $cdn_attr;
 			}
+			$cdn_array = null;
 			if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
-				$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
-				if ( ! empty( $cdns ) ) {
-					$data['cdn_urls'] = $cdns;
-				}
+				$cdn_array = $entry['cdn_urls'];
 			} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
-				$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
+				$cdn_array = $entry['cdns'];
+			}
+
+			if ( is_array( $cdn_array ) ) {
+				$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $cdn_array ) ) );
 				if ( ! empty( $cdns ) ) {
 					$data['cdn_urls'] = $cdns;
 				}
