@@ -3454,6 +3454,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function detect_safe_mode_excludes( \WP_REST_Request $_request ): \WP_REST_Response {
 			try {
+				$overlapping_optimizers = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'detect_conflicting_optimizers' ) ) {
+					try {
+						$overlapping_optimizers = Util::detect_conflicting_optimizers();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				$file_opt = array();
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 					try {
@@ -3569,16 +3577,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 				return $this->send_response(
 					array(
-						'stack'       => $stack,
-						'suggestions' => $suggestions,
-						'handles'     => array_values( array_unique( $handles ) ),
+						'stack'                  => $stack,
+						'suggestions'            => $suggestions,
+						'handles'                => array_values( array_unique( $handles ) ),
+						'overlapping_optimizers' => $overlapping_optimizers,
 					)
 				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $this->send_response(
 					array(
-						'stack'       => array(
+						'stack'                  => array(
 							'safe_mode'         => false,
 							'delay_js'          => false,
 							'defer_js'          => false,
@@ -3586,8 +3595,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							'remove_unused_css' => false,
 							'stack_enabled'     => false,
 						),
-						'suggestions' => array(),
-						'handles'     => array(),
+						'suggestions'            => array(),
+						'handles'                => array(),
+						'overlapping_optimizers' => array(),
 					)
 				);
 			}
