@@ -3528,7 +3528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function maybe_apply_used_css( string $buffer ): string {
-			$used_css = new Used_CSS( $this->options );
+			$used_css = Used_CSS::from_settings( is_array( $this->options ) ? $this->options : array() );
 			return $used_css->process_buffer( $buffer );
 		}
 

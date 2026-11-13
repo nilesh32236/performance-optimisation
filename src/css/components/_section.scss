@@ -187,6 +187,9 @@
 	}
 }
 
+// Audit #1831: intentionally NOT respond-to('md') (768px). 782px is the
+// WP-core admin breakpoint (admin menu collapses), so this rule tracks core,
+// not the plugin token scale.
 @media ( max-width: 782px ) {
 	.wppo-section__title {
 		font-size: 1.25rem;

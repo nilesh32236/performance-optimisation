@@ -96,7 +96,11 @@ const useImageJobPolling = ( { notify, onImageInfo } ) => {
 				retryRef.current = 0;
 				if ( ! response.success || ! response.data ) {
 					throw new Error(
-						response.message || 'Status check failed'
+						response.message ||
+							__(
+								'Status check failed.',
+								'performance-optimisation'
+							)
 					);
 				}
 

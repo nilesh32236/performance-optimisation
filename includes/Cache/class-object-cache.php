@@ -296,6 +296,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Build an Object_Cache manager instance.
+		 *
+		 * Single construction seam for callers (REST, Cron, CLI, Abilities,
+		 * System_Info, Admin_Notices) that previously wrote `new Object_Cache()`
+		 * inline at 11 sites (audit #1820). The runtime Redis config is still
+		 * resolved lazily inside the connection methods via the
+		 * `wppo_object_cache_config` filter, so this factory only centralizes
+		 * construction: a constructor or circuit-breaker change lands once
+		 * instead of at eleven call sites. It takes no arguments and reads no
+		 * configuration of its own — config injection stays with the filter.
+		 *
+		 * `new static()` (rather than `new self()`) keeps the seam open to a
+		 * subclass, matching the `static` return type.
+		 *
+		 * @since NEXT
+		 * @return static
+		 */
+		public static function create(): static {
+			return new static();
+		}
+
+		/**
 		 * Active drop-in path (containment-validated).
 		 *
 		 * Consumers (e.g. the System Info reporter) must use this

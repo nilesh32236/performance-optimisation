@@ -530,7 +530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			$obj = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				try {
-					$oc     = new Object_Cache();
+					$oc     = Object_Cache::create();
 					$status = $oc->get_status();
 					if ( ! empty( $status['enabled'] ) ) {
 						$obj = 'wppo';

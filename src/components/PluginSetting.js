@@ -47,6 +47,15 @@ const FALLBACK_ALLOWED_KEYS = [
 	'cache_settings',
 	'litespeed_integration',
 	'llms_txt',
+	// Kept in lockstep with Settings_Store::ALLOWED_SETTINGS_KEYS. These five
+	// were missing, so without the localized wppoSettings list (Jest, or
+	// evaluation before wp_localize_script) a valid export carrying them was
+	// rejected. Masked in production because the global is always localized.
+	'od_integration',
+	'bfcache',
+	'perf_translations',
+	'ai_adaptive',
+	'edge_cache',
 ];
 // Audit #1354: resolved lazily at call time — a module-load snapshot
 // goes stale when wppoSettings is localised after import.
@@ -753,9 +762,11 @@ const PluginSetting = ( { options } ) => {
 		// authoritative; this is defense-in-depth for the plaintext file.
 		let safeOptions;
 		try {
-			safeOptions = redactSecrets(
-				JSON.parse( JSON.stringify( options ) )
-			);
+			// redactSecrets() -> walkSensitiveKeys() already returns a fresh
+			// deep clone (and drops prototype-pollution keys), so the explicit
+			// JSON round-trip here only doubled peak memory and CPU on export
+			// for large settings trees.
+			safeOptions = redactSecrets( options );
 		} catch ( exportError ) {
 			console.error(
 				'Failed to export settings:',
@@ -1376,10 +1387,10 @@ const PluginSetting = ( { options } ) => {
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
 					icon={
-						<i
-							className="fas fa-tachometer-alt"
+						<FontAwesomeIcon
+							icon={ faTachometerAlt }
 							aria-hidden="true"
-						></i>
+						/>
 					} // Audit #1420: decorative.
 				>
 					<CheckboxOption

@@ -1763,7 +1763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return bool True if Accept header contains image/webp or image/avif.
 		 */
 		private static function client_supports_webp(): bool {
-			$accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
+			$accept = Util::server_string( 'HTTP_ACCEPT' );
 			return false !== strpos( $accept, 'image/webp' ) || false !== strpos( $accept, 'image/avif' );
 		}
 
