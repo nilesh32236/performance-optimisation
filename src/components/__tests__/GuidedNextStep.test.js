@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	within,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -46,6 +52,14 @@ describe( 'GuidedNextStep', () => {
 		);
 		// Server-type note is always displayed.
 		expect( screen.getByText( /Server: Nginx/ ) ).toBeInTheDocument();
+
+		// The next action is a listitem nested inside a labelled list
+		// (axe aria-required-parent): no orphaned listitem.
+		const list = screen.getByRole( 'list', {
+			name: /Guided next step/i,
+		} );
+		expect( list ).toBeInTheDocument();
+		expect( within( list ).getByRole( 'listitem' ) ).toBeInTheDocument();
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Review Image Optimization/i } )
