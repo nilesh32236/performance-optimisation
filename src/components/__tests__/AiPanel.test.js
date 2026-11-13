@@ -123,7 +123,9 @@ describe( 'AiPanel Component', () => {
 					settings: expect.objectContaining( {
 						dismissed_suggestions: [ 'ai_delay_js' ],
 					} ),
-				} )
+				} ),
+				'POST',
+				expect.anything()
 			);
 		} );
 	} );
@@ -176,9 +178,14 @@ describe( 'AiPanel Component', () => {
 		fireEvent.click( regenerateButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate', {
-				post_id: 123,
-			} );
+			expect( apiCall ).toHaveBeenCalledWith(
+				'used_css_regenerate',
+				{
+					post_id: 123,
+				},
+				'POST',
+				expect.anything()
+			);
 		} );
 	} );
 } );

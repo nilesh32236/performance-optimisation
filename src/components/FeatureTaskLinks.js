@@ -99,7 +99,9 @@ const FeatureTaskLinks = ( { onNavigate = () => {} } ) => (
 							type="button"
 							className="wppo-feature-task-link"
 							onClick={ () => onNavigate( task.targetTab ) }
-							aria-label={ `${ task.label } — ${ task.destination }` }
+							// Audit #1839: include the visible risk classification
+							// so aria-label does not hide it from screen readers.
+							aria-label={ `${ task.label } — ${ task.destination } — ${ task.risk }` }
 						>
 							<span className="wppo-feature-task-link__label">
 								{ task.label }

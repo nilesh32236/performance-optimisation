@@ -146,6 +146,13 @@ const ImageOptimization = ( { options = {} } ) => {
 		2560
 	);
 
+	// Audit #1839: array options compare by content, not reference, so a
+	// new-but-identical array from the parent does not reset the form. Extracted
+	// so the dependency arrays stay statically checkable.
+	const selectedPostTypeKey = options.selectedPostType?.join( ',' );
+	const availablePostTypesKey = options.availablePostTypes?.join( ',' );
+	const clientSideMimeTypesKey = options.clientSideMimeTypes?.join( ',' );
+
 	const [ settings, setSettings ] = useState( defaultSettings );
 
 	useEffect( () => {
@@ -189,8 +196,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.preloadFrontPageImages,
 		options.preloadFrontPageImagesUrls,
 		options.preloadPostTypeImage,
-		options.selectedPostType,
-		options.availablePostTypes,
+		selectedPostTypeKey,
+		availablePostTypesKey,
 		options.excludePostTypeImgUrl,
 		options.maxWidthImgSize,
 		options.excludeSize,
@@ -203,7 +210,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.lazyRenderBelowFold,
 		options.lazyRenderExcludeBuilders,
 		options.clientSideMimeTypeOverride,
-		options.clientSideMimeTypes,
+		clientSideMimeTypesKey,
 		options.forceServerSideConversion,
 		options.discardOversizedSibling,
 		options.placeholderType,
@@ -422,8 +429,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.preloadFrontPageImages,
 		options.preloadFrontPageImagesUrls,
 		options.preloadPostTypeImage,
-		options.selectedPostType,
-		options.availablePostTypes,
+		selectedPostTypeKey,
+		availablePostTypesKey,
 		options.excludePostTypeImgUrl,
 		options.maxWidthImgSize,
 		options.excludeSize,
@@ -436,7 +443,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.lazyRenderBelowFold,
 		options.lazyRenderExcludeBuilders,
 		options.clientSideMimeTypeOverride,
-		options.clientSideMimeTypes,
+		clientSideMimeTypesKey,
 		options.forceServerSideConversion,
 		options.discardOversizedSibling,
 		options.placeholderType,
@@ -1315,7 +1322,15 @@ const ImageOptimization = ( { options = {} } ) => {
 									'performance-optimisation'
 								) }
 							</span>
-							{ lcpCandidateBody }
+							{ /* Audit #1839: stable live region so a screen reader is
+							    told when the async field-measured candidate loads. */ }
+							<div
+								role="status"
+								aria-live="polite"
+								aria-busy={ isCandidateLoading }
+							>
+								{ lcpCandidateBody }
+							</div>
 						</div>
 						<div>
 							<SwitchField
@@ -1466,9 +1481,7 @@ const ImageOptimization = ( { options = {} } ) => {
 											value={
 												settings.excludePostTypeImgUrl
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="excludePostTypeImgUrl-desc"
 										/>
 										<p

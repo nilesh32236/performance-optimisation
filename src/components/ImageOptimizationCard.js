@@ -202,7 +202,7 @@ const ImageOptimizationCard = ( {
 						{ sprintf(
 							/* translators: %d: queued job count. */
 							_n(
-								'Currently processing background optimisation jobs (%d queued)',
+								'Currently processing a background optimisation job (%d queued)',
 								'Currently processing background optimisation jobs (%d queued)',
 								bgJobsQueued,
 								'performance-optimisation'

@@ -149,11 +149,22 @@ const ConfirmDialog = ( {
 	}, [ isOpen ] );
 	useEffect( () => {
 		rebuildTrapList();
-	}, [ rebuildTrapList, children ] );
+		// Audit #1839: isBusy flips both action buttons to disabled, so the
+		// trap list must be rebuilt when it changes or Tab can escape the
+		// modal to focusableRef's now-disabled buttons.
+	}, [ rebuildTrapList, children, isBusy ] );
 
 	useEffect( () => {
 		// Audit #1354 review: gate on dialogRef (mounted dialog).
 		if ( isOpen && dialogRef.current ) {
+			// Audit #1839: capture the opener BEFORE moving focus into the
+			// dialog. Previously this ran in a later effect, so the captured
+			// element was this dialog's own (soon-to-be-unmounted) cancel
+			// button and focus fell to <body> on close.
+			const doc = dialogRef.current.ownerDocument || document;
+			if ( ! previouslyFocusedRef.current ) {
+				previouslyFocusedRef.current = doc.activeElement;
+			}
 			const cancelBtn = dialogRef.current?.querySelector(
 				'.wppo-dialog-cancel'
 			);
@@ -169,7 +180,12 @@ const ConfirmDialog = ( {
 	useEffect( () => {
 		const doc = dialogRef.current?.ownerDocument || document;
 		if ( isOpen ) {
-			previouslyFocusedRef.current = doc.activeElement;
+			// Audit #1839: only capture if the focus effect above did not
+			// already capture the real opener. Never overwrite it with this
+			// dialog's focused cancel button.
+			if ( ! previouslyFocusedRef.current ) {
+				previouslyFocusedRef.current = doc.activeElement;
+			}
 			prevOverflowRef.current = doc.body.style.overflow;
 			prevPaddingRef.current = doc.body.style.paddingRight;
 			const scrollbarW =

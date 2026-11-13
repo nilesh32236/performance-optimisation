@@ -39,23 +39,49 @@ Object.defineProperty( window, 'matchMedia', {
 	} ) ),
 } );
 
-/* eslint-disable @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies */
+/* eslint-disable import/no-extraneous-dependencies */
 jest.mock(
 	'@wordpress/components',
 	() => {
 		const React = require( 'react' );
 		return {
-			ToggleControl: ( { checked, onChange, label, disabled } ) => (
-				<input
-					type="checkbox"
-					checked={ checked }
-					onChange={ ( e ) => onChange( e.target.checked ) }
-					aria-label={ label }
-					disabled={ disabled }
-				/>
+			// Mirror the real ToggleControl contract used by SwitchField:
+			// forward the ref to the input (so aria-* set imperatively by
+			// SwitchField lands on it) and render `help` so its text is
+			// queryable. Audit #1839.
+			ToggleControl: React.forwardRef(
+				(
+					{
+						checked,
+						onChange,
+						label,
+						disabled,
+						help,
+						__nextHasNoMarginBottom,
+						...rest
+					},
+					ref
+				) => (
+					<div className="components-base-control">
+						<input
+							type="checkbox"
+							ref={ ref }
+							checked={ checked }
+							onChange={ ( e ) => onChange( e.target.checked ) }
+							aria-label={ label }
+							disabled={ disabled }
+							{ ...rest }
+						/>
+						{ help ? (
+							<span className="components-base-control__hint">
+								{ help }
+							</span>
+						) : null }
+					</div>
+				)
 			),
 		};
 	},
 	{ virtual: true }
 );
-/* eslint-enable @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies */
+/* eslint-enable import/no-extraneous-dependencies */
