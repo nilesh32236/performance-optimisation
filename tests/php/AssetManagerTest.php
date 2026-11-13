@@ -13,6 +13,8 @@
 
 use PerformanceOptimise\Inc\Asset_Manager;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for the Asset_Manager class.
@@ -89,6 +91,69 @@ class AssetManagerTest extends \PHPUnit\Framework\TestCase {
 				unlink( $tmp_file );
 			}
 		}
+	}
+
+	/**
+	 * Visitor requests must not capture assets (transient + stat cost).
+	 *
+	 * Separate process: the current_user_can stub must not leak into later
+	 * files that branch on function_exists() (the documented Patchwork
+	 * cross-file collision).
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_capture_page_assets_skips_visitors(): void {
+		$writes = array();
+
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'current_user_can' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value, $expiration ) use ( &$writes ) {
+				$writes[] = array( $key, $value, $expiration );
+				return true;
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( false );
+
+		( new Asset_Manager() )->capture_page_assets();
+
+		$this->assertSame( array(), $writes, 'Visitors must not pay the asset-capture transient/stat cost.' );
+	}
+
+	/**
+	 * Users who can edit the post still get captured assets for the metabox.
+	 *
+	 * Separate process for the same current_user_can stub isolation reason.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_capture_page_assets_runs_for_editors(): void {
+		$writes = array();
+
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value, $expiration ) use ( &$writes ) {
+				$writes[] = array( $key, $value, $expiration );
+				return true;
+			}
+		);
+
+		( new Asset_Manager() )->capture_page_assets();
+
+		$this->assertCount( 1, $writes );
+		$this->assertStringContainsString( 'wppo_page_assets_42', $writes[0][0] );
+		$this->assertSame( array(), $writes[0][1]['scripts'] );
+		$this->assertSame( array(), $writes[0][1]['styles'] );
 	}
 
 	/**

@@ -8543,6 +8543,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $result;
 			}
 
+			// SVG is the default placeholder mode and needs neither the local
+			// path resolution nor the wppo_img_info option, so short-circuit
+			// before either lookup runs.
+			if ( 'svg' === $placeholder_type ) {
+				$result['src'] = $this->generate_svg_base64( $img_tag );
+				return $result;
+			}
+
 			// Resolve data-src to a local path key for looking up placeholder data.
 			$rel_path = '';
 			if ( ! isset( self::$placeholder_path_cache[ $data_src ] ) ) {
@@ -8560,11 +8568,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				self::$placeholder_info_cache = Img_Converter::get_placeholder_info();
 			}
 			$placeholder_cache = self::$placeholder_info_cache;
-
-			if ( 'svg' === $placeholder_type ) {
-				$result['src'] = $this->generate_svg_base64( $img_tag );
-				return $result;
-			}
 
 			if ( 'dominant_color' === $placeholder_type ) {
 				$dominant_color = $placeholder_cache['dominant_color'][ $rel_path ] ?? '';

@@ -17,6 +17,8 @@ use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Settings_Migrations;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Behavioral coverage for the settings-migration cluster (issue #1534).
@@ -610,6 +612,102 @@ class SettingsMigrationsTest extends \PHPUnit\Framework\TestCase {
 		$runner->migrate_object_cache_outage_flag();
 
 		$this->assertNotContains( 'wppo_settings', $reads );
+	}
+
+	/**
+	 * Steady-state migrations share one raw wppo_settings read per request.
+	 *
+	 * The 17 admin_init callbacks used to issue a duplicate get_option() /
+	 * unserialize each. The raw-row memo must collapse them into one read
+	 * once every backfill key is already present.
+	 *
+	 * Separate process: the capability/option stubs must not leak into
+	 * later files (the documented Patchwork cross-file collision).
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_steady_state_cluster_reads_stored_row_once(): void {
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$stored = array(
+			'file_optimisation'  => array(
+				'blockAssetsOnDemand'   => true,
+				'ccssMaxSize'           => 20480,
+				'ccssSafelistExtra'     => '',
+				'ccssQueueCap'          => 5,
+				'usedCssQueueCap'       => 50,
+				'ccssViewportVariants'  => false,
+				'usedCSSDeliveryMode'   => 'file',
+				'usedCssDelivery'       => 'file',
+				'ccssGenTimeout'        => 25,
+				'ccssInlineBudgetKb'    => 14,
+				'ccssCommerceExclude'   => true,
+				'ccssChecksumRegen'     => true,
+				'safeMode'              => false,
+				'elementorSafeMode'     => true,
+				'builderPurgeWatcher'   => true,
+				'builderPurgeDriftLog'  => true,
+				'delayJSThirdPartyAuto' => false,
+				'delayJSPreset'         => 'safe',
+			),
+			'preload_settings'   => array(
+				'speculationTopUrlsLimit'  => 2,
+				'speculationPrerenderList' => false,
+				'autoLcpPreload'           => false,
+				'autoDiscoverFonts'        => false,
+				'preloadCssFirstN'         => 0,
+			),
+			'image_optimisation' => array(
+				'autoAltText'         => false,
+				'maxLongestEdgePx'    => 2560,
+				'hardenCommentImages' => true,
+			),
+			'performance_audit'  => array( 'rum_sample_rate' => 100 ),
+			'object_cache'       => array( 'outage_bypassed' => false ),
+			'ai_adaptive'        => array(
+				'speculation_autotune_enabled'         => false,
+				'speculation_min_samples'              => 20,
+				'speculation_max_urls'                 => 5,
+				'anomaly_band_window'                  => 10,
+				'anomaly_recovery_days'                => 3,
+				'deploy_notes'                         => array(),
+				'css_refresh_require_no_recent_deploy' => false,
+			),
+		);
+
+		$reads = array();
+		Functions\when( 'get_option' )->alias(
+			static function ( $key, $default_value = false ) use ( &$stored, &$reads ) {
+				if ( 'wppo_settings' === $key ) {
+					$reads[] = $key;
+					return $stored;
+				}
+				return $default_value;
+			}
+		);
+		Functions\when( 'update_option' )->justReturn( true );
+
+		list( $runner, $_main ) = $this->make_runner( array() );
+
+		$runner->migrate_block_assets_setting( true );
+		$runner->migrate_ccss_max_size();
+		$runner->migrate_ccss_safelist();
+		$runner->migrate_css_queue_defaults();
+		$runner->migrate_speculation_top_urls();
+		$runner->migrate_speculation_prerender_list();
+		$runner->migrate_rum_sample_rate();
+		$runner->migrate_image_alt_edge_defaults();
+		$runner->migrate_safe_mode();
+		$runner->migrate_elementor_safe_mode();
+		$runner->migrate_preload_auto_defaults();
+		$runner->migrate_object_cache_outage_flag();
+		$runner->migrate_ai_speculation_autotune();
+		$runner->migrate_ai_anomaly_v2();
+		$runner->migrate_comment_image_hardening();
+		$runner->migrate_builder_watcher();
+		$runner->migrate_third_party_auto();
+
+		$this->assertCount( 1, $reads, 'Steady-state migrations must share one raw wppo_settings read per request.' );
 	}
 
 	/**

@@ -2540,6 +2540,35 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The default SVG placeholder must not read the non-autoloaded
+	 * wppo_img_info option or resolve a local path it discards.
+	 */
+	public function test_svg_placeholder_skips_image_info_option(): void {
+		$this->stub_local_path_resolution();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'untrailingslashit' )->returnArg();
+
+		$option_reads = array();
+		Functions\when( 'get_option' )->alias(
+			static function ( $key, $default_value = false ) use ( &$option_reads ) {
+				$option_reads[] = $key;
+				return $default_value;
+			}
+		);
+
+		$image_opt  = new Image_Optimisation( $this->default_options );
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_placeholder_src_for_image' );
+		$result     = $reflection->invoke(
+			$image_opt,
+			'<img src="photo.jpg" width="800" height="600">',
+			'http://example.com/wp-content/uploads/photo.jpg'
+		);
+
+		$this->assertStringStartsWith( 'data:image/svg+xml;base64,', $result['src'] );
+		$this->assertNotContains( 'wppo_img_info', $option_reads, 'SVG placeholders must not touch wppo_img_info.' );
+	}
+
+	/**
 	 * Tag Processor preload scan treats present-but-empty as="" as non-image.
 	 *
 	 * Mirrors the regex fallback exactly: any present quoted as value
