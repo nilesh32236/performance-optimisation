@@ -154,60 +154,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			if ( 'activation' === $key ) {
-				delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
-			}
-
-			if ( 'review_done' === $key ) {
-				// Audit #1325: one-shot UI marker must not autoload.
-				update_option( 'wppo_review_dismissed', 1, false );
-			}
-
-			if ( 'review_snooze' === $key ) {
-				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ), false );
-			}
-
-			if ( 'litespeed' === $key ) {
-				update_user_meta( get_current_user_id(), 'wppo_litespeed_notice_dismissed', 1 );
-			}
-
-			if ( 'avif_webp_only' === $key ) {
-				update_user_meta( get_current_user_id(), 'wppo_avif_webp_only_dismissed', 1 );
-			}
-
-			if ( 'htaccess_failure' === $key ) {
-				if ( class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
-					try {
-						Htaccess_Handler::clear_htaccess_failure();
-					} catch ( \Throwable $e ) {
-						unset( $e );
+			switch ( $key ) {
+				case 'activation':
+					delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
+					break;
+				case 'review_done':
+					// Audit #1325: one-shot UI marker must not autoload.
+					update_option( 'wppo_review_dismissed', 1, false );
+					break;
+				case 'review_snooze':
+					update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ), false );
+					break;
+				case 'litespeed':
+					update_user_meta( get_current_user_id(), 'wppo_litespeed_notice_dismissed', 1 );
+					break;
+				case 'avif_webp_only':
+					update_user_meta( get_current_user_id(), 'wppo_avif_webp_only_dismissed', 1 );
+					break;
+				case 'htaccess_failure':
+					if ( class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
+						try {
+							Htaccess_Handler::clear_htaccess_failure();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
-				}
-			}
-
-			if ( 'object_cache_circuit' === $key ) {
-				// Dismiss only this trip: persist its tripped_at timestamp so
-				// the next trip (newer timestamp) automatically re-arms the notice.
-				$tripped_at = 0;
-				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
-					try {
-						$circuit    = ( new Object_Cache() )->get_circuit_state();
-						$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
+					break;
+				case 'object_cache_circuit':
+					// Dismiss only this trip: persist its tripped_at timestamp so
+					// the next trip (newer timestamp) automatically re-arms the notice.
+					$tripped_at = 0;
+					if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+						try {
+							$circuit    = ( new Object_Cache() )->get_circuit_state();
+							$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						// Audit #1434: constant access stays inside the class_exists guard.
+						update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
+						delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
 					}
-					// Audit #1434: constant access stays inside the class_exists guard.
-					update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
-					delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
-				}
-			}
-
-			if ( 'nginx_redis_config' === $key ) {
-				// Timestamped dismissal that re-arms after 14 days (mirrors
-				// the circuit notice re-arm). The shared probe cache is
-				// deliberately left alone: one admin's dismiss must not force
-				// a re-probe for everyone else.
-				update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', time() );
+					break;
+				case 'nginx_redis_config':
+					// Timestamped dismissal that re-arms after 14 days (mirrors
+					// the circuit notice re-arm). The shared probe cache is
+					// deliberately left alone: one admin's dismiss must not force
+					// a re-probe for everyone else.
+					update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', time() );
+					break;
 			}
 
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );

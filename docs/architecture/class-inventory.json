@@ -127,7 +127,7 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Admin",
-        "lines": 784,
+        "lines": 779,
         "methods": 15,
         "public_methods": 4,
         "large_methods": 1,
@@ -135,7 +135,7 @@
         "largest_method": {
             "name": "handle_dismiss",
             "line": 128,
-            "lines": 88
+            "lines": 83
         },
         "method_prefixes": {
             "maybe": 9,
