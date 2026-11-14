@@ -1321,7 +1321,7 @@ const loadScript = ( script ) => {
 				// replacement set — the script is never executed.
 				console.warn(
 					'WPPO: blocked deferred script src (scheme/origin not allowed):',
-					src
+					getLogMessage( src )
 				);
 				resolve();
 				return;
@@ -1370,10 +1370,28 @@ const loadScript = ( script ) => {
 			// Mutating the already-inserted node does nothing, so we must replace it with
 			// a fresh element. Copy allowlisted attributes and content to the new node,
 			// swap it into the DOM, and resolve once it has been processed.
+			//
+			// An inline placeholder must never carry a `src`: the inline branch
+			// does not run isSafeScriptSrc(), so copying src here would turn an
+			// inert <script type="wppo/javascript" src="…"> into a live
+			// cross-origin load during delay-JS hydration. Reject it outright.
+			const inlineSrc = script.getAttribute( 'src' );
+			if ( inlineSrc ) {
+				console.warn(
+					'WPPO: blocked inline deferred script with src (src is not allowed):',
+					getLogMessage( inlineSrc )
+				);
+				resolve();
+				return;
+			}
+
 			const replacement = document.createElement( 'script' );
 
 			// Copy allowlisted attributes from the original node to the replacement.
 			copyAllowedScriptAttrs( script, replacement );
+			// Defence in depth: src is in the allowlist for the external
+			// branch, but an inline replacement must never load a URL.
+			replacement.removeAttribute( 'src' );
 
 			// Stamp the surviving node — see the external branch above (#1217 review).
 			try {
@@ -2310,7 +2328,7 @@ const restoreHeroImage = ( el ) => {
 			if ( ! isSafeSubresourceUrl( dataSrc ) ) {
 				console.warn(
 					'WPPO: blocked hero image src (scheme/origin not allowed):',
-					dataSrc
+					getLogMessage( dataSrc )
 				);
 			} else {
 				el.src = dataSrc;
@@ -2324,7 +2342,7 @@ const restoreHeroImage = ( el ) => {
 			if ( ! isSafeSrcsetValue( dataSrcset ) ) {
 				console.warn(
 					'WPPO: blocked hero image srcset (scheme/origin not allowed):',
-					dataSrcset
+					getLogMessage( dataSrcset )
 				);
 			} else {
 				el.srcset = dataSrcset;
@@ -2343,7 +2361,7 @@ const restoreHeroImage = ( el ) => {
 					if ( ! isSafeSrcsetValue( sourceSrcset ) ) {
 						console.warn(
 							'WPPO: blocked hero picture source srcset (scheme/origin not allowed):',
-							sourceSrcset
+							getLogMessage( sourceSrcset )
 						);
 					} else {
 						s.srcset = sourceSrcset;
@@ -2675,7 +2693,7 @@ const observeElement = ( el ) => {
 			if ( ! isSafeSubresourceUrl( src ) ) {
 				console.warn(
 					'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
-					src
+					getLogMessage( src )
 				);
 			} else {
 				el.src = src;
@@ -2845,7 +2863,7 @@ const loadImages = () => {
 				if ( ! isSafeSubresourceUrl( src ) ) {
 					console.warn(
 						'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
-						src
+						getLogMessage( src )
 					);
 				} else {
 					iframe.src = src;
@@ -2894,7 +2912,9 @@ const loadImages = () => {
 												) {
 													console.warn(
 														'WPPO: blocked lazy picture source srcset (scheme/origin not allowed):',
-														pictureSrcset
+														getLogMessage(
+															pictureSrcset
+														)
 													);
 												} else {
 													s.srcset = pictureSrcset;
@@ -2941,7 +2961,7 @@ const loadImages = () => {
 										) {
 											console.warn(
 												'WPPO: blocked lazy image src (scheme/origin not allowed):',
-												imgSrc
+												getLogMessage( imgSrc )
 											);
 										} else {
 											el.src = imgSrc;
@@ -2959,7 +2979,7 @@ const loadImages = () => {
 										) {
 											console.warn(
 												'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
-												imgSrcset
+												getLogMessage( imgSrcset )
 											);
 										} else {
 											el.srcset = imgSrcset;
@@ -2977,7 +2997,7 @@ const loadImages = () => {
 										) {
 											console.warn(
 												'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
-												iframeSrc
+												getLogMessage( iframeSrc )
 											);
 										} else {
 											el.src = iframeSrc;
@@ -2994,7 +3014,7 @@ const loadImages = () => {
 									} else {
 										console.warn(
 											'WPPO: blocked lazy video src (scheme/origin not allowed):',
-											videoSrc
+											getLogMessage( videoSrc )
 										);
 									}
 									el.removeAttribute( 'data-src' );
@@ -3007,7 +3027,7 @@ const loadImages = () => {
 									} else {
 										console.warn(
 											'WPPO: blocked lazy video poster (scheme/origin not allowed):',
-											poster
+											getLogMessage( poster )
 										);
 									}
 									el.removeAttribute( 'data-poster' );
@@ -3022,7 +3042,7 @@ const loadImages = () => {
 									} else {
 										console.warn(
 											'WPPO: blocked lazy source src (scheme/origin not allowed):',
-											sourceSrc
+											getLogMessage( sourceSrc )
 										);
 									}
 									s.removeAttribute( 'data-src' );
@@ -3229,7 +3249,7 @@ const loadImages = () => {
 								} else {
 									console.warn(
 										'WPPO: blocked lazy video poster (scheme/origin not allowed):',
-										fallbackPoster
+										getLogMessage( fallbackPoster )
 									);
 								}
 								el.removeAttribute( 'data-poster' );
@@ -3244,7 +3264,7 @@ const loadImages = () => {
 								} else {
 									console.warn(
 										'WPPO: blocked lazy video src (scheme/origin not allowed):',
-										fallbackVideoSrc
+										getLogMessage( fallbackVideoSrc )
 									);
 								}
 								el.removeAttribute( 'data-src' );
@@ -3260,7 +3280,7 @@ const loadImages = () => {
 									} else {
 										console.warn(
 											'WPPO: blocked lazy source src (scheme/origin not allowed):',
-											fbSourceSrc
+											getLogMessage( fbSourceSrc )
 										);
 									}
 									s.removeAttribute( 'data-src' );
@@ -3276,7 +3296,7 @@ const loadImages = () => {
 										) {
 											console.warn(
 												'WPPO: blocked lazy source srcset (scheme/origin not allowed):',
-												fbSourceSrcset
+												getLogMessage( fbSourceSrcset )
 											);
 										} else {
 											s.srcset = fbSourceSrcset;
@@ -3331,7 +3351,7 @@ const loadImages = () => {
 									) {
 										console.warn(
 											'WPPO: blocked lazy image src (scheme/origin not allowed):',
-											fallbackImgSrc
+											getLogMessage( fallbackImgSrc )
 										);
 									} else {
 										el.src = fallbackImgSrc;
@@ -3348,7 +3368,7 @@ const loadImages = () => {
 									) {
 										console.warn(
 											'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
-											fallbackImgSrcset
+											getLogMessage( fallbackImgSrcset )
 										);
 									} else {
 										el.srcset = fallbackImgSrcset;
@@ -3428,7 +3448,7 @@ const initVideoPlaceholders = () => {
 					} else {
 						console.warn(
 							'WPPO: blocked image fallback src (scheme/origin not allowed):',
-							fallback
+							getLogMessage( fallback )
 						);
 					}
 					e.target.removeAttribute( 'data-wppo-fallback' );
@@ -3461,7 +3481,7 @@ const initVideoPlaceholders = () => {
 			if ( ! isSafeVideoEmbedUrl( src ) ) {
 				console.warn(
 					'WPPO: blocked video placeholder src (must be a same-origin or allowlisted https embed URL):',
-					src
+					getLogMessage( src )
 				);
 				return;
 			}
@@ -3654,7 +3674,7 @@ const loadBackgrounds = () => {
 			} else {
 				console.warn(
 					'WPPO: blocked lazy background value (unsupported URL/scheme):',
-					background
+					getLogMessage( background )
 				);
 			}
 		}
