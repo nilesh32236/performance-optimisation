@@ -29,6 +29,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
+		 * Safely read and sanitize a scalar `$_SERVER` entry (issue #1820(b)).
+		 *
+		 * Central single-source guard for the `isset( ... ) ? sanitize_text_field( wp_unslash( ... ) ) : ''`
+		 * idiom so the isset-type + `is_scalar` + try guards are consistent for the
+		 * ~50 duplicated reads instead of inconsistent copies. Returns a bounded string;
+		 * never fatals on a missing or non-scalar value (PHP 8 guard). Read-only.
+		 *
+		 * @since NEXT
+		 * @param string $key     Server key, e.g. `HTTP_ACCEPT` or `QUERY_STRING`.
+		 * @param string $fallback Default to return when the key is missing or unusable.
+		 * @return string
+		 */
+		public static function get_server_string( string $key, string $fallback = '' ): string {
+			if ( ! isset( $_SERVER[ $key ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Key existence check only; value is sanitized below.
+				return $fallback;
+			}
+			$raw = $_SERVER[ $key ]; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Raw value is validated and sanitized below.
+			if ( ! is_scalar( $raw ) ) {
+				return $fallback;
+			}
+			$value = (string) $raw;
+			// Fail closed when the WordPress sanitization primitives are unavailable.
+			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
+				return $fallback;
+			}
+			// Bound the input before sanitizing and avoid splitting a multibyte sequence.
+			if ( strlen( $value ) > 4096 ) {
+				$value = function_exists( 'mb_substr' )
+					? mb_substr( $value, 0, 4096, 'UTF-8' )
+					: substr( $value, 0, 4096 );
+			}
+			try {
+				$value = sanitize_text_field( wp_unslash( $value ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Value is unslashed above and sanitized here; dynamic key prevents literal sniff recognition.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+			return (string) $value;
+		}
+
+
+		/**
 		 * Top-level settings keys allowlisted for import and update operations.
 		 *
 		 * Facade alias: canonical owner is {@see \PerformanceOptimise\Inc\Settings_Store::ALLOWED_SETTINGS_KEYS};
