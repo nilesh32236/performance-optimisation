@@ -1,7 +1,7 @@
 # Free model registry
 
-Last successful discovery: `2026-11-18T20:27:01.260Z`
-Last attempt: `2026-11-18T20:27:01.260Z`
+Last successful discovery: `2026-11-19T07:18:56.548Z`
+Last attempt: `2026-11-19T07:18:56.548Z`
 Champion: `opencode/muse-spark-1.3-contributor-free`
 
 Only models with positive zero-price evidence and a catalog free label appear in the candidate pool. Catalog presence does not establish health or coding quality.
@@ -56,6 +56,7 @@ Only models with positive zero-price evidence and a catalog free label appear in
 | `opencode/ring-2.6-1t-free` | 262000 | 66000 | yes | no | catalog_visible |
 | `opencode/space-bunny-free` | 1048576 | 524288 | yes | yes | catalog_visible |
 | `opencode/step-5-preview-free` | 1000000 | 65536 | yes | yes | catalog_visible |
+| `opencode/tidepool-alpha-free` | 1048576 | 131072 | yes | no | catalog_visible |
 | `opencode/trinity-large-preview-free` | 131072 | 131072 | no | no | catalog_visible |
 | `opencode/x-preview-f-free` | 1000000 | 131072 | yes | yes | catalog_visible |
 
