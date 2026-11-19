@@ -779,6 +779,134 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Registry of third-party plugins that overlap a WPPO optimisation feature.
+		 *
+		 * Feature-level (not just cache-level) overlap detection: each entry names
+		 * the constant a plugin defines and its canonical plugin file, plus the
+		 * owned `area` (`css_js`, `media`, or `cache`). Derived from public
+		 * competitor-gap research so a second optimiser can be surfaced before it
+		 * double-minifies or double-defers a page.
+		 *
+		 * @since NEXT
+		 * @return array<string, array{label: string, area: string, constant: string, plugin: string}>
+		 */
+		public static function get_conflicting_optimizer_registry(): array {
+			return array(
+				'autoptimize'     => array(
+					'label'    => 'Autoptimize',
+					'area'     => 'css_js',
+					'constant' => 'AUTOPTIMIZE_PLUGIN_VERSION',
+					'plugin'   => 'autoptimize/autoptimize.php',
+				),
+				'perfmatters'     => array(
+					'label'    => 'Perfmatters',
+					'area'     => 'css_js',
+					'constant' => 'PERFMATTERS_VERSION',
+					'plugin'   => 'perfmatters/perfmatters.php',
+				),
+				'rapidload'       => array(
+					'label'    => 'RapidLoad',
+					'area'     => 'css_js',
+					'constant' => 'RAPIDLOAD_VERSION',
+					'plugin'   => 'rapidload/rapidload.php',
+				),
+				'litespeed-cache' => array(
+					'label'    => 'LiteSpeed Cache',
+					'area'     => 'css_js',
+					'constant' => 'LSCWP_V',
+					'plugin'   => 'litespeed-cache/litespeed-cache.php',
+				),
+				'wp-rocket'       => array(
+					'label'    => 'WP Rocket',
+					'area'     => 'cache',
+					'constant' => 'WP_ROCKET_VERSION',
+					'plugin'   => 'wp-rocket/wp-rocket.php',
+				),
+				'smush'           => array(
+					'label'    => 'Smush',
+					'area'     => 'media',
+					'constant' => 'WP_SMUSH_VERSION',
+					'plugin'   => 'wp-smushit/wp-smush.php',
+				),
+				'shortpixel'      => array(
+					'label'    => 'ShortPixel',
+					'area'     => 'media',
+					'constant' => 'SHORTPIXEL_IMAGE_OPTIMISER_VERSION',
+					'plugin'   => 'shortpixel-image-optimiser/wp-shortpixel.php',
+				),
+			);
+		}
+
+		/**
+		 * Detect active third-party optimisers with feature-level overlap.
+		 *
+		 * Probe-only and fail-open: an entry is present when its plugin constant
+		 * is defined (`function_exists()` on `is_plugin_active()` as the
+		 * admin-context fallback). Missing probe functions, missing constants, or
+		 * any thrown error yield an empty array — detection never fatals, never
+		 * writes an option, and never changes the settings schema.
+		 *
+		 * @since NEXT
+		 * @return array<string, array{label: string, area: string}> Detected slug => label/area.
+		 */
+		public static function detect_conflicting_optimizers(): array {
+			$found = array();
+			try {
+				foreach ( self::get_conflicting_optimizer_registry() as $slug => $entry ) {
+					if ( ! is_array( $entry ) ) {
+						continue;
+					}
+
+					$label    = isset( $entry['label'] ) ? (string) $entry['label'] : '';
+					$area     = isset( $entry['area'] ) ? (string) $entry['area'] : '';
+					$constant = isset( $entry['constant'] ) ? (string) $entry['constant'] : '';
+					$plugin   = isset( $entry['plugin'] ) ? (string) $entry['plugin'] : '';
+
+					if ( '' === $label || '' === $area ) {
+						continue;
+					}
+
+					if ( self::is_optimizer_probe_active( $constant, $plugin ) ) {
+						$found[ (string) $slug ] = array(
+							'label' => $label,
+							'area'  => $area,
+						);
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			return $found;
+		}
+
+		/**
+		 * Whether one optimizer registry entry is active.
+		 *
+		 * @since NEXT
+		 * @param string $constant Plugin version constant (empty to skip).
+		 * @param string $plugin   Plugin file path (empty to skip).
+		 * @return bool True when the constant is defined or the plugin is active.
+		 */
+		private static function is_optimizer_probe_active( string $constant, string $plugin ): bool {
+			if ( '' !== $constant && defined( $constant ) ) {
+				return true;
+			}
+
+			if ( '' === $plugin || ! function_exists( 'is_plugin_active' ) ) {
+				return false;
+			}
+
+			try {
+				return (bool) is_plugin_active( $plugin );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether a query string carries WooCommerce layered-nav / faceted-filter params.
 		 *
 		 * Matches faceted param names case-insensitively (`&`/`;` split,
