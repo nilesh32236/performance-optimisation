@@ -3235,7 +3235,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cache_count = (int) ( $cache_stats['cached_pages'] ?? 0 );
 
 			// Clone options and redact sensitive keys before exposing to the client.
+			// Note: This redacted copy is also used to back the internal performance_audit/cache_settings reads below.
 			$safe_options = $this->get_options();
+			// Capture the configured boolean BEFORE the key is unset below.
+			$pagespeed_api_key_configured = ! empty( $safe_options['performance_audit']['pagespeed_api_key'] );
 			if ( isset( $safe_options['performance_audit']['pagespeed_api_key'] ) ) {
 				unset( $safe_options['performance_audit']['pagespeed_api_key'] );
 			}
@@ -3281,10 +3284,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
-						'pagespeedApiKeyConfigured' => ! empty( $this->get_options()['performance_audit']['pagespeed_api_key'] ),
-						'highValueUrls'             => $this->get_options()['performance_audit']['high_value_urls'] ?? array(), // High-value URLs from settings (edited in Tools tab; consumed by preload/PageSpeed rescan cron + llms.txt proxy).
-						'autoFixEnabled'            => (bool) ( $this->get_options()['performance_audit']['auto_fix_enabled'] ?? false ),
-						'autoRescan'                => $this->get_options()['performance_audit']['auto_rescan'] ?? '',
+						'pagespeedApiKeyConfigured' => $pagespeed_api_key_configured,
+						'highValueUrls'             => $safe_options['performance_audit']['high_value_urls'] ?? array(), // High-value URLs from settings (edited in Tools tab; consumed by preload/PageSpeed rescan cron + llms.txt proxy).
+						'autoFixEnabled'            => (bool) ( $safe_options['performance_audit']['auto_fix_enabled'] ?? false ),
+						'autoRescan'                => $safe_options['performance_audit']['auto_rescan'] ?? '',
 					),
 					// Frontend theme colors for accent syncing.
 					'themeColors'                          => $this->get_frontend_theme_colors(),
@@ -3296,7 +3299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'speculation_rules'                    => array(
 						'mode_override'       => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' ),
 						'eagerness_override'  => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ),
-						'static_cache_active' => ! empty( $this->get_options()['cache_settings']['enableCache'] ),
+						'static_cache_active' => ! empty( $safe_options['cache_settings']['enableCache'] ),
 					),
 					// LiteSpeed integration — for SPA banner + mode selector (Phase 1).
 					'litespeed'                            => class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ? LiteSpeed_Integration::get_info() : array(
@@ -3347,12 +3350,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $this->should_optimise_for_logged_in() ) {
-				$lazy_load_images         = ! empty( $this->get_options()['image_optimisation']['lazyLoadImages'] );
-				$lazy_load_backgrounds    = ! empty( $this->get_options()['image_optimisation']['lazyLoadBackgroundImages'] );
-				$lazy_load_videos         = ! empty( $this->get_options()['image_optimisation']['lazyLoadVideos'] );
-				$enable_video_placeholder = ! empty( $this->get_options()['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
-				$delay_js                 = ! empty( $this->get_options()['file_optimisation']['delayJS'] );
-				$use_native_lazy          = ! empty( $this->get_options()['image_optimisation']['lazyLoadNative'] );
+				$options                  = $this->get_options();
+				$lazy_load_images         = ! empty( $options['image_optimisation']['lazyLoadImages'] );
+				$lazy_load_backgrounds    = ! empty( $options['image_optimisation']['lazyLoadBackgroundImages'] );
+				$lazy_load_videos         = ! empty( $options['image_optimisation']['lazyLoadVideos'] );
+				$enable_video_placeholder = ! empty( $options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
+				$delay_js                 = ! empty( $options['file_optimisation']['delayJS'] );
+				$use_native_lazy          = ! empty( $options['image_optimisation']['lazyLoadNative'] );
 
 				// When native lazy loading is active, images use native loading="lazy" but iframes may still need JS restoration.
 				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_backgrounds || $lazy_load_videos || $enable_video_placeholder || $delay_js;
@@ -3374,8 +3378,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
 
 					if ( $delay_js ) {
-						$idle_timeout = ! empty( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
-						? absint( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
+						$idle_timeout = ! empty( $options['file_optimisation']['delayJSIdleTimeout'] )
+						? absint( $options['file_optimisation']['delayJSIdleTimeout'] )
 						: 3000;
 						// Prefer the in-memory effective strategy (INP preset may have
 						// flipped interaction → idle in setup_hooks) over the stored

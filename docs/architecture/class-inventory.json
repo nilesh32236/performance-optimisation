@@ -2275,15 +2275,15 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Core",
-        "lines": 10399,
+        "lines": 10403,
         "methods": 239,
         "public_methods": 151,
         "large_methods": 17,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "enqueue_scripts",
-            "line": 3344,
-            "lines": 203
+            "line": 3347,
+            "lines": 204
         },
         "method_prefixes": {
             "get": 54,
