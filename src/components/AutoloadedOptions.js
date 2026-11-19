@@ -95,11 +95,11 @@ const AutoloadedOptions = () => {
 					signal
 				);
 				if ( signal?.aborted || ! isMounted.current ) {
-					return;
+					return false;
 				}
 				if ( response.success && response.data?.options ) {
 					if ( ! isMounted.current ) {
-						return;
+						return false;
 					}
 					setOptions( response.data.options );
 					setAudit( {
@@ -120,27 +120,30 @@ const AutoloadedOptions = () => {
 					setSizeLimit(
 						Number.isFinite( limit ) && limit > 0 ? limit : null
 					);
-				} else {
-					if ( ! isMounted.current ) {
-						return;
-					}
-					notify( {
-						type: 'error',
-						message:
-							response.message ||
-							__(
-								'Failed to load autoloaded options.',
-								'performance-optimisation'
-							),
-						durationMs: 5000,
-					} );
-				}
-			} catch ( loadError ) {
-				if ( signal?.aborted || loadError?.name === 'AbortError' ) {
-					return;
+					// Audit #1839: report success so callers do not emit a
+					// success notice on top of the failure notice raised here.
+					return true;
 				}
 				if ( ! isMounted.current ) {
-					return;
+					return false;
+				}
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to load autoloaded options.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+				return false;
+			} catch ( loadError ) {
+				if ( signal?.aborted || loadError?.name === 'AbortError' ) {
+					return false;
+				}
+				if ( ! isMounted.current ) {
+					return false;
 				}
 				notify( {
 					type: 'error',
@@ -154,6 +157,7 @@ const AutoloadedOptions = () => {
 					'Error fetching autoloaded options:',
 					getErrorLogMessage( loadError )
 				);
+				return false;
 			} finally {
 				if ( ! signal?.aborted && isMounted.current ) {
 					setLoading( false );
@@ -250,24 +254,28 @@ const AutoloadedOptions = () => {
 				setAppliedSummary( response.data );
 				setRemediated( response.data.remediated || {} );
 				// Reload first: load() dismisses stale notices, so notify after.
-				await load( controller.signal );
+				const reloaded = await load( controller.signal );
 				if ( controller.signal.aborted || ! isMounted.current ) {
 					return;
 				}
-				notify( {
-					type: 'success',
-					message: sprintf(
-						/* translators: %d: number of options remediated. */
-						_n(
-							'Remediation applied to %d option.',
-							'Remediation applied to %d options.',
-							response.data.applied?.length || 0,
-							'performance-optimisation'
+				// Audit #1839: only claim success if the post-write reload
+				// actually succeeded; otherwise load() already showed the error.
+				if ( reloaded ) {
+					notify( {
+						type: 'success',
+						message: sprintf(
+							/* translators: %d: number of options remediated. */
+							_n(
+								'Remediation applied to %d option.',
+								'Remediation applied to %d options.',
+								response.data.applied?.length || 0,
+								'performance-optimisation'
+							),
+							response.data.applied?.length || 0
 						),
-						response.data.applied?.length || 0
-					),
-					durationMs: 5000,
-				} );
+						durationMs: 5000,
+					} );
+				}
 			} else {
 				notify( {
 					type: 'error',
@@ -359,22 +367,24 @@ const AutoloadedOptions = () => {
 						};
 					} );
 					// Reload first: load() dismisses stale notices, so notify after.
-					await load( controller.signal );
+					const reloaded = await load( controller.signal );
 					if ( controller.signal.aborted || ! isMounted.current ) {
 						return;
 					}
-					notify( {
-						type: 'success',
-						message: sprintf(
-							/* translators: %s: option name. */
-							__(
-								'Reverted autoload for %s.',
-								'performance-optimisation'
+					if ( reloaded ) {
+						notify( {
+							type: 'success',
+							message: sprintf(
+								/* translators: %s: option name. */
+								__(
+									'Reverted autoload for %s.',
+									'performance-optimisation'
+								),
+								optionName
 							),
-							optionName
-						),
-						durationMs: 5000,
-					} );
+							durationMs: 5000,
+						} );
+					}
 				} else {
 					notify( {
 						type: 'error',
@@ -439,18 +449,20 @@ const AutoloadedOptions = () => {
 				setRemediated( {} );
 				setAppliedSummary( null );
 				// Reload first: load() dismisses stale notices, so notify after.
-				await load( controller.signal );
+				const reloaded = await load( controller.signal );
 				if ( controller.signal.aborted || ! isMounted.current ) {
 					return;
 				}
-				notify( {
-					type: 'success',
-					message: __(
-						'All remediated options reverted.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} );
+				if ( reloaded ) {
+					notify( {
+						type: 'success',
+						message: __(
+							'All remediated options reverted.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+				}
 			} else {
 				notify( {
 					type: 'error',

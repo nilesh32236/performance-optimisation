@@ -41,10 +41,6 @@ const RecentActivityCard = ( {
 							onNavigate( 'tools' );
 						}
 					} }
-					aria-label={ __(
-						'View Full Optimisation Activity Log',
-						'performance-optimisation'
-					) }
 				>
 					{ __( 'View Full Log', 'performance-optimisation' ) }
 					<FontAwesomeIcon icon={ faArrowRight } aria-hidden="true" />

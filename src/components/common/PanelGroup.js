@@ -23,10 +23,13 @@
  * ## Accessibility
  *
  * A real `<button>` with `aria-expanded` and `aria-controls`, because the
- * affordance is "show more", which is a button and not a heading. The panel is a
- * labelled region, so a screen reader can jump to it once expanded. Collapsed
- * content stays in the DOM rather than being unmounted, so a value being typed
- * into a panel inside a folded group is not silently destroyed.
+ * affordance is "show more", which is a button and not a heading. The panel is
+ * deliberately **not** exposed as a landmark: pointing `aria-labelledby` at the
+ * toggle renamed the region on every fold/unfold, so a plain `hidden` div is
+ * the safer choice (audit #1839 corrected this doc comment, which previously
+ * claimed the panel was a labelled region). Collapsed content stays in the DOM
+ * rather than being unmounted, so a value being typed into a panel inside a
+ * folded group is not silently destroyed.
  *
  * @package
  */

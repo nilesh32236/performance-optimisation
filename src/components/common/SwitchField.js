@@ -1,4 +1,4 @@
-import { useId } from '@wordpress/element';
+import { useEffect, useId, useRef } from '@wordpress/element';
 import { ToggleControl } from '@wordpress/components';
 
 /**
@@ -36,43 +36,46 @@ const SwitchField = ( {
 		} );
 	};
 
+	const inputRef = useRef( null );
 	const labelId = useId();
-	// Audit #1420: description programmatically associated with the toggle.
-	const descriptionId = description ? `desc-${ labelId }` : undefined;
+
+	// Audit #1839: ToggleControl destructures only a fixed prop subset
+	// (__nextHasNoMarginBottom, label, checked, help, className, onChange,
+	// disabled) and forwards nothing else — so aria-labelledby/aria-label and
+	// hideLabelFromVision were silently dropped. Apply the accessible name
+	// directly to the input instead, and pass the description through `help`
+	// (ToggleControl wires aria-describedby to the rendered hint itself).
+	useEffect( () => {
+		const input = inputRef.current;
+		if ( ! input ) {
+			return;
+		}
+		if ( showLabel ) {
+			input.setAttribute( 'aria-labelledby', labelId );
+			input.removeAttribute( 'aria-label' );
+		} else {
+			input.setAttribute( 'aria-label', label );
+			input.removeAttribute( 'aria-labelledby' );
+		}
+	}, [ showLabel, label, labelId ] );
 
 	return (
 		<div className="wppo-switch-field">
-			{ ( showLabel || description ) && (
+			{ showLabel && (
 				<div className="wppo-switch-field__info">
-					{ showLabel && (
-						<span
-							className="wppo-switch-field__label"
-							id={ labelId }
-						>
-							{ label }
-							{ badge }
-						</span>
-					) }
-					{ description && (
-						<p id={ descriptionId } className="wppo-text-muted">
-							{ description }
-						</p>
-					) }
+					<span className="wppo-switch-field__label" id={ labelId }>
+						{ label }
+						{ badge }
+					</span>
 				</div>
 			) }
 			<ToggleControl
 				__nextHasNoMarginBottom
 				checked={ checked }
 				onChange={ handleToggle }
-				label={ label }
-				hideLabelFromVision={ true }
+				help={ description }
 				disabled={ disabled }
-				{ ...( showLabel
-					? { 'aria-labelledby': labelId }
-					: { 'aria-label': label } ) }
-				{ ...( descriptionId
-					? { 'aria-describedby': descriptionId }
-					: {} ) }
+				ref={ inputRef }
 			/>
 		</div>
 	);

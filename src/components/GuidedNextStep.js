@@ -181,7 +181,6 @@ const GuidedNextStep = ( { onNavigate } ) => {
 			{ nextAction && (
 				<div
 					className={ `wppo-suggestion-card wppo-suggestion-card--${ nextAction.status }` }
-					role="listitem"
 				>
 					<div className="wppo-suggestion-card__header">
 						<span className="wppo-suggestion-card__description">

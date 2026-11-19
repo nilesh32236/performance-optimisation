@@ -547,17 +547,25 @@ const deriveOneDevice = ( vitals, device ) => {
 				measure.key === 'cls'
 					? Number( raw.toFixed( 3 ) )
 					: Math.round( raw );
+			// Audit #1839: this module is pure and never imports wp.i18n, so it
+			// emits the raw number plus a unit token. detailCopy.js formats the
+			// unit into a translatable pattern at render time, so a translator
+			// can localize (or reposition) the millisecond unit.
 			const value =
-				measure.key === 'cls'
-					? rounded.toFixed( 3 )
-					: `${ rounded } ms`;
+				measure.key === 'cls' ? rounded.toFixed( 3 ) : rounded;
+			const unit = measure.key === 'cls' ? null : 'ms';
 			if ( rounded <= measure.good ) {
 				return {
 					id: device ? `${ measure.id }--${ device }` : measure.id,
 					labelKey: measure.labelKey,
 					status: STATUS.HEALTHY,
 					detailKey: DETAIL.vital_good,
-					detailArgs: { labelKey: measure.labelKey, value, device },
+					detailArgs: {
+						labelKey: measure.labelKey,
+						value,
+						unit,
+						device,
+					},
 				};
 			}
 			if ( rounded <= measure.poor ) {
@@ -569,6 +577,7 @@ const deriveOneDevice = ( vitals, device ) => {
 					detailArgs: {
 						labelKey: measure.labelKey,
 						value,
+						unit,
 						hintKey: measure.hintKey,
 						device,
 					},
@@ -582,6 +591,7 @@ const deriveOneDevice = ( vitals, device ) => {
 				detailArgs: {
 					labelKey: measure.labelKey,
 					value,
+					unit,
 					hintKey: measure.hintKey,
 					device,
 				},

@@ -155,13 +155,29 @@ const PreloadSettings = ( { options = {} } ) => {
 					setCacheCap( payload.cache );
 				}
 			} catch ( err ) {
+				// Audit #1839: an abort (unmount / superseded run) is not a
+				// failure and must not notify; a real failure surfaces a
+				// notice like the sibling tabs instead of only logging.
+				if (
+					err?.name === 'AbortError' ||
+					( signal && signal.aborted )
+				) {
+					return;
+				}
 				console.error(
 					'Failed fetching preload status',
 					getErrorLogMessage( err )
 				);
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load preload status.',
+						'performance-optimisation'
+					),
+				} );
 			}
 		},
-		[ isMountedRef ]
+		[ isMountedRef, notify ]
 	);
 
 	useEffect( () => {
