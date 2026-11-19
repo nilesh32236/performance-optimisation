@@ -3347,12 +3347,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $this->should_optimise_for_logged_in() ) {
-				$lazy_load_images         = ! empty( $this->get_options()['image_optimisation']['lazyLoadImages'] );
-				$lazy_load_backgrounds    = ! empty( $this->get_options()['image_optimisation']['lazyLoadBackgroundImages'] );
-				$lazy_load_videos         = ! empty( $this->get_options()['image_optimisation']['lazyLoadVideos'] );
-				$enable_video_placeholder = ! empty( $this->get_options()['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
-				$delay_js                 = ! empty( $this->get_options()['file_optimisation']['delayJS'] );
-				$use_native_lazy          = ! empty( $this->get_options()['image_optimisation']['lazyLoadNative'] );
+				// Snapshot options for the flag reads; get_options() is memoized per blog,
+				// so this only removes repeated facade calls inside this method.
+				// The delay block below re-snapshots after the gettext-filtered __() call.
+				$options                  = $this->get_options();
+				$lazy_load_images         = ! empty( $options['image_optimisation']['lazyLoadImages'] );
+				$lazy_load_backgrounds    = ! empty( $options['image_optimisation']['lazyLoadBackgroundImages'] );
+				$lazy_load_videos         = ! empty( $options['image_optimisation']['lazyLoadVideos'] );
+				$enable_video_placeholder = ! empty( $options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
+				$delay_js                 = ! empty( $options['file_optimisation']['delayJS'] );
+				$use_native_lazy          = ! empty( $options['image_optimisation']['lazyLoadNative'] );
 
 				// When native lazy loading is active, images use native loading="lazy" but iframes may still need JS restoration.
 				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_backgrounds || $lazy_load_videos || $enable_video_placeholder || $delay_js;
@@ -3374,8 +3378,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
 
 					if ( $delay_js ) {
-						$idle_timeout = ! empty( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
-						? absint( $this->get_options()['file_optimisation']['delayJSIdleTimeout'] )
+						// Re-snapshot options below the translation call since it runs gettext filters.
+						$options      = $this->get_options();
+						$idle_timeout = ! empty( $options['file_optimisation']['delayJSIdleTimeout'] )
+						? absint( $options['file_optimisation']['delayJSIdleTimeout'] )
 						: 3000;
 						// Prefer the in-memory effective strategy (INP preset may have
 						// flipped interaction → idle in setup_hooks) over the stored
