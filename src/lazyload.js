@@ -20,14 +20,18 @@ import { redactLogSecrets } from './lib/logSecrets';
 const getLogMessage = ( err ) => {
 	let message;
 	if ( err instanceof Error ) {
+		// Deliberately NOT truncated here: redactLogSecrets() scans a window
+		// far wider than the published cap and slices the redacted result, so
+		// pre-slicing would cut a credential straddling the cap before the
+		// redactor sees it (audit #1831).
 		message = err.message || 'Unknown error';
 	} else if ( typeof err === 'string' ) {
-		message = err.slice( 0, 500 ) || 'Unknown error';
+		message = err || 'Unknown error';
 	} else if ( err === null || typeof err === 'undefined' ) {
 		return 'Unknown error';
 	} else {
 		try {
-			message = String( err ).slice( 0, 500 );
+			message = String( err );
 		} catch {
 			return 'Unknown error';
 		}
@@ -543,21 +547,76 @@ const replayDelayedLifecycleEvents = () => {
  */
 const readModuleData = () => {
 	const el = document.getElementById( 'wp-script-module-data-wppo-lazyload' );
-	if ( ! el || ! el.textContent ) {
-		return {};
+	if ( el && el.textContent ) {
+		try {
+			return JSON.parse( el.textContent );
+		} catch ( _err ) {
+			console.warn(
+				'WPPO: invalid lazyload module data',
+				getLogMessage( _err )
+			);
+		}
 	}
-	try {
-		return JSON.parse( el.textContent );
-	} catch ( _err ) {
-		console.warn(
-			'WPPO: invalid lazyload module data',
-			getLogMessage( _err )
-		);
+	// WP < 6.9 classic-script fallback: PHP injects window globals (see
+	// Main::enqueue_scripts()); merged here so one bundle serves the full
+	// supported matrix (floor 6.2, audit #1831).
+	const fallback = {};
+	if ( typeof window.wppoVideoPlayerLabel === 'string' ) {
+		fallback.videoPlayerLabel = window.wppoVideoPlayerLabel;
 	}
-	return {};
+	if ( typeof window.wppoVideoPlayLabel === 'string' ) {
+		fallback.videoPlayLabel = window.wppoVideoPlayLabel;
+	}
+	return fallback;
 };
 
 const moduleData = readModuleData();
+
+/**
+ * Pick a server-localized label with an English fallback.
+ *
+ * The bundle stays dependency-free by design (no @wordpress/i18n dep), so
+ * these strings are localized in PHP (Main::enqueue path, videoPlayerLabel /
+ * videoPlayLabel keys) with English fallbacks here for when the module data
+ * is absent. One shared pair feeds both iframe.title and the placeholder
+ * aria-label so the two can never drift into untranslatable literals again
+ * (audits #1354, #1831).
+ *
+ * @param {*}      value    Candidate label from module data / globals.
+ * @param {string} fallback English fallback when the candidate is absent.
+ * @return {string} The label to use.
+ */
+const pickVideoLabel = ( value, fallback ) => {
+	if ( typeof value === 'string' && value ) {
+		return value;
+	}
+	return fallback;
+};
+
+const VIDEO_PLAYER_LABEL = pickVideoLabel(
+	moduleData.videoPlayerLabel,
+	'Video player'
+);
+// The aria-label names the action, never the noun "Video player": falling
+// back to moduleData.videoPlayerLabel would announce a noun for a locale
+// that ships only the player label, reintroducing the mismatch #1831 fixed.
+// English action is the terminal fallback; a dedicated play label always
+// wins (see the video-placeholder tests).
+const VIDEO_PLAY_LABEL = pickVideoLabel(
+	moduleData.videoPlayLabel,
+	'Play video'
+);
+
+// Test hook: the bundle has no module exports (side-effect script), so Jest
+// reaches the resolved labels through this handle instead of re-implementing
+// readModuleData()/pickVideoLabel() (audit #1831 review). Mirrors the
+// window.__wppoPrioritizeLcp seam below.
+if ( typeof window !== 'undefined' ) {
+	window.__wppoVideoLabels = {
+		videoPlayerLabel: VIDEO_PLAYER_LABEL,
+		videoPlayLabel: VIDEO_PLAY_LABEL,
+	};
+}
 
 /**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
@@ -1986,6 +2045,9 @@ const teardownLazyload = () => {
 	try {
 		delete window.wppoNativeLazy;
 		delete window.wppoDelayConfig;
+		delete window.wppoVideoPlayerLabel;
+		delete window.wppoVideoPlayLabel;
+		delete window.__wppoVideoLabels;
 	} catch {
 		// Non-configurable global; nothing to release.
 	}
@@ -3118,9 +3180,16 @@ const loadImages = () => {
 							return;
 						}
 						// Natively-deferred images never enter observeElement()
-						// (no data-src), so prepare their placeholders here too
-						// (idempotent — the dedicated native observer agrees).
-						prepareNativePlaceholdersForNode( node );
+						// (no data-src), so prepare their placeholders here too.
+						// Skipped when the dedicated native observer is
+						// installed: it observes the same document.body
+						// childList/subtree and calls the same function, so
+						// doing it here as well ran matches() plus
+						// querySelectorAll() twice over every inserted subtree
+						// on the AJAX/infinite-scroll path.
+						if ( ! nativePlaceholderObserver ) {
+							prepareNativePlaceholdersForNode( node );
+						}
 						if (
 							node.tagName === 'IMG' ||
 							node.tagName === 'IFRAME' ||
@@ -3482,12 +3551,8 @@ const initVideoPlaceholders = () => {
 			iframe.allowFullscreen = true;
 			iframe.loading = 'lazy';
 			// Audit #1354: PHP-provided translation via module data
-			// (server-localized); English fallback otherwise.
-			iframe.title =
-				typeof moduleData.videoPlayerLabel === 'string' &&
-				moduleData.videoPlayerLabel
-					? moduleData.videoPlayerLabel
-					: 'Video player';
+			// (server-localized); English fallback via VIDEO_PLAYER_LABEL.
+			iframe.title = VIDEO_PLAYER_LABEL;
 			iframe.style.cssText =
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
@@ -3515,6 +3580,18 @@ const initVideoPlaceholders = () => {
 							return;
 						}
 						if ( ! IFRAME_ATTR_ALLOWLIST.has( name ) ) {
+							return;
+						}
+						// Audit #1831: VIDEO_PLAYER_LABEL above is the
+						// *fallback*, not an override. When the embed carries
+						// an authored title (the core YouTube block's
+						// "YouTube video player", or a real video title) that
+						// is strictly more descriptive for assistive tech than
+						// a generic localized noun, so the stored title is
+						// restored over it. The localized label still applies
+						// whenever the payload has no title — which is the case
+						// the audit actually flagged.
+						if ( 'title' === name && '' === v.trim() ) {
 							return;
 						}
 						// Capability-bearing attributes are value-checked so a
@@ -3610,15 +3687,9 @@ const initVideoPlaceholders = () => {
 			el.setAttribute( 'role', 'button' );
 		}
 		if ( ! el.hasAttribute( 'aria-label' ) ) {
-			// Audit #1354: PHP-provided translation via module data
-			// (server-localized); English fallback otherwise.
-			el.setAttribute(
-				'aria-label',
-				typeof moduleData.videoPlayerLabel === 'string' &&
-					moduleData.videoPlayerLabel
-					? moduleData.videoPlayerLabel
-					: 'Play video'
-			);
+			// Audit #1354/#1831: PHP-provided translation via module data
+			// (server-localized); English fallback via VIDEO_PLAY_LABEL.
+			el.setAttribute( 'aria-label', VIDEO_PLAY_LABEL );
 		}
 		el.addEventListener( 'click', loadVideo );
 		el.addEventListener( 'keydown', ( event ) => {

@@ -165,7 +165,10 @@
 	color: var(--wppo-text-muted, #475569);
 }
 
-/* Two columns only when there is genuinely room for them. */
+/* Two columns only when there is genuinely room for them.
+ * Audit #1831: intentionally raw — 1100px sits outside the xs–xl token
+ * scale and respond-to() emits max-width only, so no token expresses this
+ * min-width rule. Revisit if a respond-to-min() variant is added. */
 @media ( min-width: 1100px ) {
 	.wppo-overview {
 		grid-template-columns: minmax( 0, 2fr ) minmax( 0, 1fr );

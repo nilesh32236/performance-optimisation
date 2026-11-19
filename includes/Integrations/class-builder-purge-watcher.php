@@ -1992,7 +1992,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 							// Forced: the wipe above deleted every variant, so
 							// per-post freshness would find nothing fresh and
 							// the cooldown must not suppress the requeue (issue #1107).
-							( new Used_CSS( Util::get_settings() ) )->regenerate_all( true );
+							( Used_CSS::from_settings() )->regenerate_all( true );
 						}
 					} elseif ( method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
 						// Targeted path (issue #1220): do NOT wipe all variants

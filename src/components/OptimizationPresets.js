@@ -93,10 +93,12 @@ export const formatDiffValue = ( value ) => {
 /**
  * Known secret-bearing settings paths stripped before a JSON export.
  *
- * @deprecated NEXT Kept for backward compatibility with existing imports;
- *             stripSensitiveSettings() now uses the shared generic
- *             SECRET_KEY_PATTERN redactor (src/lib/stripSensitive.js) so
- *             newly added secret keys are stripped by default.
+ * @deprecated NEXT No longer governs redaction, and no module in src/ imports
+ *             it: stripSensitiveSettings() uses the shared generic
+ *             SECRET_KEY_PATTERN redactor (src/lib/stripSensitive.js) so newly
+ *             added secret keys are stripped by default. Retained only as a
+ *             public export for external consumers; remove once nothing
+ *             outside this repository reads it.
  * @since 2.3.0
  * @type {Array.<[string, string]>} [tab, key] pairs.
  */
@@ -123,11 +125,13 @@ export const SENSITIVE_EXPORT_PATHS = [
  * @return {Object} Cloned settings safe for export.
  */
 export const stripSensitiveSettings = ( settings ) => {
-	const clone =
-		settings && typeof settings === 'object'
-			? JSON.parse( JSON.stringify( settings ) )
-			: {};
-	return stripSensitiveKeys( clone );
+	// stripSensitiveKeys() already returns a fresh deep clone (and drops
+	// prototype-pollution keys), so the extra JSON round-trip only added a
+	// second full traversal plus stringify/parse allocation on this export
+	// path. Mirrors PluginSetting.exportSettings().
+	return stripSensitiveKeys(
+		settings && typeof settings === 'object' ? settings : {}
+	);
 };
 
 /**
