@@ -170,7 +170,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				// Audit #1420: log instead of swallowing (inner handler
 				// already fails open; this covers abort rejections).
 				if ( fetchError?.name !== 'AbortError' ) {
-					console.error( 'Preload status fetch failed:', fetchError );
+					console.error(
+						'Preload status fetch failed:',
+						getErrorLogMessage( fetchError )
+					);
 				}
 			} )
 		);

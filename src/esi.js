@@ -73,6 +73,35 @@ const getEsiLogMessage = ( err ) => {
 };
 
 /**
+ * Elements removed outright before the fragment reaches the live DOM.
+ *
+ * Includes SVG SMIL elements (animate/set/…) because they can rewrite an
+ * already-sanitized URL after insertion. Compared case-insensitively via
+ * `localName` so SVG's camelCase names (animateTransform) are covered.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const ESI_BLOCKED_TAGS = new Set( [
+	'script',
+	'iframe',
+	'frame',
+	'frameset',
+	'object',
+	'embed',
+	'link',
+	'meta',
+	'base',
+	'style',
+	'animate',
+	'set',
+	'animatetransform',
+	'animatemotion',
+	'animatecolor',
+	'discard',
+] );
+
+/**
  * Attributes whose values are URLs and must be scheme-checked before the
  * fragment is inserted into the live DOM.
  *
@@ -235,10 +264,14 @@ export const sanitizeEsiFragment = ( html ) => {
 	// Remove script-capable elements outright. Forms/inputs are kept —
 	// cart and admin-bar fragments legitimately contain them. Styles are
 	// removed too (server-side wp_kses is authoritative; fragments do not
-	// need inline styles).
-	frag.querySelectorAll(
-		'script, iframe, frame, frameset, object, embed, link, meta, base, style'
-	).forEach( ( node ) => node.remove() );
+	// need inline styles). SVG SMIL elements (animate/set/…) can rewrite an
+	// already-sanitized URL after insertion, so they are removed as well.
+	frag.querySelectorAll( '*' ).forEach( ( node ) => {
+		const tag = ( node.localName || node.tagName || '' ).toLowerCase();
+		if ( ESI_BLOCKED_TAGS.has( tag ) ) {
+			node.remove();
+		}
+	} );
 
 	const all = frag.querySelectorAll( '*' );
 	if ( all.length > MAX_ESI_NODES ) {
@@ -269,10 +302,28 @@ export const sanitizeEsiFragment = ( html ) => {
 				// Browsers ignore ASCII whitespace/control characters when parsing
 				// schemes ("java\tscript:", "  javascript:"), so normalise before
 				// matching (0x00-0x20 covers C0 controls and space).
-				const value = String( attr.value || '' )
-					.toLowerCase()
-					.replace( /[\u0000-\u0020]/g, '' );
-				if ( /^(javascript|vbscript|data|blob):/.test( value ) ) {
+				const normalise = ( candidate ) =>
+					String( candidate || '' )
+						.toLowerCase()
+						.replace( /[\u0000-\u0020]/g, '' );
+				const hasDangerousScheme = ( candidate ) =>
+					/^(javascript|vbscript|data|blob):/.test(
+						normalise( candidate )
+					);
+
+				// Multi-URL attributes can hide a dangerous candidate after
+				// the first, so validate every entry rather than the start of
+				// the whole value.
+				let candidates;
+				if ( 'srcset' === name ) {
+					candidates = String( attr.value || '' ).split( ',' );
+				} else if ( 'ping' === name ) {
+					candidates = String( attr.value || '' ).split( /\s+/ );
+				} else {
+					candidates = [ attr.value ];
+				}
+
+				if ( candidates.some( hasDangerousScheme ) ) {
 					node.removeAttribute( attr.name );
 				}
 			}

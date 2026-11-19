@@ -161,6 +161,14 @@ describe( 'ObjectCache Component', () => {
 
 		const passwordInput = screen.getByLabelText( /Auth Password/i );
 		expect( passwordInput.value ).toBe( 's3cret' );
+		// A Redis credential must not be offered for password-manager
+		// autofill/save as if it were the WordPress admin login.
+		expect( passwordInput ).toHaveAttribute(
+			'autocomplete',
+			'new-password'
+		);
+		expect( passwordInput ).toHaveAttribute( 'spellcheck', 'false' );
+		expect( passwordInput ).toHaveAttribute( 'autocapitalize', 'none' );
 
 		const enableBtn = screen.getByRole( 'button', {
 			name: /Enable Object Cache/i,

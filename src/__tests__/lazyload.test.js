@@ -323,6 +323,40 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( inlineScript.hasAttribute( 'nonce' ) ).toBe( false );
 		} );
 
+		it( 'does not hydrate an inline placeholder that also carries src', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" src="https://attacker.example/x.js">window.__wppoInjected=1;</script>';
+			await bootLazyload();
+
+			// The placeholder stays inert (its type is stripped but no
+			// replacement script is created) and the injected cross-origin
+			// src is never activated by delay-JS hydration.
+			const scripts = document.querySelectorAll( 'script' );
+			expect( scripts ).toHaveLength( 1 );
+			expect(
+				scripts[ 0 ].hasAttribute( 'data-wppo-delay-loaded' )
+			).toBe( false );
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining(
+					'blocked inline deferred script with src'
+				),
+				'https://attacker.example/x.js'
+			);
+		} );
+
+		it( 'redacts credentials in blocked deferred-script warnings', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://untrusted.example.net/x.js?token=abc123"></script>';
+			await bootLazyload();
+
+			const blocked = consoleWarnSpy.mock.calls.find( ( [ message ] ) =>
+				String( message ).includes( 'blocked deferred script src' )
+			);
+			expect( blocked ).toBeDefined();
+			expect( String( blocked[ 1 ] ) ).not.toContain( 'abc123' );
+			expect( String( blocked[ 1 ] ) ).toContain( '[redacted]' );
+		} );
+
 		it( 'warns on empty inline script without logging the DOM node', async () => {
 			document.body.innerHTML =
 				'<script type="wppo/javascript"></script>';
