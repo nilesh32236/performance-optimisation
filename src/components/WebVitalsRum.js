@@ -209,7 +209,7 @@ const WebVitalsRum = () => {
 	return (
 		<FeatureCard
 			title={ __( 'Real-user Web Vitals', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faUsers } /> }
+			icon={ <FontAwesomeIcon icon={ faUsers } aria-hidden="true" /> }
 			actions={
 				loading && (
 					<span role="status" aria-live="polite">
