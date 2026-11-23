@@ -1,6 +1,6 @@
 # Phase G — Measurement & Growth Monitoring
 
-Captured: `2026-11-16T15:41:56+00:00`
+Captured: `2026-11-23T18:03:04+00:00`
 
 This report uses public WordPress.org and GitHub repository metadata. It does not collect WordPress visitors, site-owner settings, cookies, or private application traffic.
 
@@ -19,10 +19,10 @@ This report uses public WordPress.org and GitHub repository metadata. It does no
 | GitHub forks | 0 | 0 | +0 |
 | GitHub open issues | 16 | 16 | +0 |
 | GitHub open PRs | 15 | 15 | +0 |
-| GitHub 14-day views | 4 | 37 | -33 |
-| GitHub 14-day view uniques | 3 | 29 | -26 |
-| GitHub 14-day clones | 486 | 491 | -5 |
-| GitHub 14-day clone uniques | 241 | 246 | -5 |
+| GitHub 14-day views | 15 | 4 | +11 |
+| GitHub 14-day view uniques | 3 | 3 | +0 |
+| GitHub 14-day clones | 1307 | 486 | +821 |
+| GitHub 14-day clone uniques | 111 | 241 | -130 |
 
 ## Operational metrics
 
