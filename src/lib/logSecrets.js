@@ -26,6 +26,10 @@ export const redactLogSecrets = ( raw ) => {
 			'$1[redacted]'
 		)
 		.replace(
+			/(['"])(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|_wpnonce|nonce|wppo_esi|nonce_refresh)\1\s*:\s*(['"])(?:\\.|(?!\3).)*\3/gi,
+			'$1$2$1=[redacted]'
+		)
+		.replace(
 			/\b(password|passwd|pwd|secret|token|_wpnonce|nonce|wppo_esi|nonce_refresh)\b\s*[:=\s]\s*(['"]?)\S+\2/gi,
 			'$1=[redacted]'
 		);
