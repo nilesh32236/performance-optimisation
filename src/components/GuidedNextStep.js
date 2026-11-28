@@ -180,41 +180,57 @@ const GuidedNextStep = ( { onNavigate } ) => {
 			) }
 			{ nextAction && (
 				<div
-					className={ `wppo-suggestion-card wppo-suggestion-card--${ nextAction.status }` }
-					role="listitem"
+					className="wppo-stacked-cards"
+					role="list"
+					aria-label={ __(
+						'Guided next step',
+						'performance-optimisation'
+					) }
 				>
-					<div className="wppo-suggestion-card__header">
-						<span className="wppo-suggestion-card__description">
-							{ nextAction.description }
-						</span>
-						<StatusBadge status={ nextAction.status } />
-					</div>
-					<div className="wppo-suggestion-card__body">
-						<span className="wppo-suggestion-card__value">
-							{ formatValue( nextAction.value, nextAction.unit ) }
-						</span>
-						{ canFix && (
-							<button
-								type="button"
-								className="wppo-button wppo-button--sm wppo-button--primary"
-								onClick={ () => onNavigate?.( targetTab ) }
-								aria-label={ sprintf(
-									/* translators: 1: existing feature destination, 2: suggestion description. */
-									__(
-										'%1$s: %2$s',
-										'performance-optimisation'
-									),
-									getFixActionLabel( nextAction.fix_action ),
-									nextAction.description
+					<div
+						className={ `wppo-suggestion-card wppo-suggestion-card--${ nextAction.status }` }
+						role="listitem"
+					>
+						<div className="wppo-suggestion-card__header">
+							<span className="wppo-suggestion-card__description">
+								{ nextAction.description }
+							</span>
+							<StatusBadge status={ nextAction.status } />
+						</div>
+						<div className="wppo-suggestion-card__body">
+							<span className="wppo-suggestion-card__value">
+								{ formatValue(
+									nextAction.value,
+									nextAction.unit
 								) }
-							>
-								{ getFixActionLabel( nextAction.fix_action ) }
-								<FontAwesomeIcon
-									icon={ faArrowRight }
-									className="wppo-ml-6"
-								/>
-							</button>
-						) }
+							</span>
+							{ canFix && (
+								<button
+									type="button"
+									className="wppo-button wppo-button--sm wppo-button--primary"
+									onClick={ () => onNavigate?.( targetTab ) }
+									aria-label={ sprintf(
+										/* translators: 1: existing feature destination, 2: suggestion description. */
+										__(
+											'%1$s: %2$s',
+											'performance-optimisation'
+										),
+										getFixActionLabel(
+											nextAction.fix_action
+										),
+										nextAction.description
+									) }
+								>
+									{ getFixActionLabel(
+										nextAction.fix_action
+									) }
+									<FontAwesomeIcon
+										icon={ faArrowRight }
+										className="wppo-ml-6"
+									/>
+								</button>
+							) }
+						</div>
 					</div>
 				</div>
 			) }
