@@ -3525,7 +3525,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$exclude_imgs = $this->exclude_convert_imgs;
 
-				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
+				$http_accept = Util::server_string( 'HTTP_ACCEPT' );
 
 				$supports_avif = false !== strpos( $http_accept, 'image/avif' );
 				$supports_webp = false !== strpos( $http_accept, 'image/webp' );
@@ -3765,7 +3765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_img_converter() {
 			if ( null === $this->img_converter ) {
-				$this->img_converter = new Img_Converter( $this->options );
+				$this->img_converter = Img_Converter::from_settings( $this->options );
 			}
 			return $this->img_converter;
 		}
@@ -6570,13 +6570,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when the request Accept header allows image/avif.
 		 */
 		public function client_accepts_avif(): bool {
-			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) ) {
-				return false;
-			}
-			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
-				return false;
-			}
-			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			$http_accept = Util::server_string( 'HTTP_ACCEPT' );
 			return false !== strpos( $http_accept, 'image/avif' );
 		}
 

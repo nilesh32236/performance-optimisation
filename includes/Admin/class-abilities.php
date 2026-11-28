@@ -1097,7 +1097,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{flushed: bool, error_code: string|null, error_message: string|null}
 		 */
 		public static function execute_flush_object_cache( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Ability API passes input even when empty.
-			$object_cache = new Object_Cache();
+			$object_cache = Object_Cache::create();
 			// Scoped flush on multisite (issue #1186): never flush sibling
 			// sites.
 			$flushed = $object_cache->flush_scoped();
@@ -1405,7 +1405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'  => __( 'Used CSS not available.', 'performance-optimisation' ),
 				);
 			}
-			$used_css = new Used_CSS();
+			$used_css = Used_CSS::from_settings();
 			// Forced: an explicit operator request bypasses the cooldown,
 			// while per-post freshness still skips up-to-date posts (issue #1107).
 			$queued = $used_css->regenerate_all( true );

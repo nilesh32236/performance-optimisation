@@ -890,6 +890,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Read a hardened string from $_SERVER.
+		 *
+		 * Single owner for the $_SERVER read idiom (audit #1820). Enforces
+		 * `isset()` + `is_string()` before `wp_unslash()` +
+		 * `sanitize_text_field()`, so a scalar/array value can never raise a
+		 * PHP 8 TypeError and no unsanitized markup reaches the static-cache
+		 * artefact. Non-string values fall back to `$fallback` (fail-closed);
+		 * UtilServerStringTest pins both fail-closed branches.
+		 *
+		 * Scope: this covers the four HTTP_ACCEPT call sites migrated here
+		 * (class-image-optimisation.php, class-img-converter.php,
+		 * class-litespeed-integration.php). The audit's remaining hand-rolled
+		 * `$_GET`/`$_COOKIE` reads are NOT covered — no query_param() or
+		 * cookie_string() helper landed in this change, so that audit item
+		 * stays open.
+		 *
+		 * @since NEXT
+		 * @param string $key      $_SERVER key.
+		 * @param string $fallback Value returned when the key is absent or non-string.
+		 * @return string Sanitized value.
+		 */
+		public static function server_string( string $key, string $fallback = '' ): string {
+			if ( ! isset( $_SERVER[ $key ] ) || ! is_string( $_SERVER[ $key ] ) ) {
+				return $fallback;
+			}
+			return sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) );
+		}
+
+		/**
+		 * Whether a $_SERVER key is present and string-shaped.
+		 *
+		 * `server_string()` cannot distinguish an absent header from a
+		 * set-but-empty one: both return the fallback (''). Callers that need
+		 * the pre-refactor `isset()` semantics — notably the next-gen image
+		 * serve path, which must return early only when there is NO Accept
+		 * header to negotiate with, not when the client sent an empty one —
+		 * use this predicate before reading the sanitized value.
+		 *
+		 * @since NEXT
+		 * @param string $key $_SERVER key.
+		 * @return bool True when the key is set and a string.
+		 */
+		public static function has_server_string( string $key ): bool {
+			return isset( $_SERVER[ $key ] ) && is_string( $_SERVER[ $key ] );
+		}
+
+		/**
 		 * Whether path/query values indicate a WooCommerce AJAX endpoint.
 		 *
 		 * Pure string check (no Woo symbols, no I/O): matches the
@@ -1334,6 +1381,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function clear_settings_cache( $blog_id = null ): void {
 			Settings_Store::clear_settings_cache( $blog_id );
 			Filesystem::clear_purge_fallback_memo( $blog_id );
+		}
+
+		/**
+		 * Invalidate object-cache entries for a plugin option and alloptions.
+		 *
+		 * A direct `$wpdb->update()` of an option row's autoload column
+		 * bypasses `update_option()`, so the stale value survives in a
+		 * persistent object cache unless both the option key and the
+		 * `alloptions` blob are dropped. Single owner for the triplet
+		 * previously duplicated in Img_Converter, RUM, and PageSpeed (audit
+		 * #1820): a salted-cache fix must land here once, not three times.
+		 *
+		 * @since NEXT
+		 * @param string $option Option name to evict from the options group.
+		 * @return void
+		 */
+		public static function invalidate_option_caches( string $option ): void {
+			if ( ! function_exists( 'wp_cache_delete' ) ) {
+				return;
+			}
+			wp_cache_delete( $option, 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
 		}
 
 		/**

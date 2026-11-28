@@ -166,7 +166,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Preload_Buffer_Coordinator' ) ) {
 					$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
 				}
 
-				$used_css = new Used_CSS( $options );
+				$used_css = Used_CSS::from_settings( $options );
 				$result   = $used_css->process_buffer( $filtered_output );
 				return is_string( $result ) ? $result : $filtered_output;
 			} catch ( \Throwable $e ) {
@@ -244,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Preload_Buffer_Coordinator' ) ) {
 				if ( ! empty( $options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
 					$buffer = $this->google_fonts->process_buffer( $buffer );
 				}
-				$used_css = new Used_CSS( $options );
+				$used_css = Used_CSS::from_settings( $options );
 				$result   = $used_css->process_buffer( $buffer );
 				return is_string( $result ) ? $result : $original;
 			} catch ( \Throwable $e ) {
