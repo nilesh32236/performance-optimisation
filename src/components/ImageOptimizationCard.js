@@ -75,7 +75,7 @@ const ImageOptimizationCard = ( {
 	return (
 		<FeatureCard
 			title={ __( 'Image Optimisation', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faImages } /> }
+			icon={ <FontAwesomeIcon icon={ faImages } aria-hidden="true" /> }
 			footer={
 				<>
 					<LoadingSubmitButton

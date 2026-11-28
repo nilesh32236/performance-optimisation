@@ -388,7 +388,7 @@ const AiPanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'AI Adaptive', 'performance-optimisation' ) }
-			icon={ <FontAwesomeIcon icon={ faBrain } /> }
+			icon={ <FontAwesomeIcon icon={ faBrain } aria-hidden="true" /> }
 		>
 			{ notice && (
 				<NoticeBanner
