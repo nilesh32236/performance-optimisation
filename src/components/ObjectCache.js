@@ -60,10 +60,10 @@ const getCompressionLabel = ( statusLoaded, supported, key ) => {
 		return '';
 	}
 	if ( ! supported?.[ key ] ) {
-		return ` (${ __( '(Disabled)', 'performance-optimisation' ) })`;
+		return ` ${ __( '(Disabled)', 'performance-optimisation' ) }`;
 	}
 	if ( key === 'zstd' ) {
-		return ` (${ __( '(Recommended)', 'performance-optimisation' ) })`;
+		return ` ${ __( '(Recommended)', 'performance-optimisation' ) }`;
 	}
 	return '';
 };
@@ -271,7 +271,8 @@ const ObjectCache = ( { options = {} } ) => {
 			submitControllerRef.current.abort();
 		}
 		submitControllerRef.current = new AbortController();
-		const signal = submitControllerRef.current.signal;
+		const controller = submitControllerRef.current;
+		const signal = controller.signal;
 		setIsLoading( true );
 		dismiss();
 
@@ -336,7 +337,12 @@ const ObjectCache = ( { options = {} } ) => {
 				getErrorLogMessage( err )
 			);
 		} finally {
-			submitControllerRef.current = null;
+			// Audit #1839: a superseded submit's finally must not null the
+			// newer run's in-flight controller (which then could not be
+			// aborted on unmount).
+			if ( submitControllerRef.current === controller ) {
+				submitControllerRef.current = null;
+			}
 			if ( ! signal.aborted && isMountedRef.current ) {
 				setIsLoading( false );
 			}

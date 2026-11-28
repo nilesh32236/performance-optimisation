@@ -937,11 +937,15 @@ const Dashboard = ( {
 				} );
 			} )
 			.finally( () => {
-				if ( wooTimeoutRef.current ) {
-					clearTimeout( wooTimeoutRef.current );
-					wooTimeoutRef.current = null;
-				}
+				// Audit #1839: only tear down the timeout/loading state when
+				// this run is still the current one. A superseded run's
+				// finally used to clear the *new* run's timeout, stranding
+				// the button on "Running…" if the shared-GET request hung.
 				if ( wooAbortRef.current === controller ) {
+					if ( wooTimeoutRef.current ) {
+						clearTimeout( wooTimeoutRef.current );
+						wooTimeoutRef.current = null;
+					}
 					wooAbortRef.current = null;
 					setWooSelfTestLoading( false );
 				}

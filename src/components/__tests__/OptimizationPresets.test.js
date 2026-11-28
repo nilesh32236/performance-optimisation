@@ -102,7 +102,7 @@ describe( 'OptimizationPresets', () => {
 			)
 		);
 		expect(
-			screen.getByText( '1 setting(s) would change:' )
+			screen.getByText( '1 setting would change:' )
 		).toBeInTheDocument();
 		expect(
 			screen.getByText( 'file_optimisation.minifyHTML' )

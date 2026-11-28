@@ -207,8 +207,20 @@ export const statusConfigFor = ( statusKey ) => {
 	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
 };
 
+/**
+ * Stable empty-status default (audit #1839).
+ *
+ * A literal `status = {}` default parameter allocated a new object every
+ * render, so the useMemo([status]) calls below recomputed on every render and
+ * the memoization was null. A module-level frozen object keeps the identity
+ * stable when the prop is omitted.
+ *
+ * @type {Object}
+ */
+const EMPTY_STATUS = Object.freeze( {} );
+
 const CriticalCssPanel = ( {
-	status = {},
+	status = EMPTY_STATUS,
 	suspended,
 	onRegenerate,
 	onRegenerateSingle,

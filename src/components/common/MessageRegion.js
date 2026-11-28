@@ -8,7 +8,7 @@
  * @package
  */
 
-import { useEffect, useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { subscribe } from '../../lib/noticeBus';
 
 const ICONS = {
@@ -28,24 +28,31 @@ const KEEP = 3;
  */
 export default function MessageRegion() {
 	const [ messages, setMessages ] = useState( [] );
+	// Audit #1839: track the per-message dismiss timers so the effect cleanup
+	// can cancel them. Previously the effect only unsubscribed, so a queued
+	// timer still fired setMessages on the unmounted component.
+	const timersRef = useRef( [] );
 
-	useEffect(
-		() =>
-			subscribe( ( notice ) => {
-				// A key rather than the object, so two identical messages in a row
-				// both show instead of the second replacing the first silently.
-				const key = `${ Date.now() }-${ Math.random() }`;
-				setMessages( ( was ) =>
-					[ ...was, { ...notice, key } ].slice( -KEEP )
-				);
-				setTimeout( () => {
-					setMessages( ( was ) =>
-						was.filter( ( m ) => m.key !== key )
-					);
-				}, DISMISS_AFTER );
-			} ),
-		[]
-	);
+	useEffect( () => {
+		const timers = timersRef.current;
+		const unsubscribe = subscribe( ( notice ) => {
+			// A key rather than the object, so two identical messages in a row
+			// both show instead of the second replacing the first silently.
+			const key = `${ Date.now() }-${ Math.random() }`;
+			setMessages( ( was ) =>
+				[ ...was, { ...notice, key } ].slice( -KEEP )
+			);
+			const timer = setTimeout( () => {
+				setMessages( ( was ) => was.filter( ( m ) => m.key !== key ) );
+			}, DISMISS_AFTER );
+			timers.push( timer );
+		} );
+		return () => {
+			unsubscribe();
+			timers.forEach( ( timer ) => clearTimeout( timer ) );
+			timers.length = 0;
+		};
+	}, [] );
 
 	if ( messages.length === 0 ) {
 		return null;
