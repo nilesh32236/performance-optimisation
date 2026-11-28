@@ -3311,6 +3311,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
 					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
+					// Read-only feature-level overlap map (issue #1843): third-party
+					// optimisers that own the same CSS/JS, media, or cache feature.
+					// Fail-open (empty array) so a probe failure never breaks the SPA.
+					'overlappingOptimizers'                => Util::detect_conflicting_optimizers(),
 					// Authoritative one-click preset bundles (issue #1442 review):
 					// the SPA prefers these server-localised copies via
 					// resolvePresetBundle() and only falls back to its local

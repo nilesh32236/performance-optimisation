@@ -227,6 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_activation_notices();
 			$this->maybe_htaccess_failure_notice();
 			$this->maybe_competing_plugins_notice();
+			$this->maybe_optimizer_overlap_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
 			$this->maybe_nginx_redis_config_notice();
@@ -634,6 +635,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
 			echo esc_html__( 'Running multiple full-page cache solutions can cause conflicts. Consider using only one.', 'performance-optimisation' );
+			echo '</p></div>';
+		}
+
+		/**
+		 * Warn when another plugin owns the same optimisation feature (issue #1843).
+		 *
+		 * Feature-level overlap (CSS/JS or media) is independent of our page-cache
+		 * drop-in, so unlike {@see maybe_competing_plugins_notice()} this notice is
+		 * not gated on `is_our_dropin()`. The cache area keeps its dedicated notice
+		 * above; only `css_js`/`media` overlaps render here. Detection is
+		 * probe-only and fail-open — a missing Util class or a thrown error emits
+		 * nothing rather than fataling the admin pageload.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_optimizer_overlap_notice(): void {
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'detect_conflicting_optimizers' ) ) {
+				return;
+			}
+
+			try {
+				$optimizers = Util::detect_conflicting_optimizers();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			if ( ! is_array( $optimizers ) ) {
+				return;
+			}
+
+			$labels = array();
+			foreach ( $optimizers as $entry ) {
+				if ( ! is_array( $entry ) || ! isset( $entry['label'], $entry['area'] ) ) {
+					continue;
+				}
+				if ( 'cache' === $entry['area'] ) {
+					continue;
+				}
+				$label = (string) $entry['label'];
+				if ( '' !== $label ) {
+					$labels[] = $label;
+				}
+			}
+
+			if ( empty( $labels ) ) {
+				return;
+			}
+
+			echo '<div class="notice notice-warning is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> &mdash; ';
+			printf(
+				/* translators: %s: comma-separated list of conflicting plugin names. */
+				esc_html__( 'Another optimisation plugin is active: %s. Running two optimisers that own the same CSS/JS or media features can double-minify or double-defer and break layouts. Consider disabling the overlap.', 'performance-optimisation' ),
+				esc_html( implode( ', ', array_unique( $labels ) ) )
+			);
 			echo '</p></div>';
 		}
 

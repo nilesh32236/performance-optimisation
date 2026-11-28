@@ -83,16 +83,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 */
 		public static function get_all(): array {
 			return array(
-				'php'            => self::get_php(),
-				'database'       => self::get_database(),
-				'wordpress'      => self::get_wordpress(),
-				'wp_constants'   => self::get_wp_constants(),
-				'server'         => self::get_server(),
-				'cache'          => self::get_cache(),
-				'litespeed'      => self::get_litespeed(),
-				'host'           => self::get_host(),
-				'infrastructure' => self::get_infrastructure(),
-				'opcache'        => self::get_opcache(),
+				'php'                    => self::get_php(),
+				'database'               => self::get_database(),
+				'wordpress'              => self::get_wordpress(),
+				'wp_constants'           => self::get_wp_constants(),
+				'server'                 => self::get_server(),
+				'cache'                  => self::get_cache(),
+				'litespeed'              => self::get_litespeed(),
+				'host'                   => self::get_host(),
+				'infrastructure'         => self::get_infrastructure(),
+				'opcache'                => self::get_opcache(),
+				// Read-only feature-level overlap map (issue #1843). Additive
+				// and fail-open: Util returns an empty array when no third-party
+				// optimiser is detected (or probes are unavailable).
+				'overlapping_optimizers' => Util::detect_conflicting_optimizers(),
 			);
 		}
 

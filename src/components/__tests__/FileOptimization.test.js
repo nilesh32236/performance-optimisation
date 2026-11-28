@@ -2975,4 +2975,65 @@ describe( 'FileOptimization Component', () => {
 			} );
 		} );
 	} );
+
+	describe( 'optimizer overlap warning (issue #1843)', () => {
+		it( 'renders the ownership warning on the Used CSS row when an optimizer overlaps', () => {
+			global.wppoSettings = {
+				...global.wppoSettings,
+				overlappingOptimizers: {
+					autoptimize: { label: 'Autoptimize', area: 'css_js' },
+				},
+			};
+
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			expect(
+				screen.getByText( /Another optimisation plugin is active/ )
+			).toBeInTheDocument();
+			expect( screen.getByText( /Autoptimize/ ) ).toBeInTheDocument();
+			expect(
+				screen.getByLabelText( /Used CSS Output/i )
+			).toBeInTheDocument();
+		} );
+
+		it( 'renders nothing when there is no optimizer overlap', () => {
+			global.wppoSettings = {
+				...global.wppoSettings,
+				overlappingOptimizers: {},
+			};
+
+			render(
+				<FileOptimization
+					options={ { removeUnusedCSS: true } }
+					serverRules={ {} }
+				/>
+			);
+
+			expect(
+				screen.queryByText( /Another optimisation plugin is active/ )
+			).not.toBeInTheDocument();
+		} );
+
+		it( 'mirrors the ownership warning in the Safe-Mode panel', () => {
+			global.wppoSettings = {
+				...global.wppoSettings,
+				overlappingOptimizers: {
+					perfmatters: { label: 'Perfmatters', area: 'css_js' },
+				},
+			};
+
+			render( <FileOptimization options={ {} } serverRules={ {} } /> );
+			fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+			expect(
+				screen.getByText( /Another optimisation plugin is active/ )
+			).toBeInTheDocument();
+			expect( screen.getByText( /Perfmatters/ ) ).toBeInTheDocument();
+		} );
+	} );
 } );
