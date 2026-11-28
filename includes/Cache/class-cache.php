@@ -3658,7 +3658,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->atomic_put_contents( $file_path, $buffer );
 
 				if ( function_exists( 'gzencode' ) ) {
-					$gzip_output = gzencode( $buffer, 9 );
+					/**
+					 * Filter the gzip compression level for static cache writes.
+					 *
+					 * Level 6 is the default: it is materially cheaper on the
+					 * render path than level 9 for a marginal HTML size
+					 * difference. Values are clamped to the valid 0-9 range.
+					 *
+					 * @since NEXT
+					 * @param int $level Gzip compression level (0-9).
+					 */
+					$gzip_level  = (int) apply_filters( 'wppo_cache_gzip_level', 6 );
+					$gzip_level  = max( 0, min( 9, $gzip_level ) );
+					$gzip_output = gzencode( $buffer, $gzip_level );
 					if ( false !== $gzip_output ) {
 						$this->atomic_put_contents( $gzip_file_path, $gzip_output );
 					}
