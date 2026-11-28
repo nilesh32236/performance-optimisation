@@ -4924,14 +4924,14 @@
         "kind": "class",
         "scope": "runtime",
         "domain": "Settings",
-        "lines": 1743,
+        "lines": 1745,
         "methods": 26,
         "public_methods": 24,
         "large_methods": 3,
         "large_method_threshold_lines": 80,
         "largest_method": {
             "name": "sanitize_settings_recursively",
-            "line": 382,
+            "line": 384,
             "lines": 429
         },
         "method_prefixes": {
